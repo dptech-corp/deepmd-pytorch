@@ -27,6 +27,7 @@ class Trainer(object):
         self.disp_freq = training_params.get('disp_freq', 1000)
         self.save_ckpt = training_params.get('save_ckpt', 'model.ckpt')
         self.save_freq = training_params.get('save_freq', 1000)
+        self.device = 'cpu'
 
         # Data + Model
         my_random.seed(training_params['seed'])
@@ -36,7 +37,7 @@ class Trainer(object):
             batch_size=dataset_params['batch_size'],
             type_map=model_params['type_map']
         )
-        self.model = EnergyModel(model_params, self.training_data)
+        self.model = EnergyModel(model_params, self.training_data).to(self.device)
 
         # Learning rate
         lr_params = config.pop('learning_rate')
@@ -51,11 +52,11 @@ class Trainer(object):
         self.loss = EnergyStdLoss(**loss_params)
 
     def run(self):
-        '''Start the model training.'''
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
         fout = open(self.disp_file, 'w')
         logging.info('Start to train %d steps.', self.num_steps)
-        for step_id in range(self.num_steps):
+        
+        def step(step_id):
             bdata = self.training_data.get_batch()
             optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
@@ -70,7 +71,7 @@ class Trainer(object):
 
             # Compute prediction error
             coord.requires_grad_(True)
-            p_energy, p_force = self.model(coord, atype, natoms, box)
+            p_energy, p_force = self.model(coord.to(self.device), atype, natoms, box)
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
             loss_val = loss.detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
@@ -91,6 +92,11 @@ class Trainer(object):
             if step_id > 0:
                 if step_id % self.save_freq == 0:
                     torch.save(self.model.state_dict(), self.save_ckpt)
+                    
+        for step_id in range(self.num_steps):
+            step(step_id)
+            if step_id == 3:
+                break
 
         fout.close()
         logging.info('Saving model after all steps...')

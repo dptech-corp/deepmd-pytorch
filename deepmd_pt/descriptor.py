@@ -383,7 +383,7 @@ class SmoothDescriptor(torch.autograd.Function):
         Returns:
         - descriptor: Shape is [nframes, natoms[1]*nnei*4].
         '''
-        coord = coord.detach().numpy()
+        coord = coord.cpu().detach().numpy()
         nnei = sec[-1]  # 总的邻居数量
         nframes = coord.shape[0]  # 样本数量
         nloc, nall = natoms[0], natoms[1]  # 原子数量和包含 Ghost 原子的数量

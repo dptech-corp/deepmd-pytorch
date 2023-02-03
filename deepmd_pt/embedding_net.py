@@ -188,7 +188,7 @@ class EmbeddingNet(torch.nn.Module):
                 self.mean, self.stddev, self.deriv_stddev,
                 self.rcut, self.rcut_smth, self.sec
             )
-            sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(descriptor.numpy(), self.ndescrpt, nn)
+            sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(descriptor.cpu().numpy(), self.ndescrpt, nn)
             sumr.append(sysr)
             suma.append(sysa)
             sumn.append(sysn)
