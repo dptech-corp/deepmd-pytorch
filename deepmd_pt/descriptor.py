@@ -204,16 +204,10 @@ def select_neighbors(nlist, sec):
 
 def compute_smooth_weight(distance, rmin, rmax):
     '''Compute smooth weight for descriptor elements.'''
-    if distance < rmin:
-        return 0., 1.
-    elif distance < rmax:
-        uu = (distance - rmin) / (rmax - rmin)
-        vv = uu*uu*uu * (-6 * uu*uu + 15*uu - 10) + 1
-        du = 1. / (rmax - rmin)
-        dd = uu*uu * (uu * (-30*uu + 60) - 30) * du
-        return vv, dd
-    else:
-        return 0., 0.
+    mask = torch.logical_and(distance > rmin, distance < rmax)
+    uu = (distance - rmin) / (rmax - rmin)
+    vv = uu*uu*uu * (-6 * uu*uu + 15*uu - 10) + 1
+    return vv * mask
 
 
 def make_env_mat(coord, atype,  # 原子坐标和相应类型
@@ -244,118 +238,20 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
 
 def make_se_a_mat(selected, coord, rcut, ruct_smth):
     '''Based on environment matrix, build descriptor of type `se_a`.'''
-    nloc = selected.shape[0]
-    descriptor = np.full(selected.shape + (4,), 0., dtype=env.GLOBAL_NP_FLOAT_PRECISION)
-    descriptor_deriv = np.full(selected.shape + (4, 3), 0., dtype=env.GLOBAL_NP_FLOAT_PRECISION)
-    for aid in range(nloc):
-        neighbors = selected[aid]
-        for pos, nid in enumerate(neighbors):
-            if nid < 0:
-                continue
-
-            # 预计算的值
-            rr = coord[nid*3:nid*3+3] - coord[aid*3:aid*3+3]
-            nr = np.linalg.norm(rr)
-            inr = 1. / nr
-            inr2 = inr * inr
-            inr3 = inr2 * inr
-            inr4 = inr2 * inr2
-            sw, dsw = compute_smooth_weight(nr, ruct_smth, rcut)
-
-            # 非平滑的值
-            descriptor[aid, pos, 0] = inr
-            descriptor[aid, pos, 1:] = rr * inr2
-
-            # 链式法则求导到 Xji, Yji, Zji
-            descriptor_deriv[aid, pos, 0, 0] = rr[0] * inr3 * sw - rr[0] * inr2 * dsw
-            descriptor_deriv[aid, pos, 0, 1] = rr[1] * inr3 * sw - rr[1] * inr2 * dsw
-            descriptor_deriv[aid, pos, 0, 2] = rr[2] * inr3 * sw - rr[2] * inr2 * dsw
-            descriptor_deriv[aid, pos, 1, 0] = (2 * rr[0] * rr[0] * inr4 - inr2) * sw - rr[0] * rr[0] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 1, 1] = 2 * rr[0] * rr[1] * inr4 * sw - rr[0] * rr[1] * inr3 * dsw
-            descriptor_deriv[aid, pos, 1, 2] = 2 * rr[0] * rr[2] * inr4 * sw - rr[0] * rr[2] * inr3 * dsw
-            descriptor_deriv[aid, pos, 2, 0] = 2 * rr[1] * rr[0] * inr4 * sw - rr[1] * rr[0] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 2, 1] = (2 * rr[1] * rr[1] * inr4 - inr2) * sw - rr[1] * rr[1] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 2, 2] = 2 * rr[1] * rr[2] * inr4 * sw - rr[1] * rr[2] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 3, 0] = 2 * rr[2] * rr[0] * inr4 * sw - rr[2] * rr[0] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 3, 1] = 2 * rr[2] * rr[1] * inr4 * sw - rr[2] * rr[1] * inr3 * dsw 
-            descriptor_deriv[aid, pos, 3, 2] = (2 * rr[2] * rr[2] * inr4 - inr2) * sw - rr[2] * rr[2] * inr3 * dsw 
-            descriptor[aid, pos, :] *= sw
-    return descriptor, descriptor_deriv
-
-
-class SmoothDescriptorBackward(torch.autograd.Function):
-    '''Function wrapper for force computation.'''
-
-    @staticmethod
-    def forward(ctx, descriptor_grad, deriv_list, nlist_list, natoms):
-        '''Compute atom force with descriptor gradient.
-
-        Args:
-        - descriptor_grad: Shape is [nframes, natoms[0]*nnei*4].
-        - deriv_list: Shape is [nframes, natoms[0]*nnei*4*3].
-        - nlist_list: Shape is [nframes, natoms[0]*nnei].
-        - natoms: Shape is [ntypes+2].
-
-        Returns:
-        - force: Shape is [nframes, natoms[1]*3].
-        '''
-        nframes = descriptor_grad.shape[0]
-        nloc, nall = natoms.numpy()[:2]
-        nnei = nlist_list.shape[1] // nloc
-        ndescrpt = nnei * 4
-        force = torch.zeros(size=[nframes, nall*3], dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        for sid in range(nframes):  # 枚举样本
-            logging.debug('[BW] In-batch ID: %d', sid)
-            for aid in range(nloc):  # 枚举原子
-                for idx in range(ndescrpt):  # 枚举描述符，对中心原子累加力
-                    dg = descriptor_grad[sid, aid*ndescrpt+idx]
-                    force[sid, aid*3+0] -= dg * deriv_list[sid, aid*ndescrpt*3+idx*3+0]
-                    force[sid, aid*3+1] -= dg * deriv_list[sid, aid*ndescrpt*3+idx*3+1]
-                    force[sid, aid*3+2] -= dg * deriv_list[sid, aid*ndescrpt*3+idx*3+2]
-                for idx in range(nnei):  # 枚举邻居，对邻居原子累加力
-                    nid = nlist_list[sid, aid*nnei + idx]
-                    if nid >= 0:
-                        for offset in range(idx*4, idx*4+4):
-                            dg = descriptor_grad[sid, aid*ndescrpt+offset]
-                            force[sid, nid*3+0] += dg * deriv_list[sid, aid*ndescrpt*3+offset*3+0]
-                            force[sid, nid*3+1] += dg * deriv_list[sid, aid*ndescrpt*3+offset*3+1]
-                            force[sid, nid*3+2] += dg * deriv_list[sid, aid*ndescrpt*3+offset*3+2]
-        ctx.save_for_backward(descriptor_grad, deriv_list, nlist_list, natoms)
-        return force
-
-    @staticmethod
-    def backward(ctx, force_grad):
-        '''Compute gradient of force over descriptor gradient.
-
-        Args:
-        - force_grad: Shape is [nframes, natoms[1]*3].
-
-        Returns:
-        - descriptor_grad_grad: Shape is [nframes, natoms[0]*nnei*4].
-        '''
-        descriptor_grad, deriv_list, nlist_list, natoms = ctx.saved_tensors
-        output = torch.zeros_like(descriptor_grad)
-        nframes = force_grad.shape[0]
-        nloc = natoms[0].numpy()
-        nnei = nlist_list.shape[1] // nloc
-        ndescrpt = nnei * 4
-        for sid in range(nframes):
-            logging.debug('[BW-BW] In-batch ID: %d', sid)
-            for aid in range(nloc):
-                for idx in range(ndescrpt):
-                    output[sid, aid*ndescrpt+idx] -= force_grad[sid, aid*3+0] * deriv_list[sid, aid*ndescrpt*3+idx*3+0]
-                    output[sid, aid*ndescrpt+idx] -= force_grad[sid, aid*3+1] * deriv_list[sid, aid*ndescrpt*3+idx*3+1]
-                    output[sid, aid*ndescrpt+idx] -= force_grad[sid, aid*3+2] * deriv_list[sid, aid*ndescrpt*3+idx*3+2]
-                for idx in range(nnei):
-                    nid = nlist_list[sid, aid*nnei + idx]
-                    if nid >= 0:
-                        nid = nid % nloc
-                        for offset in range(idx*4, idx*4+4):
-                            output[sid, aid*ndescrpt+offset] += force_grad[sid, nid*3+0] * deriv_list[sid, aid*ndescrpt*3+offset*3+0]
-                            output[sid, aid*ndescrpt+offset] += force_grad[sid, nid*3+1] * deriv_list[sid, aid*ndescrpt*3+offset*3+1]
-                            output[sid, aid*ndescrpt+offset] += force_grad[sid, nid*3+2] * deriv_list[sid, aid*ndescrpt*3+offset*3+2]
-        return output, None, None, None
-
+    coord = coord.view(-1, 3)
+    selected = torch.tensor(selected, device=coord.device, dtype=torch.long)
+    mask = selected>=0
+    selected = selected * mask
+    coord_l = coord[range(selected.shape[0])].view(-1, 1, 3)
+    coord_r = torch.index_select(coord, 0, selected.view(-1))
+    coord_r = coord_r.view(selected.shape+(3,))
+    diff = coord_l - coord_r
+    length = torch.linalg.norm(diff, dim=-1, keepdim=True)
+    t0 = 1/length
+    t1 = diff/length**2
+    weight = compute_smooth_weight(length, ruct_smth, rcut)
+    descriptor = torch.cat([t0, t1], dim=-1) *weight * mask.unsqueeze(-1)
+    return descriptor
 
 class SmoothDescriptor(torch.autograd.Function):
     '''Function wrapper for `se_a` descriptor.'''
@@ -383,7 +279,6 @@ class SmoothDescriptor(torch.autograd.Function):
         Returns:
         - descriptor: Shape is [nframes, natoms[1]*nnei*4].
         '''
-        coord = coord.cpu().detach().numpy()
         nnei = sec[-1]  # 总的邻居数量
         nframes = coord.shape[0]  # 样本数量
         nloc, nall = natoms[0], natoms[1]  # 原子数量和包含 Ghost 原子的数量
@@ -395,22 +290,21 @@ class SmoothDescriptor(torch.autograd.Function):
         assert 9 == box.shape[1], 'Box size is invalid!'
         assert len(sec) == natoms.shape[0] - 2, 'Element type mismatches!'
 
+        coord_np = coord.detach().cpu().numpy()
         descriptor_list = []
         deriv_list = []
         nlist_list = []
         for sid in range(nframes):  # 枚举样本
             logging.debug('[FW] In-batch ID: %d', sid)
-            selected, merged_coord, merged_mapping = make_env_mat(coord[sid], atype[sid], box[sid], rcut, sec)
-            se_a, se_a_deriv = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
+            selected, merged_coord, merged_mapping = make_env_mat(coord_np[sid], atype[sid], box[sid], rcut, sec)
+            merged_coord = torch.tensor(merged_coord, device=coord.device)
+            se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
             for aid in range(nloc):
                 a_type = atype[sid, aid]
                 t_avg = mean[a_type]
                 t_std = stddev[a_type]
-                t_d_std = deriv_stddev[a_type]
                 se_a[aid] = (se_a[aid] - t_avg) / t_std
-                se_a_deriv[aid, :, :] /= t_d_std
             descriptor_list.append(se_a.reshape([-1]))
-            deriv_list.append(se_a_deriv.reshape([-1]))
 
             nlist = np.full([nloc, nnei], -1, dtype=np.int32)
             for aid in range(nloc):
@@ -420,24 +314,7 @@ class SmoothDescriptor(torch.autograd.Function):
                         nlist[aid,idx] = merged_mapping[nid]
             nlist_list.append(nlist.reshape([-1]))
         descriptor_list = np.stack(descriptor_list)
-        deriv_list = np.stack(deriv_list)
         nlist_list = np.stack(nlist_list)
-        ctx.save_for_backward(torch.from_numpy(deriv_list), torch.from_numpy(nlist_list), torch.from_numpy(natoms))
         return torch.from_numpy(descriptor_list)
-
-    @staticmethod
-    def backward(ctx, descriptor_grad):
-        '''Compute XYZ forces on atoms.
-
-        Args:
-        - descriptor_grad: Shape is [nframes, natoms[1]*nnei*4].
-
-        Returns:
-        - atom_force: Shape is [nframes, natoms[1]*3].
-        '''
-        deriv_list, nlist_list, natoms = ctx.saved_tensors
-        force = SmoothDescriptorBackward.apply(descriptor_grad, deriv_list, nlist_list, natoms)
-        return force, None, None, None, None, None, None, None, None, None
-
 
 __all__ = ['SmoothDescriptor']
