@@ -169,19 +169,19 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
     distance = torch.linalg.norm(distance, dim=-1)
     distance += torch.eye(nall, dtype=torch.bool)*env.DISTANCE_INF
     distance = distance[:nloc] # shape: [nloc, nall]
-    sorted, indices = torch.sort(distance, dim=1)
-    for i, nnei in enumerate(sec[:-1]):
-        mask = atype[indices]==i
-        cumsum = torch.cumsum(mask, dim=1)
-        mask = torch.logical_and(mask, cumsum > nnei)
-        out = torch.zeros_like(mask)
-        out.scatter_(1, indices, mask)
-        distance += out * env.DISTANCE_INF 
-        # the number of selected neighbors of type i no more than sec[i]
-        sorted, indices = torch.sort(distance, dim=1)
-    mask = (sorted < rcut).to(torch.long)
-    indices = indices * mask + -(1)*(1-mask) # -1 for padding
-    selected = indices[:, :sec[-1]] # 最大的邻居数量
+
+    lst = []
+    for i, nnei in enumerate(sec):
+        if i > 0:
+            nnei = nnei - sec[i-1]
+        mask = atype.unsqueeze(0)==i
+        tmp = distance + (~mask) * env.DISTANCE_INF
+        sorted, indices = tmp.sort(dim=1)
+        mask = (sorted < rcut).to(torch.long)
+        indices = indices * mask + -(1)*(1-mask) # -1 for padding
+        lst.append(indices[:, :nnei]) 
+
+    selected = torch.cat(lst, dim=-1)
     return selected
 
 def compute_smooth_weight(distance, rmin, rmax):
@@ -225,7 +225,7 @@ def make_se_a_mat(selected, coord, rcut, ruct_smth):
     coord_l = coord[range(selected.shape[0])].view(-1, 1, 3)
     coord_r = torch.index_select(coord, 0, selected.view(-1))
     coord_r = coord_r.view(selected.shape+(3,))
-    diff = coord_l - coord_r
+    diff = coord_r - coord_l
     length = torch.linalg.norm(diff, dim=-1, keepdim=True)
     t0 = 1/length
     t1 = diff/length**2

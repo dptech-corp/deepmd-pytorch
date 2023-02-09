@@ -236,6 +236,8 @@ class EmbeddingNet(torch.nn.Module):
             self.mean, self.stddev, self.deriv_stddev,
             self.rcut, self.rcut_smth, self.sec
         )  # shape is [nframes, nall*self.ndescrpt]
+        import pdb
+        pdb.set_trace()
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         xyz_scatter = None
         for ii, transform in enumerate(self.filter_layers):
