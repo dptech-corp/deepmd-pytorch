@@ -6,14 +6,6 @@ from collections import namedtuple
 
 from deepmd_pt import env
 
-
-NeighborInfo = namedtuple('NeighborInfo', [
-    'index',    # 编号
-    'type',     # 元素
-    'distance'  # 距离
-])
-
-
 class Region3D(object):
 
     def __init__(self, boxt):
@@ -156,52 +148,41 @@ def append_neighbors(coord, region, atype, rcut):
     logging.debug('%d atoms are appended as ghost', len(tmp_atype))
 
     # 合并内部原子和 Ghost 原子信息
-    merged_coord = torch.cat([coord]+ tmp_coord)
-    merged_atype = np.concatenate([atype, tmp_atype])
-    merged_mapping = np.concatenate([np.arange(atype.size), tmp_mapping])
+    merged_coord = torch.cat([coord] + tmp_coord)
+    merged_atype = torch.cat([atype, torch.tensor(tmp_atype)])
+    merged_mapping = np.concatenate([np.arange(atype.numel()), tmp_mapping])
     return merged_coord, merged_atype, merged_mapping
 
 
-def build_neighbor_list(nloc, coord, atype, rcut):
+def build_neighbor_list(nloc, coord, atype, rcut, sec):
     '''For each atom inside region, build its neighbor list.
 
     Args:
-    - coord: shape is [nloc*3]
+    - coord: shape is [nall*3]
     - atype: shape is [nloc]
     '''
     nall = coord.numel() // 3
     nlist = [[] for _ in range(nloc)]
-    for aid in range(nloc):
-        a_coord = coord[aid*3:aid*3+3]
-        for nid in range(nall):
-            if aid == nid:
-                continue
-            n_coord = coord[nid*3:nid*3+3]
-            distance = torch.linalg.norm(n_coord - a_coord)
-            if distance < rcut:
-                ni = NeighborInfo(nid, atype[nid], distance)
-                nlist[aid].append(ni)
-    return nlist
-
-
-def select_neighbors(nlist, sec):
-    '''Select nearest neighbors of each element.'''
-    nloc = len(nlist)
-    nnei = sec[-1]  # 最大的邻居数量
-    selected = np.full([nloc, nnei], -1, dtype=np.int32)
-    for aid in range(nloc):
-        nlist[aid].sort(key=lambda item: (item.type, item.distance, item.index))
-        type_accum = np.zeros(sec.shape, dtype=np.int32)
-        type_accum[1:] = sec[:-1]
-        for ni in nlist[aid]:
-            if type_accum[ni.type] < sec[ni.type]:  # 卡邻居中某种元素的数量
-                selected[aid, type_accum[ni.type]] = ni.index
-                type_accum[ni.type] += 1
-            else:
-                # logging.warning('Count of neighbor element %d is overflowed!' % ni.type)
-                pass
+    coord_l = coord.view(-1, 1, 3)
+    coord_r = coord.view(1, -1, 3)
+    distance = coord_l - coord_r
+    distance = torch.linalg.norm(distance, dim=-1)
+    distance += torch.eye(nall, dtype=torch.bool)*env.DISTANCE_INF
+    distance = distance[:nloc] # shape: [nloc, nall]
+    sorted, indices = torch.sort(distance, dim=1)
+    for i, nnei in enumerate(sec[:-1]):
+        mask = atype[indices]==i
+        cumsum = torch.cumsum(mask, dim=1)
+        mask = torch.logical_and(mask, cumsum > nnei)
+        out = torch.zeros_like(mask)
+        out.scatter_(1, indices, mask)
+        distance += out * env.DISTANCE_INF 
+        # the number of selected neighbors of type i no more than sec[i]
+        sorted, indices = torch.sort(distance, dim=1)
+    mask = (sorted < rcut).to(torch.long)
+    indices = indices * mask + -(1)*(1-mask) # -1 for padding
+    selected = indices[:, :sec[-1]] # 最大的邻居数量
     return selected
-
 
 def compute_smooth_weight(distance, rmin, rmax):
     '''Compute smooth weight for descriptor elements.'''
@@ -232,15 +213,13 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
     assert merged_coord.shape[0] > tmp_coord.shape[0], 'No ghost atom is added!'
 
     # 构建邻居列表，并按 sel_a 筛选
-    nlist = build_neighbor_list(nloc, merged_coord, merged_atype, rcut)
-    selected = select_neighbors(nlist, sec)
+    selected = build_neighbor_list(nloc, merged_coord, merged_atype, rcut, sec)
     return selected, merged_coord, merged_mapping
 
 
 def make_se_a_mat(selected, coord, rcut, ruct_smth):
     '''Based on environment matrix, build descriptor of type `se_a`.'''
     coord = coord.view(-1, 3)
-    selected = torch.tensor(selected, device=coord.device, dtype=torch.long)
     mask = selected>=0
     selected = selected * mask
     coord_l = coord[range(selected.shape[0])].view(-1, 1, 3)

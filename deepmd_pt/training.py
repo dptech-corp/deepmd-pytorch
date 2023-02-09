@@ -63,7 +63,7 @@ class Trainer(object):
 
             # Prepare inputs
             coord = torch.from_numpy(bdata['coord'])
-            atype = bdata['type']
+            atype = torch.from_numpy(bdata['type'])
             natoms = bdata['natoms_vec']
             box = bdata['box']
             l_energy = torch.from_numpy(bdata['energy'])
@@ -95,8 +95,6 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
-            if step_id == 3:
-                break
 
         fout.close()
         logging.info('Saving model after all steps...')
