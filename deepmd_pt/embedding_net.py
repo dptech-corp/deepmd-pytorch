@@ -149,9 +149,8 @@ class EmbeddingNet(torch.nn.Module):
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
         wanted_shape = (self.ntypes, self.nnei, 4)
-        self.mean = np.zeros(wanted_shape, dtype=env.GLOBAL_NP_FLOAT_PRECISION)
-        self.stddev = np.ones(wanted_shape, dtype=env.GLOBAL_NP_FLOAT_PRECISION)
-        self.deriv_stddev = np.tile(np.expand_dims(self.stddev, axis=-1), [1, 1, 1, 3])
+        self.mean = torch.zeros(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+        self.stddev = torch.ones(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
 
         filter_layers = []
         start_index = 0
@@ -183,9 +182,11 @@ class EmbeddingNet(torch.nn.Module):
         sumr2 = []
         suma2 = []
         for cc, tt, nn, bb in zip(coord, atype, natoms, box):  # 逐个 Batch 的分析
+            cc = torch.tensor(cc, device=env.DEVICE)
+            tt = torch.tensor(tt, device=env.DEVICE)
             descriptor = SmoothDescriptor.apply(
-                torch.from_numpy(cc), tt, nn, bb,
-                self.mean, self.stddev, self.deriv_stddev,
+                cc, tt, nn, bb,
+                self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
             )
             sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(descriptor.cpu().numpy(), self.ndescrpt, nn)
@@ -214,9 +215,9 @@ class EmbeddingNet(torch.nn.Module):
             all_davg.append(davg)
             all_dstd.append(dstd)
         self.mean = np.stack(all_davg)
-        self.mean = torch.tensor(self.mean)
+        self.mean = torch.tensor(self.mean, device=env.DEVICE)
         self.stddev = np.stack(all_dstd)
-        self.stddev = torch.tensor(self.stddev)
+        self.stddev = torch.tensor(self.stddev, device=env.DEVICE)
 
     def forward(self, coord, atype, natoms, box):
         '''Calculate decoded embedding for each atom.
@@ -233,7 +234,7 @@ class EmbeddingNet(torch.nn.Module):
         nall = natoms[0]
         dmatrix = SmoothDescriptor.apply(
             coord, atype, natoms, box,
-            self.mean, self.stddev, self.deriv_stddev,
+            self.mean, self.stddev,
             self.rcut, self.rcut_smth, self.sec
         )  # shape is [nframes, nall*self.ndescrpt]
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]

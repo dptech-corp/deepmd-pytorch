@@ -4,14 +4,14 @@ import torch
 
 from collections import namedtuple
 
-from deepmd_pt import env
+from deepmd_pt.env import *
 
 class Region3D(object):
 
     def __init__(self, boxt):
         '''Construct a simulation box.'''
         logging.debug('Box: %s', boxt)
-        boxt = torch.tensor(boxt).reshape([3, 3])
+        boxt = torch.tensor(boxt, device=DEVICE).reshape([3, 3])
         self.boxt = boxt  # 用于世界坐标转内部坐标
         self.rec_boxt = torch.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
 
@@ -19,11 +19,11 @@ class Region3D(object):
         self.volume = torch.linalg.det(self.boxt)  # 平行六面体空间的体积
         assert self.volume > 0, 'Negative volume of box is detected!'
         c_yz = torch.cross(boxt[1], boxt[2])
-        self._h2yz = self.volume / np.linalg.norm(c_yz)
+        self._h2yz = self.volume / torch.linalg.norm(c_yz)
         c_zx = torch.cross(boxt[2], boxt[0])
-        self._h2zx = self.volume / np.linalg.norm(c_zx)
+        self._h2zx = self.volume / torch.linalg.norm(c_zx)
         c_xy = torch.cross(boxt[0], boxt[1])
-        self._h2xy = self.volume / np.linalg.norm(c_xy)
+        self._h2xy = self.volume / torch.linalg.norm(c_xy)
 
     def phys2inter(self, coord):
         '''Convert physical coordinates to internal ones.'''
@@ -37,7 +37,7 @@ class Region3D(object):
 
     def get_face_distance(self):
         '''Return face distinces to each surface of YZ, ZX, XY.'''
-        return torch.tensor([self._h2yz, self._h2zx, self._h2xy], dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        return torch.tensor([self._h2yz, self._h2zx, self._h2xy], device=DEVICE, dtype=GLOBAL_PT_FLOAT_PRECISION)
 
 
 def normalize_coord(coord, region, nloc):
@@ -136,9 +136,9 @@ def append_neighbors(coord, region, atype, rcut):
                 z_shift = compute_pbc_shift(zi, ncell[2])
                 if (xi >= 0 and xi < ncell[0]) and (yi >= 0 and yi < ncell[1]) and (zi >= 0 and zi < ncell[2]):
                     continue  # 无需对内部原子重复处理
-                pbc_shift = torch.tensor([x_shift, y_shift, z_shift], dtype=torch.long)
-                coord_shift = region.inter2phys(pbc_shift.to(env.GLOBAL_PT_FLOAT_PRECISION))
-                mirrored = pbc_shift*ncell + torch.tensor([xi, yi, zi])
+                pbc_shift = torch.tensor([x_shift, y_shift, z_shift], device=DEVICE, dtype=torch.long)
+                coord_shift = region.inter2phys(pbc_shift.to(GLOBAL_PT_FLOAT_PRECISION))
+                mirrored = pbc_shift*ncell + torch.tensor([xi, yi, zi], device=DEVICE)
                 cid = compute_serial_cid(mirrored, ncell)
                 for aid in clist[cid]:
                     a_coord = coord[aid*3:aid*3+3]
@@ -149,7 +149,7 @@ def append_neighbors(coord, region, atype, rcut):
 
     # 合并内部原子和 Ghost 原子信息
     merged_coord = torch.cat([coord] + tmp_coord)
-    merged_atype = torch.cat([atype, torch.tensor(tmp_atype)])
+    merged_atype = torch.cat([atype, torch.tensor(tmp_atype, device=DEVICE)])
     merged_mapping = np.concatenate([np.arange(atype.numel()), tmp_mapping])
     return merged_coord, merged_atype, merged_mapping
 
@@ -167,7 +167,7 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
     coord_r = coord.view(1, -1, 3)
     distance = coord_l - coord_r
     distance = torch.linalg.norm(distance, dim=-1)
-    distance += torch.eye(nall, dtype=torch.bool)*env.DISTANCE_INF
+    distance += torch.eye(nall, dtype=torch.bool, device=DEVICE)*DISTANCE_INF
     distance = distance[:nloc] # shape: [nloc, nall]
 
     lst = []
@@ -175,7 +175,7 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
         if i > 0:
             nnei = nnei - sec[i-1]
         mask = atype.unsqueeze(0)==i
-        tmp = distance + (~mask) * env.DISTANCE_INF
+        tmp = distance + (~mask) * DISTANCE_INF
         sorted, indices = tmp.sort(dim=1)
         mask = (sorted < rcut).to(torch.long)
         indices = indices * mask + -(1)*(1-mask) # -1 for padding
@@ -241,7 +241,7 @@ class SmoothDescriptor():
     @staticmethod
     def apply(
         coord, atype, natoms, box,  # 动态的 torch.Tensor 或 numpy.ndarray
-        mean, stddev, deriv_stddev, # 静态的 numpy.ndarray
+        mean, stddev, # 静态的 numpy.ndarray
         rcut, rcut_smth, sec  # 静态的 Python 对象
     ):
         '''Generate descriptor matrix from atom coordinates and other context.

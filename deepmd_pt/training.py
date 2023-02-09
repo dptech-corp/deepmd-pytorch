@@ -8,6 +8,7 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
+from env import DEVICE
 
 
 class Trainer(object):
@@ -37,7 +38,7 @@ class Trainer(object):
             batch_size=dataset_params['batch_size'],
             type_map=model_params['type_map']
         )
-        self.model = EnergyModel(model_params, self.training_data).to(self.device)
+        self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop('learning_rate')
@@ -66,14 +67,14 @@ class Trainer(object):
             atype = torch.from_numpy(bdata['type'])
             natoms = bdata['natoms_vec']
             box = bdata['box']
-            l_energy = torch.from_numpy(bdata['energy'])
-            l_force = torch.from_numpy(bdata['force'])
+            l_energy = torch.from_numpy(bdata['energy']).to(DEVICE)
+            l_force = torch.from_numpy(bdata['force']).to(DEVICE)
 
             # Compute prediction error
             coord.requires_grad_(True)
-            p_energy, p_force = self.model(coord.to(self.device), atype, natoms, box)
+            p_energy, p_force = self.model(coord.to(DEVICE), atype.to(DEVICE), natoms, box)
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
-            loss_val = loss.detach().numpy().tolist()
+            loss_val = loss.cpu().detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
 
             # Backpropagation
@@ -84,8 +85,8 @@ class Trainer(object):
 
             # Log and persist
             if step_id % self.disp_freq == 0:
-                rmse_e_val = rmse_e.detach().numpy().tolist()
-                rmse_f_val = rmse_f.detach().numpy().tolist()
+                rmse_e_val = rmse_e.cpu().detach().numpy().tolist()
+                rmse_f_val = rmse_f.cpu().detach().numpy().tolist()
                 record = 'step=%d, rmse_e=%f, rmse_f=%f\n' % (step_id, rmse_e_val, rmse_f_val)
                 fout.write(record)
                 fout.flush()
