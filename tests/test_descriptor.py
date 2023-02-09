@@ -11,7 +11,7 @@ from deepmd.env import op_module
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.descriptor import SmoothDescriptor
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION
+from deepmd_pt.env import *
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -76,9 +76,9 @@ class TestSeA(unittest.TestCase):
         self.nnei = sum(self.sel)
 
     def test_consistency(self):
-        avg_zero = np.zeros([self.ntypes, self.nnei*4]).astype(GLOBAL_NP_FLOAT_PRECISION)
-        std_ones = np.ones([self.ntypes, self.nnei*4]).astype(GLOBAL_NP_FLOAT_PRECISION)
-        deriv_std_ones = np.ones([self.ntypes, self.nnei, 4, 3]).astype(GLOBAL_NP_FLOAT_PRECISION)
+        avg_zero = torch.zeros([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
+        std_ones = torch.ones([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
+        deriv_std_ones = torch.ones([self.ntypes, self.nnei, 4, 3], dtype=GLOBAL_PT_FLOAT_PRECISION)
 
         base_d, base_force = base_se_a(
             rcut=self.rcut,
@@ -90,6 +90,7 @@ class TestSeA(unittest.TestCase):
         )
         pt_coord = torch.from_numpy(self.batch['coord'])
         pt_coord.requires_grad_(True)
+        self.batch['type'] = torch.from_numpy(self.batch['type'])
         my_d = SmoothDescriptor.apply(
             pt_coord,
             self.batch['type'],
@@ -106,7 +107,6 @@ class TestSeA(unittest.TestCase):
         my_force = pt_coord.grad.detach().numpy()
         self.assertTrue(np.allclose(base_d, my_d.detach().numpy()))
         self.assertTrue(np.allclose(base_force, my_force))
-
 
 if __name__ == '__main__':
     unittest.main()

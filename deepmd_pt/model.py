@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from deepmd_pt.embedding_net import EmbeddingNet
