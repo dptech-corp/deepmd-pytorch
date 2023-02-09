@@ -227,6 +227,7 @@ def make_se_a_mat(selected, coord, rcut, ruct_smth):
     coord_r = coord_r.view(selected.shape+(3,))
     diff = coord_r - coord_l
     length = torch.linalg.norm(diff, dim=-1, keepdim=True)
+    length = length + ~mask.unsqueeze(-1)
     t0 = 1/length
     t1 = diff/length**2
     weight = compute_smooth_weight(length, ruct_smth, rcut)

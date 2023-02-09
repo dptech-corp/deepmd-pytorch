@@ -58,5 +58,5 @@ class EnergyModel(torch.nn.Module):
         atom_energy = self.fitting_net(embedding, natoms)
         energy = atom_energy.sum(dim=-1)
         faked_grad = torch.ones_like(energy)
-        force = torch.autograd.grad(energy, coord, grad_outputs=faked_grad, create_graph=True)[0]
+        force = -torch.autograd.grad(energy, coord, grad_outputs=faked_grad, create_graph=True)[0]
         return energy, force
