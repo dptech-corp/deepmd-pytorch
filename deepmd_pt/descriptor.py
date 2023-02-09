@@ -19,32 +19,33 @@ class Region3D(object):
     def __init__(self, boxt):
         '''Construct a simulation box.'''
         logging.debug('Box: %s', boxt)
-        self.boxt = boxt.reshape([3, 3])  # 用于世界坐标转内部坐标
-        self.rec_boxt = np.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
+        boxt = torch.tensor(boxt).reshape([3, 3])
+        self.boxt = boxt  # 用于世界坐标转内部坐标
+        self.rec_boxt = torch.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
 
         # 计算空间属性
-        self.volume = np.linalg.det(self.boxt)  # 平行六面体空间的体积
+        self.volume = torch.linalg.det(self.boxt)  # 平行六面体空间的体积
         assert self.volume > 0, 'Negative volume of box is detected!'
-        c_yz = np.cross(boxt[3:6], boxt[6:])
+        c_yz = torch.cross(boxt[1], boxt[2])
         self._h2yz = self.volume / np.linalg.norm(c_yz)
-        c_zx = np.cross(boxt[6:], boxt[:3])
+        c_zx = torch.cross(boxt[2], boxt[0])
         self._h2zx = self.volume / np.linalg.norm(c_zx)
-        c_xy = np.cross(boxt[:3], boxt[3:6])
+        c_xy = torch.cross(boxt[0], boxt[1])
         self._h2xy = self.volume / np.linalg.norm(c_xy)
 
     def phys2inter(self, coord):
         '''Convert physical coordinates to internal ones.'''
         assert coord.shape == (3,), 'Invalid atom coordinates!'
-        return self.rec_boxt.dot(coord)
+        return self.rec_boxt@coord
 
     def inter2phys(self, coord):
         '''Convert internal coordinates to physical ones.'''
         assert coord.shape == (3,), 'Invalid atom coordinates!'
-        return self.boxt.dot(coord)
+        return self.boxt@coord
 
     def get_face_distance(self):
         '''Return face distinces to each surface of YZ, ZX, XY.'''
-        return np.array([self._h2yz, self._h2zx, self._h2xy], dtype=env.GLOBAL_NP_FLOAT_PRECISION)
+        return torch.tensor([self._h2yz, self._h2zx, self._h2xy], dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
 
 def normalize_coord(coord, region, nloc):
@@ -53,7 +54,7 @@ def normalize_coord(coord, region, nloc):
     Args:
     - coord: shape is [nloc*3]
     '''
-    tmp_coord = coord.copy()
+    tmp_coord = coord.clone()
     for aid in range(nloc):  # 枚举原子
         offset = aid * 3
         a_coord = tmp_coord[offset:offset+3]
@@ -94,18 +95,18 @@ def build_inside_clist(coord, region, ncell):
     - coord: shape is [nloc*3]
     - ncell: shape is [3]
     '''
-    loc_ncell = np.prod(ncell)  # 模拟区域内的 Cell 数量
-    nloc = coord.size // 3  # 原子数量
+    loc_ncell = torch.prod(ncell)  # 模拟区域内的 Cell 数量
+    nloc = coord.numel() // 3  # 原子数量
     inter_cell_size = 1. / ncell
     logging.debug('Cell size of internal coords:', inter_cell_size)
     clist = [[] for _ in range(loc_ncell)]  # 模拟区域内的 Cell 列表
     for aid in range(nloc):  # 枚举原子
         a_coord = coord[aid*3:aid*3+3]
         inter_cood = region.phys2inter(a_coord)
-        cell_offset = np.floor(inter_cood / inter_cell_size).astype(np.int32)
-        assert not np.any(cell_offset[cell_offset < 0]), 'No outside cell should be used!'
+        cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
+        assert not torch.any(cell_offset < 0), 'No outside cell should be used!'
         delta = cell_offset - ncell
-        assert not np.any(delta[delta >= 0]), 'No outside cell should be used!'
+        assert not torch.any(delta >= 0), 'No outside cell should be used!'
         cid = compute_serial_cid(cell_offset, ncell)
         clist[cid].append(aid)
     return clist
@@ -121,14 +122,14 @@ def append_neighbors(coord, region, atype, rcut):
     to_face = region.get_face_distance()
 
     # 计算 3 个方向的 Cell 大小和 Cell 数量
-    ncell = np.floor(to_face/rcut).astype(np.int32)
+    ncell = torch.floor(to_face/rcut).to(torch.long)
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
     logging.debug('Cell count:', ncell)
     cell_size = to_face / ncell
-    ngcell = np.floor(rcut / cell_size).astype(np.int32) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
+    ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
     logging.debug('Outer-box cell count:', ngcell)
     expanded = cell_size * ngcell
-    assert not np.any(expanded[expanded < rcut]), 'Cell sizes calculated by `rcut` and `box` is invalid!'
+    assert not torch.any(expanded < rcut), 'Cell sizes calculated by `rcut` and `box` is invalid!'
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     clist = build_inside_clist(coord, region, ncell)
@@ -143,9 +144,9 @@ def append_neighbors(coord, region, atype, rcut):
                 z_shift = compute_pbc_shift(zi, ncell[2])
                 if (xi >= 0 and xi < ncell[0]) and (yi >= 0 and yi < ncell[1]) and (zi >= 0 and zi < ncell[2]):
                     continue  # 无需对内部原子重复处理
-                pbc_shift = np.array([x_shift, y_shift, z_shift], dtype=np.int32)
-                coord_shift = region.inter2phys(pbc_shift)
-                mirrored = pbc_shift*ncell + [xi, yi, zi]
+                pbc_shift = torch.tensor([x_shift, y_shift, z_shift], dtype=torch.long)
+                coord_shift = region.inter2phys(pbc_shift.to(env.GLOBAL_PT_FLOAT_PRECISION))
+                mirrored = pbc_shift*ncell + torch.tensor([xi, yi, zi])
                 cid = compute_serial_cid(mirrored, ncell)
                 for aid in clist[cid]:
                     a_coord = coord[aid*3:aid*3+3]
@@ -155,7 +156,7 @@ def append_neighbors(coord, region, atype, rcut):
     logging.debug('%d atoms are appended as ghost', len(tmp_atype))
 
     # 合并内部原子和 Ghost 原子信息
-    merged_coord = np.concatenate([coord.reshape([-1, 3]), tmp_coord]).reshape([-1])
+    merged_coord = torch.cat([coord]+ tmp_coord)
     merged_atype = np.concatenate([atype, tmp_atype])
     merged_mapping = np.concatenate([np.arange(atype.size), tmp_mapping])
     return merged_coord, merged_atype, merged_mapping
@@ -168,7 +169,7 @@ def build_neighbor_list(nloc, coord, atype, rcut):
     - coord: shape is [nloc*3]
     - atype: shape is [nloc]
     '''
-    nall = coord.size // 3
+    nall = coord.numel() // 3
     nlist = [[] for _ in range(nloc)]
     for aid in range(nloc):
         a_coord = coord[aid*3:aid*3+3]
@@ -176,7 +177,7 @@ def build_neighbor_list(nloc, coord, atype, rcut):
             if aid == nid:
                 continue
             n_coord = coord[nid*3:nid*3+3]
-            distance = np.linalg.norm(n_coord - a_coord)
+            distance = torch.linalg.norm(n_coord - a_coord)
             if distance < rcut:
                 ni = NeighborInfo(nid, atype[nid], distance)
                 nlist[aid].append(ni)
@@ -253,11 +254,11 @@ def make_se_a_mat(selected, coord, rcut, ruct_smth):
     descriptor = torch.cat([t0, t1], dim=-1) *weight * mask.unsqueeze(-1)
     return descriptor
 
-class SmoothDescriptor(torch.autograd.Function):
+class SmoothDescriptor():
     '''Function wrapper for `se_a` descriptor.'''
 
     @staticmethod
-    def forward(ctx,
+    def apply(
         coord, atype, natoms, box,  # 动态的 torch.Tensor 或 numpy.ndarray
         mean, stddev, deriv_stddev, # 静态的 numpy.ndarray
         rcut, rcut_smth, sec  # 静态的 Python 对象
@@ -290,14 +291,12 @@ class SmoothDescriptor(torch.autograd.Function):
         assert 9 == box.shape[1], 'Box size is invalid!'
         assert len(sec) == natoms.shape[0] - 2, 'Element type mismatches!'
 
-        coord_np = coord.detach().cpu().numpy()
         descriptor_list = []
         deriv_list = []
         nlist_list = []
         for sid in range(nframes):  # 枚举样本
             logging.debug('[FW] In-batch ID: %d', sid)
-            selected, merged_coord, merged_mapping = make_env_mat(coord_np[sid], atype[sid], box[sid], rcut, sec)
-            merged_coord = torch.tensor(merged_coord, device=coord.device)
+            selected, merged_coord, merged_mapping = make_env_mat(coord[sid], atype[sid], box[sid], rcut, sec)
             se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
             for aid in range(nloc):
                 a_type = atype[sid, aid]
@@ -313,8 +312,8 @@ class SmoothDescriptor(torch.autograd.Function):
                     if nid >= 0:
                         nlist[aid,idx] = merged_mapping[nid]
             nlist_list.append(nlist.reshape([-1]))
-        descriptor_list = np.stack(descriptor_list)
+        descriptor_list = torch.stack(descriptor_list)
         nlist_list = np.stack(nlist_list)
-        return torch.from_numpy(descriptor_list)
+        return descriptor_list
 
 __all__ = ['SmoothDescriptor']

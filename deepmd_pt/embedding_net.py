@@ -214,8 +214,9 @@ class EmbeddingNet(torch.nn.Module):
             all_davg.append(davg)
             all_dstd.append(dstd)
         self.mean = np.stack(all_davg)
+        self.mean = torch.tensor(self.mean)
         self.stddev = np.stack(all_dstd)
-        self.deriv_stddev = np.tile(np.expand_dims(self.stddev, axis=-1), [1, 1, 1, 3])
+        self.stddev = torch.tensor(self.stddev)
 
     def forward(self, coord, atype, natoms, box):
         '''Calculate decoded embedding for each atom.

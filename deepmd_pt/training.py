@@ -92,7 +92,7 @@ class Trainer(object):
             if step_id > 0:
                 if step_id % self.save_freq == 0:
                     torch.save(self.model.state_dict(), self.save_ckpt)
-                    
+
         for step_id in range(self.num_steps):
             step(step_id)
             if step_id == 3:
