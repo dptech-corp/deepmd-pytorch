@@ -17,11 +17,7 @@ def load_lcurve_file(path):
         if not line or line.startswith('#'):
             continue
         fields = line.split()
-        step = int(fields[0].rstrip(',').split('=')[-1])
-        rmse_e = float(fields[1].rstrip(',').split('=')[-1])
-        rmse_f = float(fields[2].rstrip(',').split('=')[-1])
-        one = CurveRecord(step, rmse_e, rmse_f)
-        lcurve.append(one)
+        lcurve.append(fields)
     return lcurve
 
 
@@ -32,9 +28,10 @@ def draw_line_2d(path, step_interval, sacle_ratio=1):
     rmse_f = []
     for idx in range(0, len(lcurve), step_interval):
         item = lcurve[idx]
-        steps.append(int(item.step*sacle_ratio))
-        rmse_e.append(item.rmse_e)
-        rmse_f.append(item.rmse_f)
+        steps.append(int(int(item[0])*sacle_ratio))
+        rmse_e.append(float(item[3]))
+        rmse_f.append(float(item[5]))
+    pyplot.yscale("log")
     pyplot.plot(steps, rmse_e, label='Energy')
     pyplot.plot(steps, rmse_f, label='Force')
 

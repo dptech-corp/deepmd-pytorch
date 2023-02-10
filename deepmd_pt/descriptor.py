@@ -279,22 +279,12 @@ class SmoothDescriptor():
             logging.debug('[FW] In-batch ID: %d', sid)
             selected, merged_coord, merged_mapping = make_env_mat(coord[sid], atype[sid], box[sid], rcut, sec)
             se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
-            for aid in range(nloc):
-                a_type = atype[sid, aid]
-                t_avg = mean[a_type]
-                t_std = stddev[a_type]
-                se_a[aid] = (se_a[aid] - t_avg) / t_std
+            a_type = atype[sid]
+            t_avg = mean[a_type]
+            t_std = stddev[a_type]
+            se_a = (se_a - t_avg) / t_std
             descriptor_list.append(se_a.reshape([-1]))
-
-            nlist = np.full([nloc, nnei], -1, dtype=np.int32)
-            for aid in range(nloc):
-                neighbors = selected[aid]
-                for idx, nid in enumerate(neighbors):
-                    if nid >= 0:
-                        nlist[aid,idx] = merged_mapping[nid]
-            nlist_list.append(nlist.reshape([-1]))
         descriptor_list = torch.stack(descriptor_list)
-        nlist_list = np.stack(nlist_list)
         return descriptor_list
 
 __all__ = ['SmoothDescriptor']

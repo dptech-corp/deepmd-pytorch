@@ -64,7 +64,7 @@ class Trainer(object):
 
             # Prepare inputs
             coord = torch.from_numpy(bdata['coord'])
-            atype = torch.from_numpy(bdata['type'])
+            atype = torch.from_numpy(bdata['type']).to(torch.long)
             natoms = bdata['natoms_vec']
             box = bdata['box']
             l_energy = torch.from_numpy(bdata['energy']).to(DEVICE)

@@ -183,7 +183,7 @@ class EmbeddingNet(torch.nn.Module):
         suma2 = []
         for cc, tt, nn, bb in zip(coord, atype, natoms, box):  # 逐个 Batch 的分析
             cc = torch.tensor(cc, device=env.DEVICE)
-            tt = torch.tensor(tt, device=env.DEVICE)
+            tt = torch.tensor(tt, device=env.DEVICE, dtype=torch.long)
             descriptor = SmoothDescriptor.apply(
                 cc, tt, nn, bb,
                 self.mean, self.stddev,
