@@ -3,7 +3,7 @@ import os
 
 from collections import namedtuple
 from matplotlib import pyplot
-
+import numpy as np
 
 CurveRecord = namedtuple('CurveRecord', ['step', 'rmse_e', 'rmse_f'])
 
@@ -20,20 +20,29 @@ def load_lcurve_file(path):
         lcurve.append(fields)
     return lcurve
 
+def rolling_window(a, window):
+    shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+    strides = a.strides + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
-def draw_line_2d(path, step_interval, sacle_ratio=1):
+def draw_line_2d(path, step_interval, rolling=100):
     lcurve = load_lcurve_file(path)
     steps = []
     rmse_e = []
     rmse_f = []
     for idx in range(0, len(lcurve), step_interval):
         item = lcurve[idx]
-        steps.append(int(int(item[0])*sacle_ratio))
-        rmse_e.append(float(item[3]))
-        rmse_f.append(float(item[5]))
+        step = item[0].rstrip(',').split('=')[-1]
+        e = item[1].rstrip(',').split('=')[-1]
+        f = item[2].rstrip(',').split('=')[-1]
+        steps.append(int(step))
+        rmse_e.append(float(e))
+        rmse_f.append(float(f))
     pyplot.yscale("log")
-    pyplot.plot(steps, rmse_e, label='Energy')
-    pyplot.plot(steps, rmse_f, label='Force')
+    rmse_e = rolling_window(np.array(rmse_e), rolling).mean(axis=-1)
+    rmse_f = rolling_window(np.array(rmse_f), rolling).mean(axis=-1)
+    pyplot.plot(steps[rolling-1:], rmse_e, label='Energy')
+    pyplot.plot(steps[rolling-1:], rmse_f, label='Force')
 
 
 def run(FLAGS):

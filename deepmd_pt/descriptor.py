@@ -12,7 +12,7 @@ class Region3D(object):
         '''Construct a simulation box.'''
         logging.debug('Box: %s', boxt)
         boxt = torch.tensor(boxt, device=DEVICE).reshape([3, 3])
-        self.boxt = boxt  # 用于世界坐标转内部坐标
+        self.boxt = boxt.permute(1, 0)  # 用于世界坐标转内部坐标
         self.rec_boxt = torch.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
 
         # 计算空间属性
@@ -27,13 +27,11 @@ class Region3D(object):
 
     def phys2inter(self, coord):
         '''Convert physical coordinates to internal ones.'''
-        assert coord.shape == (3,), 'Invalid atom coordinates!'
-        return self.rec_boxt@coord
+        return coord@self.rec_boxt
 
     def inter2phys(self, coord):
         '''Convert internal coordinates to physical ones.'''
-        assert coord.shape == (3,), 'Invalid atom coordinates!'
-        return self.boxt@coord
+        return coord@self.boxt
 
     def get_face_distance(self):
         '''Return face distinces to each surface of YZ, ZX, XY.'''
@@ -46,16 +44,10 @@ def normalize_coord(coord, region, nloc):
     Args:
     - coord: shape is [nloc*3]
     '''
-    tmp_coord = coord.clone()
-    for aid in range(nloc):  # 枚举原子
-        offset = aid * 3
-        a_coord = tmp_coord[offset:offset+3]
-        logging.debug('Raw coords: %s', a_coord)
-        inter_cood = region.phys2inter(a_coord) % 1.0
-        logging.debug(' -> inter coords: %s', inter_cood)
-        tmp_coord[offset:offset+3] = region.inter2phys(inter_cood)
-        logging.debug(' -> phys coords: %s', tmp_coord[offset:offset+3])
-    return tmp_coord
+    tmp_coord = coord.clone().view(-1, 3)
+    inter_cood = region.phys2inter(tmp_coord) % 1.0
+    tmp_coord = region.inter2phys(inter_cood)
+    return tmp_coord.view(-1)
 
 
 def compute_serial_cid(cell_offset, ncell):

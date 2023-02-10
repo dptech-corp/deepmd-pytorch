@@ -78,7 +78,6 @@ class TestSeA(unittest.TestCase):
     def test_consistency(self):
         avg_zero = torch.zeros([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
         std_ones = torch.ones([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
-        deriv_std_ones = torch.ones([self.ntypes, self.nnei, 4, 3], dtype=GLOBAL_PT_FLOAT_PRECISION)
 
         base_d, base_force = base_se_a(
             rcut=self.rcut,
@@ -92,21 +91,20 @@ class TestSeA(unittest.TestCase):
         pt_coord.requires_grad_(True)
         self.batch['type'] = torch.from_numpy(self.batch['type'])
         my_d = SmoothDescriptor.apply(
-            pt_coord,
-            self.batch['type'],
+            pt_coord.to(DEVICE),
+            self.batch['type'].to(DEVICE).to(torch.long),
             self.batch['natoms_vec'],
             self.batch['box'],
-            avg_zero.reshape([-1, self.nnei, 4]),
-            std_ones.reshape([-1, self.nnei, 4]),
-            deriv_std_ones,
+            avg_zero.reshape([-1, self.nnei, 4]).to(DEVICE),
+            std_ones.reshape([-1, self.nnei, 4]).to(DEVICE),
             self.rcut,
             self.rcut_smth,
             self.sec
         )
         my_d.sum().backward()
         my_force = pt_coord.grad.detach().numpy()
-        self.assertTrue(np.allclose(base_d, my_d.detach().numpy()))
-        self.assertTrue(np.allclose(base_force, my_force))
+        self.assertTrue(np.allclose(base_d, my_d.cpu().detach().numpy()))
+        self.assertTrue(np.allclose(base_force, -my_force))
 
 if __name__ == '__main__':
     unittest.main()
