@@ -44,10 +44,10 @@ def normalize_coord(coord, region, nloc):
     Args:
     - coord: shape is [nloc*3]
     '''
-    tmp_coord = coord.clone().view(-1, 3)
+    tmp_coord = coord.clone()
     inter_cood = region.phys2inter(tmp_coord) % 1.0
     tmp_coord = region.inter2phys(inter_cood)
-    return tmp_coord.view(-1)
+    return tmp_coord
 
 
 def compute_serial_cid(cell_offset, ncell):
@@ -57,18 +57,18 @@ def compute_serial_cid(cell_offset, ncell):
     - cell_offset: shape is [3]
     - ncell: shape is [3]
     '''
-    return (cell_offset[0]*ncell[1] + cell_offset[1])*ncell[2] + cell_offset[2]
 
+    cell_offset[:, 0] *= ncell[1]*ncell[2]
+    cell_offset[:, 1] *= ncell[2]
+    return cell_offset.sum(-1)
 
 def compute_pbc_shift(cell_offset, ncell):
     '''Tell shift count to move the atom into region.'''
-    shift = 0
-    if cell_offset < 0:
-        shift = 1
-        assert cell_offset + ncell > 0
-    elif cell_offset >= ncell:
-        shift = -1
-        assert cell_offset - ncell < ncell
+    shift = torch.zeros_like(cell_offset)
+    shift = shift + (cell_offset < 0)
+    shift = shift + -(cell_offset >= ncell).to(torch.long)
+    assert torch.all(cell_offset + ncell > 0)
+    assert torch.all(cell_offset - ncell < ncell)
     return shift
 
 
@@ -82,18 +82,22 @@ def build_inside_clist(coord, region, ncell):
     loc_ncell = torch.prod(ncell)  # 模拟区域内的 Cell 数量
     nloc = coord.numel() // 3  # 原子数量
     inter_cell_size = 1. / ncell
-    logging.debug('Cell size of internal coords:', inter_cell_size)
-    clist = [[] for _ in range(loc_ncell)]  # 模拟区域内的 Cell 列表
-    for aid in range(nloc):  # 枚举原子
-        a_coord = coord[aid*3:aid*3+3]
-        inter_cood = region.phys2inter(a_coord)
-        cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
-        assert not torch.any(cell_offset < 0), 'No outside cell should be used!'
-        delta = cell_offset - ncell
-        assert not torch.any(delta >= 0), 'No outside cell should be used!'
-        cid = compute_serial_cid(cell_offset, ncell)
-        clist[cid].append(aid)
-    return clist
+
+    inter_cood = region.phys2inter(coord.view(-1, 3))
+    cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
+    delta = cell_offset - ncell
+    a2c = compute_serial_cid(cell_offset, ncell) # cell id of atoms
+    arange = torch.arange(0, loc_ncell, 1, device=DEVICE)
+    cellid = (a2c == arange.unsqueeze(-1)) # one hot cellid
+    c2a = cellid.nonzero()
+    lst = []
+    cnt = 0
+    bincount = torch.bincount(a2c)
+    for i in range(loc_ncell):
+        n = bincount[i]
+        lst.append(c2a[cnt: cnt+n, 1])
+        cnt += n
+    return a2c, lst
 
 
 def append_neighbors(coord, region, atype, rcut):
@@ -108,41 +112,40 @@ def append_neighbors(coord, region, atype, rcut):
     # 计算 3 个方向的 Cell 大小和 Cell 数量
     ncell = torch.floor(to_face/rcut).to(torch.long)
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
-    logging.debug('Cell count:', ncell)
     cell_size = to_face / ncell
     ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
-    logging.debug('Outer-box cell count:', ngcell)
     expanded = cell_size * ngcell
-    assert not torch.any(expanded < rcut), 'Cell sizes calculated by `rcut` and `box` is invalid!'
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
-    clist = build_inside_clist(coord, region, ncell)
-    tmp_coord = []
-    tmp_atype = []
-    tmp_mapping = []
-    for xi in range(-ngcell[0], ncell[0]+ngcell[0]):
-        x_shift = compute_pbc_shift(xi, ncell[0])
-        for yi in range(-ngcell[1], ncell[1]+ngcell[1]):
-            y_shift = compute_pbc_shift(yi, ncell[1])
-            for zi in range(-ngcell[2], ncell[2]+ngcell[2]):
-                z_shift = compute_pbc_shift(zi, ncell[2])
-                if (xi >= 0 and xi < ncell[0]) and (yi >= 0 and yi < ncell[1]) and (zi >= 0 and zi < ncell[2]):
-                    continue  # 无需对内部原子重复处理
-                pbc_shift = torch.tensor([x_shift, y_shift, z_shift], device=DEVICE, dtype=torch.long)
-                coord_shift = region.inter2phys(pbc_shift.to(GLOBAL_PT_FLOAT_PRECISION))
-                mirrored = pbc_shift*ncell + torch.tensor([xi, yi, zi], device=DEVICE)
-                cid = compute_serial_cid(mirrored, ncell)
-                for aid in clist[cid]:
-                    a_coord = coord[aid*3:aid*3+3]
-                    tmp_coord.append(a_coord - coord_shift)
-                    tmp_atype.append(atype[aid])
-                    tmp_mapping.append(aid)
-    logging.debug('%d atoms are appended as ghost', len(tmp_atype))
+    a2c, c2a = build_inside_clist(coord, region, ncell)
+    xi = torch.arange(-ngcell[0], ncell[0]+ngcell[0], 1).to(DEVICE)
+    yi = torch.arange(-ngcell[1], ncell[1]+ngcell[1], 1).to(DEVICE)
+    zi = torch.arange(-ngcell[2], ncell[2]+ngcell[2], 1).to(DEVICE)
+    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=DEVICE)
+    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=DEVICE)
+    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=DEVICE)
+    xyz = xyz.view(-1, 3)
+    mask_a = (xyz >= 0).all(dim=-1)
+    mask_b = (xyz<ncell).all(dim=-1)
+    mask = ~torch.logical_and(mask_a, mask_b)
+    xyz = xyz[mask] # cell coord
+    shift = compute_pbc_shift(xyz, ncell)
+    coord_shift = region.inter2phys(shift.to(GLOBAL_PT_FLOAT_PRECISION))
+    mirrored = shift*ncell + xyz
+    cid = compute_serial_cid(mirrored, ncell)
+
+    n_atoms = coord.shape[0]
+    aid = [c2a[ci] + i*n_atoms for i, ci in enumerate(cid)]
+    aid = torch.cat(aid) 
+    tmp = aid//n_atoms
+    aid = aid % n_atoms
+    tmp_coord = coord[aid] - coord_shift[tmp]
+    tmp_atype = atype[aid]
 
     # 合并内部原子和 Ghost 原子信息
-    merged_coord = torch.cat([coord] + tmp_coord)
-    merged_atype = torch.cat([atype, torch.tensor(tmp_atype, device=DEVICE)])
-    merged_mapping = np.concatenate([np.arange(atype.numel()), tmp_mapping])
+    merged_coord = torch.cat([coord, tmp_coord])
+    merged_atype = torch.cat([atype, tmp_atype])
+    merged_mapping = torch.cat([torch.arange(atype.numel()).to(DEVICE), aid])
     return merged_coord, merged_atype, merged_mapping
 
 
@@ -269,7 +272,7 @@ class SmoothDescriptor():
         nlist_list = []
         for sid in range(nframes):  # 枚举样本
             logging.debug('[FW] In-batch ID: %d', sid)
-            selected, merged_coord, merged_mapping = make_env_mat(coord[sid], atype[sid], box[sid], rcut, sec)
+            selected, merged_coord, merged_mapping = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
             se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
             a_type = atype[sid]
             t_avg = mean[a_type]
