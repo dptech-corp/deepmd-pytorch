@@ -4,14 +4,13 @@ import torch
 
 from collections import namedtuple
 
-from deepmd_pt.env import *
+from deepmd_pt import env
 
 class Region3D(object):
 
     def __init__(self, boxt):
         '''Construct a simulation box.'''
-        logging.debug('Box: %s', boxt)
-        boxt = torch.tensor(boxt, device=DEVICE).reshape([3, 3])
+        boxt = boxt.reshape([3, 3])
         self.boxt = boxt.permute(1, 0)  # 用于世界坐标转内部坐标
         self.rec_boxt = torch.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
 
@@ -35,10 +34,10 @@ class Region3D(object):
 
     def get_face_distance(self):
         '''Return face distinces to each surface of YZ, ZX, XY.'''
-        return torch.tensor([self._h2yz, self._h2zx, self._h2xy], device=DEVICE, dtype=GLOBAL_PT_FLOAT_PRECISION)
+        return torch.stack([self._h2yz, self._h2zx, self._h2xy])
 
 
-def normalize_coord(coord, region, nloc):
+def normalize_coord(coord, region: Region3D, nloc: int):
     '''Move outer atoms into region by mirror.
 
     Args:
@@ -72,14 +71,14 @@ def compute_pbc_shift(cell_offset, ncell):
     return shift
 
 
-def build_inside_clist(coord, region, ncell):
+def build_inside_clist(coord, region: Region3D, ncell):
     '''Build cell list on atoms inside region.
 
     Args:
     - coord: shape is [nloc*3]
     - ncell: shape is [3]
     '''
-    loc_ncell = torch.prod(ncell)  # 模拟区域内的 Cell 数量
+    loc_ncell = int(torch.prod(ncell))  # 模拟区域内的 Cell 数量
     nloc = coord.numel() // 3  # 原子数量
     inter_cell_size = 1. / ncell
 
@@ -87,7 +86,7 @@ def build_inside_clist(coord, region, ncell):
     cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
     delta = cell_offset - ncell
     a2c = compute_serial_cid(cell_offset, ncell) # cell id of atoms
-    arange = torch.arange(0, loc_ncell, 1, device=DEVICE)
+    arange = torch.arange(0, loc_ncell, 1, device=env.DEVICE)
     cellid = (a2c == arange.unsqueeze(-1)) # one hot cellid
     c2a = cellid.nonzero()
     lst = []
@@ -100,7 +99,7 @@ def build_inside_clist(coord, region, ncell):
     return a2c, lst
 
 
-def append_neighbors(coord, region, atype, rcut):
+def append_neighbors(coord, region: Region3D, atype, rcut: float):
     '''Make ghost atoms who are valid neighbors.
 
     Args:
@@ -118,19 +117,19 @@ def append_neighbors(coord, region, atype, rcut):
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
-    xi = torch.arange(-ngcell[0], ncell[0]+ngcell[0], 1).to(DEVICE)
-    yi = torch.arange(-ngcell[1], ncell[1]+ngcell[1], 1).to(DEVICE)
-    zi = torch.arange(-ngcell[2], ncell[2]+ngcell[2], 1).to(DEVICE)
-    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=DEVICE)
-    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=DEVICE)
-    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=DEVICE)
+    xi = torch.arange(-ngcell[0], ncell[0]+ngcell[0], 1).to(env.DEVICE)
+    yi = torch.arange(-ngcell[1], ncell[1]+ngcell[1], 1).to(env.DEVICE)
+    zi = torch.arange(-ngcell[2], ncell[2]+ngcell[2], 1).to(env.DEVICE)
+    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=env.DEVICE)
+    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=env.DEVICE)
+    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=env.DEVICE)
     xyz = xyz.view(-1, 3)
     mask_a = (xyz >= 0).all(dim=-1)
     mask_b = (xyz<ncell).all(dim=-1)
     mask = ~torch.logical_and(mask_a, mask_b)
     xyz = xyz[mask] # cell coord
     shift = compute_pbc_shift(xyz, ncell)
-    coord_shift = region.inter2phys(shift.to(GLOBAL_PT_FLOAT_PRECISION))
+    coord_shift = region.inter2phys(shift.to(env.GLOBAL_PT_FLOAT_PRECISION))
     mirrored = shift*ncell + xyz
     cid = compute_serial_cid(mirrored, ncell)
 
@@ -145,11 +144,11 @@ def append_neighbors(coord, region, atype, rcut):
     # 合并内部原子和 Ghost 原子信息
     merged_coord = torch.cat([coord, tmp_coord])
     merged_atype = torch.cat([atype, tmp_atype])
-    merged_mapping = torch.cat([torch.arange(atype.numel()).to(DEVICE), aid])
+    merged_mapping = torch.cat([torch.arange(atype.numel()).to(env.DEVICE), aid])
     return merged_coord, merged_atype, merged_mapping
 
 
-def build_neighbor_list(nloc, coord, atype, rcut, sec):
+def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     '''For each atom inside region, build its neighbor list.
 
     Args:
@@ -162,7 +161,7 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
     coord_r = coord.view(1, -1, 3)
     distance = coord_l - coord_r
     distance = torch.linalg.norm(distance, dim=-1)
-    distance += torch.eye(nall, dtype=torch.bool, device=DEVICE)*DISTANCE_INF
+    distance += torch.eye(nall, dtype=torch.bool, device=env.DEVICE)*env.DISTANCE_INF
     distance = distance[:nloc] # shape: [nloc, nall]
 
     lst = []
@@ -170,7 +169,7 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
         if i > 0:
             nnei = nnei - sec[i-1]
         mask = atype.unsqueeze(0)==i
-        tmp = distance + (~mask) * DISTANCE_INF
+        tmp = distance + (~mask) * env.DISTANCE_INF
         sorted, indices = tmp.sort(dim=1)
         mask = (sorted < rcut).to(torch.long)
         indices = indices * mask + -(1)*(1-mask) # -1 for padding
@@ -179,7 +178,7 @@ def build_neighbor_list(nloc, coord, atype, rcut, sec):
     selected = torch.cat(lst, dim=-1)
     return selected
 
-def compute_smooth_weight(distance, rmin, rmax):
+def compute_smooth_weight(distance, rmin:float, rmax:float):
     '''Compute smooth weight for descriptor elements.'''
     mask = torch.logical_and(distance > rmin, distance < rmax)
     uu = (distance - rmin) / (rmax - rmin)
@@ -189,7 +188,7 @@ def compute_smooth_weight(distance, rmin, rmax):
 
 def make_env_mat(coord, atype,  # 原子坐标和相应类型
                  box,           # 模拟盒子
-                 rcut,          # 截断半径
+                 rcut:float,          # 截断半径
                  sec):          # 邻居中某元素的最大数量
     '''Based on atom coordinates, return environment matrix.
 
@@ -212,12 +211,12 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
     return selected, merged_coord, merged_mapping
 
 
-def make_se_a_mat(selected, coord, rcut, ruct_smth):
+def make_se_a_mat(selected, coord, rcut:float, ruct_smth:float):
     '''Based on environment matrix, build descriptor of type `se_a`.'''
     coord = coord.view(-1, 3)
     mask = selected>=0
     selected = selected * mask
-    coord_l = coord[range(selected.shape[0])].view(-1, 1, 3)
+    coord_l = coord[:selected.shape[0]].view(-1, 1, 3)
     coord_r = torch.index_select(coord, 0, selected.view(-1))
     coord_r = coord_r.view(selected.shape+(3,))
     diff = coord_r - coord_l
@@ -230,56 +229,49 @@ def make_se_a_mat(selected, coord, rcut, ruct_smth):
     descriptor[~mask] = 0
     return descriptor
 
-class SmoothDescriptor():
-    '''Function wrapper for `se_a` descriptor.'''
 
-    @staticmethod
-    def apply(
-        coord, atype, natoms, box,  # 动态的 torch.Tensor 或 numpy.ndarray
-        mean, stddev, # 静态的 numpy.ndarray
-        rcut, rcut_smth, sec  # 静态的 Python 对象
-    ):
-        '''Generate descriptor matrix from atom coordinates and other context.
+def smoothDescriptor(
+    coord, atype, natoms, box,  mean, stddev, rcut:float, rcut_smth:float, sec):
+    '''Generate descriptor matrix from atom coordinates and other context.
 
-        Args:
-        - coord: Batched atom coordinates with shape [nframes, natoms[1]*3].
-        - atype: Batched atom types with shape [nframes, natoms[1]].
-        - natoms: Batched atom statisics with shape [len(sec)+2].
-        - box: Batched simulation box with shape [nframes, 9].
-        - mean: Average value of descriptor per element type with shape [len(sec), nnei, 4].
-        - stddev: Standard deviation of descriptor per element type with shape [len(sec), nnei, 4].
-        - deriv_stddev:  StdDev of descriptor derivative per element type with shape [len(sec), nnei, 4, 3].
-        - rcut: Cut-off radius.
-        - rcut_smth: Smooth hyper-parameter for pair force & energy.
-        - sec: Cumulative count of neighbors by element.
+    Args:
+    - coord: Batched atom coordinates with shape [nframes, natoms[1]*3].
+    - atype: Batched atom types with shape [nframes, natoms[1]].
+    - natoms: Batched atom statisics with shape [len(sec)+2].
+    - box: Batched simulation box with shape [nframes, 9].
+    - mean: Average value of descriptor per element type with shape [len(sec), nnei, 4].
+    - stddev: Standard deviation of descriptor per element type with shape [len(sec), nnei, 4].
+    - deriv_stddev:  StdDev of descriptor derivative per element type with shape [len(sec), nnei, 4, 3].
+    - rcut: Cut-off radius.
+    - rcut_smth: Smooth hyper-parameter for pair force & energy.
+    - sec: Cumulative count of neighbors by element.
 
-        Returns:
-        - descriptor: Shape is [nframes, natoms[1]*nnei*4].
-        '''
-        nnei = sec[-1]  # 总的邻居数量
-        nframes = coord.shape[0]  # 样本数量
-        nloc, nall = natoms[0], natoms[1]  # 原子数量和包含 Ghost 原子的数量
-        assert nloc == nall, 'In PBC, `nloc` === `nall`!'
-        assert nframes == atype.shape[0], 'Batch size differs!'
-        assert nframes == box.shape[0], 'Batch size differs!'
-        assert nall*3 == coord.shape[1], 'Atom count differs!'
-        assert nall == atype.shape[1], 'Atom count differs!'
-        assert 9 == box.shape[1], 'Box size is invalid!'
-        assert len(sec) == natoms.shape[0] - 2, 'Element type mismatches!'
+    Returns:
+    - descriptor: Shape is [nframes, natoms[1]*nnei*4].
+    '''
+    nnei = sec[-1]  # 总的邻居数量
+    nframes = coord.shape[0]  # 样本数量
+    nloc, nall = natoms[0], natoms[1]  # 原子数量和包含 Ghost 原子的数量
+    assert nloc == nall, 'In PBC, `nloc` === `nall`!'
+    assert nframes == atype.shape[0], 'Batch size differs!'
+    assert nframes == box.shape[0], 'Batch size differs!'
+    assert nall*3 == coord.shape[1], 'Atom count differs!'
+    assert nall == atype.shape[1], 'Atom count differs!'
+    assert 9 == box.shape[1], 'Box size is invalid!'
+    assert len(sec) == natoms.shape[0] - 2, 'Element type mismatches!'
 
-        descriptor_list = []
-        deriv_list = []
-        nlist_list = []
-        for sid in range(nframes):  # 枚举样本
-            logging.debug('[FW] In-batch ID: %d', sid)
-            selected, merged_coord, merged_mapping = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
-            se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
-            a_type = atype[sid]
-            t_avg = mean[a_type]
-            t_std = stddev[a_type]
-            se_a = (se_a - t_avg) / t_std
-            descriptor_list.append(se_a.reshape([-1]))
-        descriptor_list = torch.stack(descriptor_list)
-        return descriptor_list
+    descriptor_list = []
+    deriv_list = []
+    nlist_list = []
+    for sid in range(nframes):  # 枚举样本
+        selected, merged_coord, merged_mapping = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
+        se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
+        a_type = atype[sid]
+        t_avg = mean[a_type]
+        t_std = stddev[a_type]
+        se_a = (se_a - t_avg) / t_std
+        descriptor_list.append(se_a.reshape([-1]))
+    descriptor_list = torch.stack(descriptor_list)
+    return descriptor_list
 
-__all__ = ['SmoothDescriptor']
+__all__ = ['smoothDescriptor']

@@ -38,7 +38,7 @@ class Trainer(object):
             type_map=model_params['type_map']
         )
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
-
+        self.model = torch.jit.script(self.model)
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -57,17 +57,17 @@ class Trainer(object):
         logging.info('Start to train %d steps.', self.num_steps)
         
         def step(step_id):
-            bdata = self.training_data.get_batch()
+            bdata = self.training_data.get_batch(tf=False, pt=True)
             optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
 
             # Prepare inputs
-            coord = torch.from_numpy(bdata['coord'])
-            atype = torch.from_numpy(bdata['type']).to(torch.long)
+            coord = bdata['coord']
+            atype = bdata['type']
             natoms = bdata['natoms_vec']
             box = bdata['box']
-            l_energy = torch.from_numpy(bdata['energy']).to(DEVICE)
-            l_force = torch.from_numpy(bdata['force']).to(DEVICE)
+            l_energy = bdata['energy']
+            l_force = bdata['force']
 
             # Compute prediction error
             coord.requires_grad_(True)

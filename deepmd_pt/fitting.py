@@ -3,6 +3,10 @@ import numpy as np
 import torch
 
 from deepmd_pt import env
+try:
+    from typing_extensions import Final
+except:
+    from torch.jit import Final
 
 
 def Tensor(*shape):
@@ -10,7 +14,7 @@ def Tensor(*shape):
 
 
 class SimpleLinear(torch.nn.Module):
-
+    resnet: Final[bool]
     def __init__(self, num_in, num_out, bavg=0., stddev=1., use_timestep=False, activate=True):
         '''Construct a linear layer.
 
@@ -104,7 +108,7 @@ class EnergyFittingNet(torch.nn.Module):
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         assert self.ntypes == len(bias_atom_e), 'Element count mismatches!'
-        self.bias_atom_e = bias_atom_e
+        self.bias_atom_e = torch.tensor(bias_atom_e)
 
         filter_layers = []
         for type_i in range(self.ntypes):
@@ -128,12 +132,12 @@ class EnergyFittingNet(torch.nn.Module):
         '''
         start_index = 0
         outs = []
-        for type_i in range(self.ntypes):
+        for type_i, filter_layer in enumerate(self.filter_layers):
             offset = start_index
             length = natoms[2+type_i]
             inputs_i = inputs[:, offset:offset+length]
             inputs_i = inputs_i.reshape(-1, self.embedding_width)  # Shape is [nframes*natoms[2+type_i], self.embedding_width]
-            final_layer = self.filter_layers[type_i](inputs_i)
+            final_layer = filter_layer(inputs_i)
             final_layer = final_layer.view(-1, natoms[2+type_i])  # Shape is [nframes, natoms[2+type_i]]
             final_layer = final_layer + self.bias_atom_e[type_i]
             outs.append(final_layer)

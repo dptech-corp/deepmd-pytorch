@@ -288,6 +288,11 @@ class TestEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(head_dict['force'], p_force.cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy()))
 
+        optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
+        optimizer.zero_grad()
+        def step(step_id):
+            bdata = self.training_data.get_batch()
+            optimizer.zero_grad()
         # Compare gradient for consistency
         loss.backward()
         for name, param in my_model.named_parameters():
@@ -295,6 +300,9 @@ class TestEnergy(unittest.TestCase):
             var_grad = vs_dict[var_name].gradient
             param_grad = param.grad.cpu().numpy()
             self.assertTrue(np.allclose(var_grad, param_grad, rtol=1e-4, atol=1e-6))
+        for g in optimizer.param_groups:
+            g['lr'] = cur_lr
+        optimizer.step()
 
 
 if __name__ == '__main__':

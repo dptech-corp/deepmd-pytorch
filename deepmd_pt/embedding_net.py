@@ -2,7 +2,12 @@ import numpy as np
 import torch
 
 from deepmd_pt import env
-from deepmd_pt.descriptor import SmoothDescriptor
+from deepmd_pt.descriptor import smoothDescriptor
+try:
+    from typing_extensions import Final
+except:
+    from torch.jit import Final
+
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms):
@@ -49,7 +54,7 @@ def Tensor(*shape):
 
 
 class ResidualLinear(torch.nn.Module):
-
+    resnet: Final[int]
     def __init__(self, num_in, num_out, bavg=0., stddev=1., resnet_dt=False):
         '''Construct a linear layer.
 
@@ -144,7 +149,7 @@ class EmbeddingNet(torch.nn.Module):
         self.axis_neuron = axis_neuron
 
         self.ntypes = len(sel)  # 元素数量
-        self.sec = np.cumsum(sel)  # 每种元素在邻居中的位移
+        self.sec = torch.cumsum(torch.tensor(sel), dim=0)  # 每种元素在邻居中的位移
         self.nnei = self.sec[-1]  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
@@ -184,7 +189,8 @@ class EmbeddingNet(torch.nn.Module):
         for cc, tt, nn, bb in zip(coord, atype, natoms, box):  # 逐个 Batch 的分析
             cc = torch.tensor(cc, device=env.DEVICE)
             tt = torch.tensor(tt, device=env.DEVICE, dtype=torch.long)
-            descriptor = SmoothDescriptor.apply(
+            bb = torch.tensor(bb, device=env.DEVICE)
+            descriptor = smoothDescriptor(
                 cc, tt, nn, bb,
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
@@ -232,13 +238,13 @@ class EmbeddingNet(torch.nn.Module):
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         '''
         nall = natoms[0]
-        dmatrix = SmoothDescriptor.apply(
+        dmatrix = smoothDescriptor(
             coord, atype, natoms, box,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth, self.sec
         )  # shape is [nframes, nall*self.ndescrpt]
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
-        xyz_scatter = None
+        xyz_scatter = torch.empty(1,)
         for ii, transform in enumerate(self.filter_layers):
             ret = transform(dmatrix)  # shape is [nframes*nall, 4, self.filter_neuron[-1]]
             if ii == 0:

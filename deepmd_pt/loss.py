@@ -32,7 +32,7 @@ class EnergyStdLoss(torch.nn.Module):
         pref_e = self.limit_pref_e + (self.start_pref_e - self.limit_pref_e) * coef
         pref_f = self.limit_pref_f + (self.start_pref_f - self.limit_pref_f) * coef
         l2_ener_loss = torch.mean(torch.square(p_energy - l_energy))
-        atom_norm_ener = torch.tensor(1./ natoms[0]).to(GLOBAL_PT_FLOAT_PRECISION)
+        atom_norm_ener =1./ natoms[0]
         energy_loss = atom_norm_ener * (pref_e * l2_ener_loss)
         diff_f = l_force.view(-1) - p_force.view(-1)
         l2_force_loss = torch.mean(torch.square(diff_f))

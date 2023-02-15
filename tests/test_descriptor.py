@@ -10,7 +10,7 @@ from deepmd.env import op_module
 
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.descriptor import SmoothDescriptor
+from deepmd_pt.descriptor import smoothDescriptor
 from deepmd_pt.env import *
 
 
@@ -89,7 +89,7 @@ class TestSeA(unittest.TestCase):
         )
         pt_coord = self.pt_batch['coord']
         pt_coord.requires_grad_(True)
-        my_d = SmoothDescriptor.apply(
+        my_d = smoothDescriptor(
             pt_coord.to(DEVICE),
             self.pt_batch['type'],
             self.pt_batch['natoms_vec'],
