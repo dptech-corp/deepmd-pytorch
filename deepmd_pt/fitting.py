@@ -46,14 +46,13 @@ class SimpleLinear(torch.nn.Module):
 
 class ResidualDeep(torch.nn.Module):
 
-    def __init__(self, type_id, embedding_width, neuron, bias_atom_e, resnet_dt=False):
+    def __init__(self, type_id, embedding_width, neuron, resnet_dt=False):
         '''Construct a filter on the given element as neighbor.
 
         Args:
         - typei: Element ID.
         - embedding_width: Embedding width per atom.
         - neuron: Number of neurons in each hidden layers of the embedding net.
-        - bias_atom_e: Average enery per atom for each element.
         - resnet_dt: Using time-step in the ResNet construction.
         '''
         super(ResidualDeep, self).__init__()
@@ -69,7 +68,7 @@ class ResidualDeep(torch.nn.Module):
             )
             deep_layers.append(one)
         self.deep_layers = torch.nn.ModuleList(deep_layers)
-        self.final_layer = SimpleLinear(self.neuron[-1], 1, bavg=bias_atom_e, activate=False)
+        self.final_layer = SimpleLinear(self.neuron[-1], 1, activate=False)
 
     def forward(self, inputs):
         '''Calculate decoded embedding for each atom.
@@ -86,8 +85,8 @@ class ResidualDeep(torch.nn.Module):
                 outputs = outputs + linear(outputs)
             else:
                 outputs = linear(outputs)
-        return self.final_layer(outputs)
-
+        outputs = self.final_layer(outputs)
+        return outputs
 
 class EnergyFittingNet(torch.nn.Module):
 
@@ -105,10 +104,11 @@ class EnergyFittingNet(torch.nn.Module):
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         assert self.ntypes == len(bias_atom_e), 'Element count mismatches!'
+        self.bias_atom_e = bias_atom_e
 
         filter_layers = []
         for type_i in range(self.ntypes):
-            one = ResidualDeep(type_i, embedding_width, neuron, bias_atom_e[type_i], resnet_dt)
+            one = ResidualDeep(type_i, embedding_width, neuron, resnet_dt)
             filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
 
@@ -120,7 +120,7 @@ class EnergyFittingNet(torch.nn.Module):
         '''Based on embedding net output, alculate total energy.
 
         Args:
-        - inputs: Embedding matrix. Its shape is [nframes, natoms[0]*self.embedding_width].
+        - inputs: Embedding matrix. Its shape is [nframes, natoms[0], self.embedding_width].
         - natoms: Tell atom count and element count. Its shape is [2+self.ntypes].
 
         Returns:
@@ -129,12 +129,13 @@ class EnergyFittingNet(torch.nn.Module):
         start_index = 0
         outs = []
         for type_i in range(self.ntypes):
-            offset = start_index*self.embedding_width
-            length = natoms[2+type_i]*self.embedding_width
+            offset = start_index
+            length = natoms[2+type_i]
             inputs_i = inputs[:, offset:offset+length]
             inputs_i = inputs_i.reshape(-1, self.embedding_width)  # Shape is [nframes*natoms[2+type_i], self.embedding_width]
             final_layer = self.filter_layers[type_i](inputs_i)
             final_layer = final_layer.view(-1, natoms[2+type_i])  # Shape is [nframes, natoms[2+type_i]]
+            final_layer = final_layer + self.bias_atom_e[type_i]
             outs.append(final_layer)
             start_index += natoms[2+type_i]
         outs = torch.cat(outs, dim=1)  # Shape is [nframes, natoms[0]]

@@ -20,7 +20,7 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
-
+from deepmd_pt.env import *
 
 CUR_DIR = os.path.dirname(__file__)
 kDataSystems = [
@@ -248,6 +248,7 @@ class TestEnergy(unittest.TestCase):
             },
             training_data=my_ds
         )
+        my_model.to(DEVICE)
         my_lr = MyLRExp(self.start_lr, self.stop_lr, self.decay_steps, self.stop_steps)
         my_loss = EnergyStdLoss(
             starter_learning_rate=self.start_lr,
@@ -260,8 +261,9 @@ class TestEnergy(unittest.TestCase):
         # Keep statistics consistency between 2 implentations
         my_em = my_model.embedding_net
         my_em.mean = stat_dict['descriptor.mean'].reshape([self.ntypes, my_em.nnei, 4])
+        my_em.mean = torch.tensor(my_em.mean, device=DEVICE)
         my_em.stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.nnei, 4])
-        my_em.deriv_stddev = np.tile(np.expand_dims(my_em.stddev, axis=-1), [1, 1, 1, 3])
+        my_em.stddev = torch.tensor(my_em.stddev, device=DEVICE)
         my_model.fitting_net.bias_atom_e = stat_dict['fitting_net.bias_atom_e']
 
         # Keep parameter value consistency between 2 implentations
@@ -272,26 +274,26 @@ class TestEnergy(unittest.TestCase):
                 param.data.copy_(torch.from_numpy(var))
 
         # Start forward computing
-        pt_coord = torch.from_numpy(batch['coord'])
+        pt_coord = torch.from_numpy(batch['coord']).to(DEVICE)
         pt_coord.requires_grad_(True)
-        atype = batch['type']
-        natoms = batch['natoms_vec']
-        box = batch['box']
-        l_energy = torch.from_numpy(batch['energy'])
-        l_force = torch.from_numpy(batch['force'])
+        atype = torch.tensor(batch['type'], device=DEVICE, dtype=torch.long)
+        natoms = torch.tensor(batch['natoms_vec'], device=DEVICE, dtype=torch.long)
+        box = torch.tensor(batch['box'], device=DEVICE)
+        l_energy = torch.from_numpy(batch['energy']).to(DEVICE)
+        l_force = torch.from_numpy(batch['force']).to(DEVICE)
         p_energy, p_force = my_model(pt_coord, atype, natoms, box)
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)[0]
-        self.assertTrue(np.allclose(head_dict['energy'], p_energy.detach().numpy()))
-        self.assertTrue(np.allclose(head_dict['force'], p_force.detach().numpy()))
-        self.assertTrue(np.allclose(head_dict['loss'], loss.detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['energy'], p_energy.cpu().detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['force'], p_force.cpu().detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy()))
 
         # Compare gradient for consistency
         loss.backward()
         for name, param in my_model.named_parameters():
             var_name = torch2tf(name)
             var_grad = vs_dict[var_name].gradient
-            param_grad = param.grad.numpy()
+            param_grad = param.grad.cpu().numpy()
             self.assertTrue(np.allclose(var_grad, param_grad, rtol=1e-4, atol=1e-6))
 
 

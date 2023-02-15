@@ -28,7 +28,6 @@ class Trainer(object):
         self.disp_freq = training_params.get('disp_freq', 1000)
         self.save_ckpt = training_params.get('save_ckpt', 'model.ckpt')
         self.save_freq = training_params.get('save_freq', 1000)
-        self.device = 'cpu'
 
         # Data + Model
         my_random.seed(training_params['seed'])

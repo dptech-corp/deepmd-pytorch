@@ -11,7 +11,6 @@ from deepmd.fit.ener import EnerFitting
 from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION
 from deepmd_pt.fitting import EnergyFittingNet
 
-
 class FakeDescriptor(object):
 
     def __init__(self, ntypes, embedding_width):
@@ -71,6 +70,7 @@ class TestFittingNet(unittest.TestCase):
         fake_d = FakeDescriptor(2, 30)
         self.dp_fn = EnerFitting(fake_d, self.n_neuron)
         self.dp_fn.bias_atom_e = np.random.uniform(size=[self.ntypes])
+        self.dp_fn.bias_atom_e = [1e8, 0]
 
     def test_consistency(self):
         dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms)
@@ -84,12 +84,14 @@ class TestFittingNet(unittest.TestCase):
                 matched = re.match('filter_layers\.(\d).final_layer\.([a-z]+)', name)
                 if matched:
                     key = gen_key(type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2))
-            if key is not None:
-                var = values[key]
-                with torch.no_grad():
-                    # Keep parameter value consistency between 2 implentations
-                    param.data.copy_(torch.from_numpy(var))
-        my_energy = my_fn(torch.from_numpy(self.embedding), torch.from_numpy(self.natoms)).detach()
+            assert key is not None
+            var = values[key]
+            with torch.no_grad():
+                # Keep parameter value consistency between 2 implentations
+                param.data.copy_(torch.from_numpy(var))
+        embedding = torch.from_numpy(self.embedding)
+        embedding = embedding.view(4, -1, self.embedding_width)
+        my_energy = my_fn(embedding, torch.from_numpy(self.natoms)).detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
 

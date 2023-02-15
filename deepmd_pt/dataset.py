@@ -2,7 +2,7 @@ import glob
 import logging
 import numpy as np
 import os
-
+import torch
 from typing import List
 
 from deepmd_pt import env, my_random
@@ -225,10 +225,25 @@ class DeepmdDataSet(object):
     def nsystems(self):
         return len(self._data_systems)
 
-    def get_batch(self, sys_idx=None):
+    def get_batch(self, sys_idx=None, pt=False, tf=True):
         '''Get a batch of frames from the selected system.'''
         if sys_idx is None:
             sys_idx = my_random.choice(np.arange(self.nsystems))
         b_data = self._data_systems[sys_idx].get_batch(self._batch_size)
         b_data['natoms_vec'] = self._natoms_vec[sys_idx]
-        return b_data
+
+        results = []
+        if tf:
+            results.append(b_data)
+        if pt:
+            b_data = b_data.copy()
+            results.append(b_data)
+            for key in ['coord', 'box', 'force', 'energy']:
+                if key in b_data.keys():
+                    b_data[key] = torch.tensor(b_data[key], device=env.DEVICE, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            for key in ['type', 'natoms_vec']:
+                if key in b_data.keys():
+                    b_data[key] = torch.tensor(b_data[key], device=env.DEVICE, dtype=torch.long)
+        if len(results) == 1:
+            results = results[0]
+        return results

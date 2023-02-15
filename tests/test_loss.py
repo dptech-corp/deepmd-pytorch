@@ -105,7 +105,8 @@ class TestLearningRate(unittest.TestCase):
             torch.from_numpy(p_force),
             torch.from_numpy(l_energy),
             torch.from_numpy(l_force)
-        ).detach()
+        )
+        my_loss = my_loss[0].detach().cpu()
         self.assertTrue(np.allclose(base_loss, my_loss.numpy()))
 
 

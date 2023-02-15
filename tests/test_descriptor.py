@@ -66,7 +66,7 @@ class TestSeA(unittest.TestCase):
             os.path.join(CUR_DIR, 'water/data/data_1'),
             os.path.join(CUR_DIR, 'water/data/data_2')
         ], 2, ['O', 'H'])
-        self.batch = ds.get_batch()
+        self.np_batch, self.pt_batch = ds.get_batch(pt=True)
         self.rcut = 6.
         self.rcut_smth = 0.5
         self.sel = [46, 92]
@@ -83,18 +83,17 @@ class TestSeA(unittest.TestCase):
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
-            batch=self.batch,
+            batch=self.np_batch,
             mean=avg_zero,
             stddev=std_ones
         )
-        pt_coord = torch.from_numpy(self.batch['coord'])
+        pt_coord = self.pt_batch['coord']
         pt_coord.requires_grad_(True)
-        self.batch['type'] = torch.from_numpy(self.batch['type'])
         my_d = SmoothDescriptor.apply(
             pt_coord.to(DEVICE),
-            self.batch['type'].to(DEVICE).to(torch.long),
-            self.batch['natoms_vec'],
-            self.batch['box'],
+            self.pt_batch['type'],
+            self.pt_batch['natoms_vec'],
+            self.pt_batch['box'],
             avg_zero.reshape([-1, self.nnei, 4]).to(DEVICE),
             std_ones.reshape([-1, self.nnei, 4]).to(DEVICE),
             self.rcut,
@@ -102,7 +101,7 @@ class TestSeA(unittest.TestCase):
             self.sec
         )
         my_d.sum().backward()
-        my_force = pt_coord.grad.detach().numpy()
+        my_force = pt_coord.grad.cpu().detach().numpy()
         self.assertTrue(np.allclose(base_d, my_d.cpu().detach().numpy()))
         self.assertTrue(np.allclose(base_force, -my_force))
 

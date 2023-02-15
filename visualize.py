@@ -35,6 +35,8 @@ def draw_line_2d(path, step_interval, rolling=100):
         step = item[0].rstrip(',').split('=')[-1]
         e = item[1].rstrip(',').split('=')[-1]
         f = item[2].rstrip(',').split('=')[-1]
+        #e = item[4].rstrip(',').split('=')[-1]
+        #f = item[6].rstrip(',').split('=')[-1]
         steps.append(int(step))
         rmse_e.append(float(e))
         rmse_f.append(float(f))

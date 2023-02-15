@@ -12,7 +12,7 @@ from deepmd.descriptor import DescrptSeA
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.embedding_net import EmbeddingNet
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION
+from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -64,7 +64,7 @@ class TestSeA(unittest.TestCase):
             os.path.join(CUR_DIR, 'water/data/data_1'),
             os.path.join(CUR_DIR, 'water/data/data_2')
         ], 2, ['O', 'H'])
-        self.batch = ds.get_batch()
+        self.np_batch, self.torch_batch = ds.get_batch(pt=True)
         self.rcut = 6.
         self.rcut_smth = 0.5
         self.sel = [46, 92]
@@ -82,17 +82,17 @@ class TestSeA(unittest.TestCase):
         )
         dp_embedding, dp_force, dp_vars = base_se_a(
             descriptor=dp_d,
-            coord=self.batch['coord'],
-            atype=self.batch['type'],
-            natoms=self.batch['natoms_vec'],
-            box=self.batch['box'],
+            coord=self.np_batch['coord'],
+            atype=self.np_batch['type'],
+            natoms=self.np_batch['natoms_vec'],
+            box=self.np_batch['box'],
         )
 
         # Reproduced
         embedding_net = EmbeddingNet(
             self.rcut, self.rcut_smth, self.sel,
             self.filter_neuron, self.axis_neuron
-        )
+        ).to(DEVICE)
         for name, param in embedding_net.named_parameters():
             ms = re.findall(r'(\d)\.deep_layers\.(\d)\.([a-z]+)', name)
             if len(ms) == 1:
@@ -102,18 +102,18 @@ class TestSeA(unittest.TestCase):
                 with torch.no_grad():
                     # Keep parameter value consistency between 2 implentations
                     param.data.copy_(torch.from_numpy(var))
-        pt_coord = torch.from_numpy(self.batch['coord'])
+        pt_coord = self.torch_batch['coord']
         pt_coord.requires_grad_(True)
         env_embedding = embedding_net(
             pt_coord,
-            self.batch['type'],
-            self.batch['natoms_vec'],
-            self.batch['box']
+            self.torch_batch['type'],
+            self.torch_batch['natoms_vec'],
+            self.torch_batch['box']
         )
-        my_embedding = env_embedding.detach().numpy()
+        my_embedding = env_embedding.cpu().detach().numpy()
         fake_energy = torch.sum(env_embedding)
         fake_energy.backward()
-        my_force = pt_coord.grad.numpy()
+        my_force = -pt_coord.grad.cpu().numpy()
 
         # Check
         self.assertTrue(np.allclose(dp_embedding, my_embedding))

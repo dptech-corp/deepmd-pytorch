@@ -90,6 +90,8 @@ class TestDataset(unittest.TestCase):
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
         my_en = EmbeddingNet(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         my_en.compute_input_stats(coord, atype, natoms, box)
+        my_en.mean = my_en.mean.cpu().numpy()
+        my_en.stddev = my_en.stddev.cpu().numpy()
         self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.reshape([-1])))
         self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.reshape([-1])))
 
