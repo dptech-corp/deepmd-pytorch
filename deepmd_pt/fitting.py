@@ -50,7 +50,7 @@ class SimpleLinear(torch.nn.Module):
 
 class ResidualDeep(torch.nn.Module):
 
-    def __init__(self, type_id, embedding_width, neuron, resnet_dt=False):
+    def __init__(self, type_id, embedding_width, neuron, bias_atom_e, resnet_dt=False):
         '''Construct a filter on the given element as neighbor.
 
         Args:
@@ -72,7 +72,9 @@ class ResidualDeep(torch.nn.Module):
             )
             deep_layers.append(one)
         self.deep_layers = torch.nn.ModuleList(deep_layers)
-        self.final_layer = SimpleLinear(self.neuron[-1], 1, activate=False)
+        if not env.ENERGY_BIAS_TRAINABLE:
+            bias_atom_e = 0
+        self.final_layer = SimpleLinear(self.neuron[-1], 1, bias_atom_e, activate=False)
 
     def forward(self, inputs):
         '''Calculate decoded embedding for each atom.
@@ -112,7 +114,7 @@ class EnergyFittingNet(torch.nn.Module):
 
         filter_layers = []
         for type_i in range(self.ntypes):
-            one = ResidualDeep(type_i, embedding_width, neuron, resnet_dt)
+            one = ResidualDeep(type_i, embedding_width, neuron, bias_atom_e[type_i], resnet_dt)
             filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
 
@@ -139,7 +141,8 @@ class EnergyFittingNet(torch.nn.Module):
             inputs_i = inputs_i.reshape(-1, self.embedding_width)  # Shape is [nframes*natoms[2+type_i], self.embedding_width]
             final_layer = filter_layer(inputs_i)
             final_layer = final_layer.view(-1, natoms[2+type_i])  # Shape is [nframes, natoms[2+type_i]]
-            final_layer = final_layer + self.bias_atom_e[type_i]
+            if not env.ENERGY_BIAS_TRAINABLE:
+                final_layer = final_layer + self.bias_atom_e[type_i]
             outs.append(final_layer)
             start_index += natoms[2+type_i]
         outs = torch.cat(outs, dim=1)  # Shape is [nframes, natoms[0]]

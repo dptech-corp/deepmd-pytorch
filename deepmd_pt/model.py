@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+from typing import Optional, List
 from deepmd_pt.embedding_net import EmbeddingNet
 from deepmd_pt.fitting import EnergyFittingNet
 from deepmd_pt.stat import compute_output_stats, make_stat_input, merge_sys_stat
@@ -56,8 +56,10 @@ class EnergyModel(torch.nn.Module):
         assert coord.requires_grad, 'Coordinate tensor must require gradient!'
         embedding = self.embedding_net(coord, atype, natoms, box)
         atom_energy = self.fitting_net(embedding, natoms)
-        energy = atom_energy.sum(dim=-1)
-        force = torch.autograd.grad([energy.sum()], [coord], create_graph=True)[0]
+        energy = atom_energy.sum(dim=-1, keepdim=True)
+        faked_grad = torch.ones_like(energy)
+        lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
+        force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
         if not force is None:
             force = -force
         return energy, force

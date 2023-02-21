@@ -16,7 +16,6 @@ class Region3D(object):
 
         # 计算空间属性
         self.volume = torch.linalg.det(self.boxt)  # 平行六面体空间的体积
-        assert self.volume > 0, 'Negative volume of box is detected!'
         c_yz = torch.cross(boxt[1], boxt[2])
         self._h2yz = self.volume / torch.linalg.norm(c_yz)
         c_zx = torch.cross(boxt[2], boxt[0])
@@ -265,10 +264,10 @@ def smoothDescriptor(
     nlist_list = []
     for sid in range(nframes):  # 枚举样本
         selected, merged_coord, merged_mapping = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
-        se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth)
-        a_type = atype[sid]
-        t_avg = mean[a_type]
-        t_std = stddev[a_type]
+        se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth) # shape [n_atom, dim, 4]
+        a_type = atype[sid] # [n_atom]
+        t_avg = mean[a_type] # [n_atom, dim, 4]
+        t_std = stddev[a_type] # [n_atom, dim, 4]
         se_a = (se_a - t_avg) / t_std
         descriptor_list.append(se_a.reshape([-1]))
     descriptor_list = torch.stack(descriptor_list)

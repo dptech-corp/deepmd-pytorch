@@ -32,7 +32,7 @@
             "seed": 1,
             "_comment": " that's all"
         },
-        "data_stat_nbatch": 5,
+        "data_stat_nbatch": 20,
         "_comment": " that's all"
     },
     "learning_rate": {

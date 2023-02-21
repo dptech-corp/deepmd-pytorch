@@ -94,6 +94,5 @@ class TestFittingNet(unittest.TestCase):
         my_energy = my_fn(embedding, torch.from_numpy(self.natoms)).detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
-
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,9 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
-from env import DEVICE
+from env import DEVICE, JIT
+if torch.__version__.startswith("2"):
+    import torch._dynamo
 
 
 class Trainer(object):
@@ -38,7 +40,11 @@ class Trainer(object):
             type_map=model_params['type_map']
         )
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
-        self.model = torch.jit.script(self.model)
+        if torch.__version__.startswith("2") and JIT:
+            torch._dynamo.config.verbose = True
+            self.model = torch.compile(self.model, dynamic=True)
+        elif JIT:
+            self.model = torch.jit.script(self.model)
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -71,15 +77,13 @@ class Trainer(object):
 
             # Compute prediction error
             coord.requires_grad_(True)
-            p_energy, p_force = self.model(coord.to(DEVICE), atype.to(DEVICE), natoms, box)
+            p_energy, p_force = self.model(coord, atype, natoms, box)
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
             loss_val = loss.cpu().detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
 
             # Backpropagation
             loss.backward()
-            for g in optimizer.param_groups:
-                g['lr'] = cur_lr
             optimizer.step()
 
             # Log and persist
@@ -95,7 +99,17 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
-
+        if JIT:
+            if torch.__version__.startswith("2"):
+                bdata = self.training_data.get_batch(tf=False, pt=True)
+                coord = bdata['coord']
+                atype = bdata['type']
+                natoms = bdata['natoms_vec']
+                box = bdata['box']
+                exported_model = torch._dynamo.export(self.model, (coord, atype, natoms, box))
+                torch.save(exported_model, "compiled_model.pt")
+            else:
+                self.model.save("torchscript_model.pt")
         fout.close()
         logging.info('Saving model after all steps...')
         torch.save(self.model.state_dict(), self.save_ckpt)
