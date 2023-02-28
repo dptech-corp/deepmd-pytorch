@@ -12,7 +12,7 @@ except:
 
 def analyze_descrpt(matrix, ndescrpt, natoms):
     '''Collect avg, square avg and count of descriptors in a batch.'''
-    ntypes = natoms.size - 2
+    ntypes = natoms.shape[1] - 2
     start_index = 0
     sysr = []  # 每类元素的径向均值
     sysa = []  # 每类元素的轴向均值
@@ -20,7 +20,7 @@ def analyze_descrpt(matrix, ndescrpt, natoms):
     sysr2 = []  # 每类元素的径向平方均值
     sysa2 = []  # 每类元素的轴向平方均值
     for type_i in range(ntypes):
-        end_index = start_index + ndescrpt * natoms[2+type_i]
+        end_index = start_index + ndescrpt * natoms[0, 2+type_i]
         dd = matrix[:, start_index:end_index]  # 本元素所有原子的 descriptor
         start_index = end_index
         dd = np.reshape (dd, [-1, 4])  # Shape is [nframes*natoms[2+type_id]*self.nnei, 4]
@@ -180,16 +180,16 @@ class EmbeddingNet(torch.nn.Module):
         sumn = []
         sumr2 = []
         suma2 = []
-        for system in merged['energy']:  # 逐个 system 的分析
-            index = merged['mapping'].unsqueeze(-1).expand(-1, -1, 3)
-            extended_coord = torch.gather(coord, dim=1, index=index)
-            extended_coord = extended_coord - merged['shift']
+        for system in merged:  # 逐个 system 的分析
+            index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
+            extended_coord = torch.gather(system['coord'], dim=1, index=index)
+            extended_coord = extended_coord - system['shift']
             descriptor = smoothDescriptor(
-                system['coord'], extended_coord, system['selected'],
+                extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
             )
-            sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(descriptor.cpu().numpy(), self.ndescrpt, nn)
+            sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(descriptor.cpu().numpy(), self.ndescrpt, system['natoms'])
             sumr.append(sysr)
             suma.append(sysa)
             sumn.append(sysn)

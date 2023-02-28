@@ -3,7 +3,7 @@ import torch
 from typing import Optional, List
 from deepmd_pt.embedding_net import EmbeddingNet
 from deepmd_pt.fitting import EnergyFittingNet
-from deepmd_pt.stat import compute_output_stats, make_stat_input, merge_sys_stat
+from deepmd_pt.stat import compute_output_stats, make_stat_input
 
 
 class EnergyModel(torch.nn.Module):
@@ -25,15 +25,16 @@ class EnergyModel(torch.nn.Module):
         # Statistics
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
         sampled = make_stat_input(training_data, data_stat_nbatch)
-        merged = merge_sys_stat(sampled)
-#        self.embedding_net.compute_input_stats(merged)
+        self.embedding_net.compute_input_stats(sampled)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = self.embedding_net.ntypes
         fitting_param['embedding_width'] = self.embedding_net.dim_out
-        fitting_param['bias_atom_e'] = compute_output_stats(sampled['energy'], sampled['natoms_vec'])
+        energy = [item['energy'] for item in sampled]
+        natoms = [item['natoms'] for item in sampled]
+        fitting_param['bias_atom_e'] = compute_output_stats(energy, natoms)[:, 0]
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
     def forward(self, coord, atype, natoms, box, **kwargs):

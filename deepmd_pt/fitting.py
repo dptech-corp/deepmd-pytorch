@@ -136,14 +136,14 @@ class EnergyFittingNet(torch.nn.Module):
         outs = []
         for type_i, filter_layer in enumerate(self.filter_layers):
             offset = start_index
-            length = natoms[2+type_i]
+            length = natoms[0, 2+type_i]
             inputs_i = inputs[:, offset:offset+length]
             inputs_i = inputs_i.reshape(-1, self.embedding_width)  # Shape is [nframes*natoms[2+type_i], self.embedding_width]
             final_layer = filter_layer(inputs_i)
-            final_layer = final_layer.view(-1, natoms[2+type_i])  # Shape is [nframes, natoms[2+type_i]]
+            final_layer = final_layer.view(-1, natoms[0,2+type_i])  # Shape is [nframes, natoms[2+type_i]]
             if not env.ENERGY_BIAS_TRAINABLE:
                 final_layer = final_layer + self.bias_atom_e[type_i]
             outs.append(final_layer)
-            start_index += natoms[2+type_i]
+            start_index += natoms[0, 2+type_i]
         outs = torch.cat(outs, dim=1)  # Shape is [nframes, natoms[0]]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
