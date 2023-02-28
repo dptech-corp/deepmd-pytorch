@@ -227,7 +227,8 @@ def make_se_a_mat(selected, coord, rcut:float, ruct_smth:float):
 
 
 def smoothDescriptor(
-    coord, atype, natoms, box,  mean, stddev, rcut:float, rcut_smth:float, sec):
+    extended_coord, selected, atype,
+    mean, stddev, rcut:float, rcut_smth:float, sec):
     '''Generate descriptor matrix from atom coordinates and other context.
 
     Args:
@@ -246,28 +247,14 @@ def smoothDescriptor(
     - descriptor: Shape is [nframes, natoms[1]*nnei*4].
     '''
     nnei = sec[-1]  # 总的邻居数量
-    nframes = coord.shape[0]  # 样本数量
-    nloc, nall = natoms[0], natoms[1]  # 原子数量和包含 Ghost 原子的数量
-    assert nloc == nall, 'In PBC, `nloc` === `nall`!'
-    assert nframes == atype.shape[0], 'Batch size differs!'
-    assert nframes == box.shape[0], 'Batch size differs!'
-    assert nall*3 == coord.shape[1], 'Atom count differs!'
-    assert nall == atype.shape[1], 'Atom count differs!'
-    assert 9 == box.shape[1], 'Box size is invalid!'
-    assert len(sec) == natoms.shape[0] - 2, 'Element type mismatches!'
+    nframes = extended_coord.shape[0]  # 样本数量
 
     descriptor_list = []
     deriv_list = []
     nlist_list = []
-    coord = coord.view(nframes, -1, 3)
     for sid in range(nframes):  # 枚举样本
-        region = Region3D(box[sid])
-        nloc = atype[sid].shape[0]
-        _coord = normalize_coord(coord[sid], region, nloc)
-        selected, merged_coord_shift, merged_mapping = make_env_mat(_coord, atype[sid], region, rcut, sec)
-        merged_coord = _coord[merged_mapping] - merged_coord_shift
-        se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth) # shape [n_atom, dim, 4]
-        a_type = atype[sid] # [n_atom]
+        a_type = atype[sid]
+        se_a = make_se_a_mat(selected[sid], extended_coord[sid], rcut, rcut_smth) # shape [n_atom, dim, 4]
         t_avg = mean[a_type] # [n_atom, dim, 4]
         t_std = stddev[a_type] # [n_atom, dim, 4]
         se_a = (se_a - t_avg) / t_std

@@ -65,22 +65,17 @@ class Trainer(object):
         logging.info('Start to train %d steps.', self.num_steps)
         
         def step(step_id):
-            bdata = self.training_data.get_batch(tf=False, pt=True)
+            bdata = self.training_data[0]
             optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
 
-            # Prepare inputs
-            coord = bdata['coord']
-            atype = bdata['type']
-            natoms = bdata['natoms_vec']
-            box = bdata['box']
             l_energy = bdata['energy']
             l_force = bdata['force']
 
             # Compute prediction error
-            coord.requires_grad_(True)
-            p_energy, p_force = self.model(coord, atype, natoms, box)
-            loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
+            bdata['coord'].requires_grad_(True)
+            p_energy, p_force = self.model(**bdata)
+            loss, rmse_e, rmse_f = self.loss(cur_lr, bdata['natoms'], p_energy, p_force, l_energy, l_force)
             loss_val = loss.cpu().detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
 

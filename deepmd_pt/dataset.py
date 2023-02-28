@@ -6,7 +6,7 @@ import torch
 from typing import List
 from torch.utils.data import Dataset
 from deepmd_pt import env, my_random
-from deepmd_pt.descriptor import make_env_mat
+from deepmd_pt.descriptor import Region3D, normalize_coord, make_env_mat
 
 
 def _shuffle_data(data):
@@ -233,16 +233,22 @@ class DeepmdDataSet(Dataset):
     def __len__():
         return self.nsystems
 
-    def __getitem__(self, index):
-        batch = self.get_batch(index, pt=True, tf=False)
+    def __getitem__(self, index, batch = None):
+        if batch is None:
+            batch = self.get_batch(index, pt=True, tf=False)
+        batch['coord'] = batch['coord'].view(self._batch_size, -1, 3)
         coord = batch['coord']
-        atype = batch['atype']
+        atype = batch['type']
         box = batch['box']
         rcut = self.rcut
         sec = sec = self.sec
         selected, shift, mapping = [], [], []
         for sid in range(self._batch_size):
-            a, b, c = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
+            region = Region3D(box[sid])
+            nloc = atype[sid].shape[0]
+            _coord = normalize_coord(coord[sid], region, nloc)
+            coord[sid] = _coord
+            a, b, c = make_env_mat(_coord, atype[sid], region, rcut, sec)
             selected.append(a)
             shift.append(b)
             mapping.append(c)
@@ -252,6 +258,8 @@ class DeepmdDataSet(Dataset):
         batch['selected'] = selected
         batch['shift'] = shift
         batch['mapping'] = mapping
+        batch['atype'] = batch.pop('type')
+        batch['natoms'] = batch.pop('natoms_vec')
         return batch
 
     def get_batch(self, sys_idx=None, pt=False, tf=True):

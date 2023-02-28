@@ -172,26 +172,20 @@ class EmbeddingNet(torch.nn.Module):
         """
         return self.filter_neuron[-1] * self.axis_neuron
 
-    def compute_input_stats(self, coord, atype, natoms, box):
+    def compute_input_stats(self, merged):
         '''Update mean and stddev for descriptor elements.
-
-        Args:
-        - coord: Batched atom coordinates with shape [nframes, natoms[1]*3].
-        - atype: Batched atom types with shape [nframes, natoms[1]].
-        - natoms: Batched atom statisics with shape [self.ntypes+2].
-        - box: Batched simulation box with shape [nframes, 9].
         '''
         sumr = []
         suma = []
         sumn = []
         sumr2 = []
         suma2 = []
-        for cc, tt, nn, bb in zip(coord, atype, natoms, box):  # 逐个 system 的分析
-            cc = torch.tensor(cc, device=env.DEVICE)
-            tt = torch.tensor(tt, device=env.DEVICE, dtype=torch.long)
-            bb = torch.tensor(bb, device=env.DEVICE)
+        for system in merged['energy']:  # 逐个 system 的分析
+            index = merged['mapping'].unsqueeze(-1).expand(-1, -1, 3)
+            extended_coord = torch.gather(coord, dim=1, index=index)
+            extended_coord = extended_coord - merged['shift']
             descriptor = smoothDescriptor(
-                cc, tt, nn, bb,
+                system['coord'], extended_coord, system['selected'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
             )
@@ -225,7 +219,7 @@ class EmbeddingNet(torch.nn.Module):
         self.stddev = np.stack(all_dstd)
         self.stddev = torch.tensor(self.stddev, device=env.DEVICE)
 
-    def forward(self, coord, atype, natoms, box):
+    def forward(self, extended_coord, selected, atype):
         '''Calculate decoded embedding for each atom.
 
         Args:
@@ -237,12 +231,11 @@ class EmbeddingNet(torch.nn.Module):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         '''
-        nall = natoms[0]
+        nall = selected.shape[1]
         dmatrix = smoothDescriptor(
-            coord, atype, natoms, box,
+            extended_coord, selected, atype,
             self.mean, self.stddev,
-            self.rcut, self.rcut_smth, self.sec
-        )  # shape is [nframes, nall*self.ndescrpt]
+            self.rcut, self.rcut_smth, self.sec)  # shape is [nframes, nall*self.ndescrpt]
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         xyz_scatter = torch.empty(1,)
         for ii, transform in enumerate(self.filter_layers):
