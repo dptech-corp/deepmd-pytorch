@@ -37,7 +37,7 @@ class EnergyModel(torch.nn.Module):
         fitting_param['bias_atom_e'] = compute_output_stats(energy, natoms)[:, 0]
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, box, **kwargs):
+    def forward(self, coord, atype, natoms, mapping, shift, selected):
         '''Return total energy of the system.
 
         Args:
@@ -51,10 +51,10 @@ class EnergyModel(torch.nn.Module):
         - force: XYZ force per atom.
         '''
         assert coord.requires_grad, 'Coordinate tensor must require gradient!'
-        index = kwargs['mapping'].unsqueeze(-1).expand(-1, -1, 3)
+        index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(coord, dim=1, index=index)
-        extended_coord = extended_coord - kwargs['shift']
-        embedding = self.embedding_net(extended_coord, kwargs['selected'], atype)
+        extended_coord = extended_coord - shift
+        embedding = self.embedding_net(extended_coord, selected, atype)
         atom_energy = self.fitting_net(embedding, natoms)
         energy = atom_energy.sum(dim=-1, keepdim=True)
         faked_grad = torch.ones_like(energy)

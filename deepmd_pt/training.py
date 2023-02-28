@@ -74,7 +74,9 @@ class Trainer(object):
 
             # Compute prediction error
             bdata['coord'].requires_grad_(True)
-            p_energy, p_force = self.model(**bdata)
+            coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
+            mapping, shift, selected = bdata['mapping'], bdata['shift'], bdata['selected']
+            p_energy, p_force = self.model(coord, atype, natoms, mapping, shift, selected)
             loss, rmse_e, rmse_f = self.loss(cur_lr, bdata['natoms'], p_energy, p_force, l_energy, l_force)
             loss_val = loss.cpu().detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)

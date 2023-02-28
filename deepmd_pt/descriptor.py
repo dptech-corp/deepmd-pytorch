@@ -209,12 +209,13 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
 
 def make_se_a_mat(selected, coord, rcut:float, ruct_smth:float):
     '''Based on environment matrix, build descriptor of type `se_a`.'''
-    coord = coord.view(-1, 3)
+    bsz, natoms, nnei = selected.shape
     mask = selected>=0
     selected = selected * mask
-    coord_l = coord[:selected.shape[0]].view(-1, 1, 3)
-    coord_r = torch.index_select(coord, 0, selected.view(-1))
-    coord_r = coord_r.view(selected.shape+(3,))
+    coord_l = coord[:, :natoms].view(bsz, -1, 1, 3)
+    index = selected.view(bsz, -1).unsqueeze(-1).expand(-1, -1, 3)
+    coord_r = torch.gather(coord, 1, index)
+    coord_r = coord_r.view(bsz, natoms, nnei, 3)
     diff = coord_r - coord_l
     length = torch.linalg.norm(diff, dim=-1, keepdim=True)
     length = length + ~mask.unsqueeze(-1)
@@ -248,18 +249,10 @@ def smoothDescriptor(
     '''
     nnei = sec[-1]  # 总的邻居数量
     nframes = extended_coord.shape[0]  # 样本数量
-
-    descriptor_list = []
-    deriv_list = []
-    nlist_list = []
-    for sid in range(nframes):  # 枚举样本
-        a_type = atype[sid]
-        se_a = make_se_a_mat(selected[sid], extended_coord[sid], rcut, rcut_smth) # shape [n_atom, dim, 4]
-        t_avg = mean[a_type] # [n_atom, dim, 4]
-        t_std = stddev[a_type] # [n_atom, dim, 4]
-        se_a = (se_a - t_avg) / t_std
-        descriptor_list.append(se_a.reshape([-1]))
-    descriptor_list = torch.stack(descriptor_list)
-    return descriptor_list
+    se_a = make_se_a_mat(selected, extended_coord, rcut, rcut_smth) # shape [n_atom, dim, 4]
+    t_avg = mean[atype] # [n_atom, dim, 4]
+    t_std = stddev[atype] # [n_atom, dim, 4]
+    se_a = (se_a - t_avg) / t_std
+    return se_a
 
 __all__ = ['smoothDescriptor']
