@@ -38,7 +38,7 @@ class Trainer(object):
             systems=dataset_params['systems'],
             batch_size=dataset_params['batch_size'],
             type_map=model_params['type_map']
-        )
+        )   
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if torch.__version__.startswith("2") and JIT:
             torch._dynamo.config.verbose = True

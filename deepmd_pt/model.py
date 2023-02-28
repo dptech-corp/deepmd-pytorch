@@ -27,7 +27,7 @@ class EnergyModel(torch.nn.Module):
         sampled = make_stat_input(training_data, data_stat_nbatch)
         merged = merge_sys_stat(sampled)
         coord = merged['coord']
-        atype = np.array(merged['type'])
+        atype = merged['type']
         natoms = merged['natoms_vec']
         box = merged['box']
         self.embedding_net.compute_input_stats(coord, atype, natoms, box)

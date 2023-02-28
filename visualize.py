@@ -25,7 +25,7 @@ def rolling_window(a, window):
     strides = a.strides + (a.strides[-1],)
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
-def draw_line_2d(path, step_interval, rolling=100):
+def draw_line_2d(path, step_interval, rolling=1000):
     lcurve = load_lcurve_file(path)
     steps = []
     rmse_e = []
@@ -34,7 +34,7 @@ def draw_line_2d(path, step_interval, rolling=100):
         item = lcurve[idx]
         step = item[0].rstrip(',').split('=')[-1]
         e = item[1].rstrip(',').split('=')[-1]
-        f = item[1].rstrip(',').split('=')[-1]
+        f = item[2].rstrip(',').split('=')[-1]
         #e = item[4].rstrip(',').split('=')[-1]
         #f = item[6].rstrip(',').split('=')[-1]
         #e = item[3].rstrip(',').split('=')[-1]
