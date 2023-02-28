@@ -4,8 +4,9 @@ import numpy as np
 import os
 import torch
 from typing import List
-
+from torch.utils.data import Dataset
 from deepmd_pt import env, my_random
+from deepmd_pt.descriptor import make_env_mat
 
 
 def _shuffle_data(data):
@@ -205,9 +206,9 @@ class DeepmdDataSystem(object):
             return np.float32(0.0), data
 
 
-class DeepmdDataSet(object):
+class DeepmdDataSet(Dataset):
 
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str]):
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -220,10 +221,38 @@ class DeepmdDataSet(object):
         self._data_systems = [DeepmdDataSystem(ii, type_map=self._type_map) for ii in systems]
         self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
         self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
+        self.rcut = rcut
+        self.sel = sel
+        if not sel is None:
+            self.sec = torch.cumsum(torch.tensor(sel), dim=0)
 
     @property
     def nsystems(self):
         return len(self._data_systems)
+
+    def __len__():
+        return self.nsystems
+
+    def __getitem__(self, index):
+        batch = self.get_batch(index, pt=True, tf=False)
+        coord = batch['coord']
+        atype = batch['atype']
+        box = batch['box']
+        rcut = self.rcut
+        sec = sec = self.sec
+        selected, shift, mapping = [], [], []
+        for sid in range(self._batch_size):
+            a, b, c = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
+            selected.append(a)
+            shift.append(b)
+            mapping.append(c)
+        selected = torch.stack(selected)
+        shift = torch.stack(shift)
+        mapping = torch.stack(mapping)
+        batch['selected'] = selected
+        batch['shift'] = shift
+        batch['mapping'] = mapping
+        return batch
 
     def get_batch(self, sys_idx=None, pt=False, tf=True):
         '''Get a batch of frames from the selected system.'''

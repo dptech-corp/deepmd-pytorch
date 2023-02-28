@@ -142,9 +142,10 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
 
     # 合并内部原子和 Ghost 原子信息
     merged_coord = torch.cat([coord, tmp_coord])
+    merged_coord_shift = torch.cat([torch.zeros_like(coord), coord_shift[tmp]])
     merged_atype = torch.cat([atype, tmp_atype])
     merged_mapping = torch.cat([torch.arange(atype.numel()).to(env.DEVICE), aid])
-    return merged_coord, merged_atype, merged_mapping
+    return merged_coord_shift, merged_atype, merged_mapping
 
 
 def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
@@ -186,8 +187,7 @@ def compute_smooth_weight(distance, rmin:float, rmax:float):
 
 
 def make_env_mat(coord, atype,  # 原子坐标和相应类型
-                 box,           # 模拟盒子
-                 rcut:float,          # 截断半径
+                 region, rcut:float,          # 截断半径
                  sec):          # 邻居中某元素的最大数量
     '''Based on atom coordinates, return environment matrix.
 
@@ -197,17 +197,14 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
     - box: shape is [9]
     - sec: shape is [max(atype)+1]
     '''
-    region = Region3D(box)
-    nloc = atype.shape[0]
-
     # 将盒子外的原子，通过镜像挪入盒子内
-    tmp_coord = normalize_coord(coord, region, nloc)
-    merged_coord, merged_atype, merged_mapping = append_neighbors(tmp_coord, region, atype, rcut)
-    assert merged_coord.shape[0] > tmp_coord.shape[0], 'No ghost atom is added!'
+    merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
+    merged_coord = coord[merged_mapping] - merged_coord_shift
+    assert merged_coord.shape[0] > coord.shape[0], 'No ghost atom is added!'
 
     # 构建邻居列表，并按 sel_a 筛选
-    selected = build_neighbor_list(nloc, merged_coord, merged_atype, rcut, sec)
-    return selected, merged_coord, merged_mapping
+    selected = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec)
+    return selected, merged_coord_shift, merged_mapping
 
 
 def make_se_a_mat(selected, coord, rcut:float, ruct_smth:float):
@@ -262,8 +259,13 @@ def smoothDescriptor(
     descriptor_list = []
     deriv_list = []
     nlist_list = []
+    coord = coord.view(nframes, -1, 3)
     for sid in range(nframes):  # 枚举样本
-        selected, merged_coord, merged_mapping = make_env_mat(coord[sid].view(-1,3), atype[sid], box[sid], rcut, sec)
+        region = Region3D(box[sid])
+        nloc = atype[sid].shape[0]
+        _coord = normalize_coord(coord[sid], region, nloc)
+        selected, merged_coord_shift, merged_mapping = make_env_mat(_coord, atype[sid], region, rcut, sec)
+        merged_coord = _coord[merged_mapping] - merged_coord_shift
         se_a = make_se_a_mat(selected, merged_coord, rcut, rcut_smth) # shape [n_atom, dim, 4]
         a_type = atype[sid] # [n_atom]
         t_avg = mean[a_type] # [n_atom, dim, 4]

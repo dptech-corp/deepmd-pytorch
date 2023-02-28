@@ -190,8 +190,6 @@ class EmbeddingNet(torch.nn.Module):
             cc = torch.tensor(cc, device=env.DEVICE)
             tt = torch.tensor(tt, device=env.DEVICE, dtype=torch.long)
             bb = torch.tensor(bb, device=env.DEVICE)
-            import pdb
-            pdb.set_trace()
             descriptor = smoothDescriptor(
                 cc, tt, nn, bb,
                 self.mean, self.stddev,

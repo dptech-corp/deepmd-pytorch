@@ -37,7 +37,9 @@ class Trainer(object):
         self.training_data = DeepmdDataSet(
             systems=dataset_params['systems'],
             batch_size=dataset_params['batch_size'],
-            type_map=model_params['type_map']
+            type_map=model_params['type_map'],
+            rcut=model_params['descriptor']['rcut'],
+            sel=model_params['descriptor']['sel']
         )   
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if torch.__version__.startswith("2") and JIT:
@@ -99,6 +101,8 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
+            if step_id == 1000:
+                break
         if JIT:
             if torch.__version__.startswith("2"):
                 bdata = self.training_data.get_batch(tf=False, pt=True)
