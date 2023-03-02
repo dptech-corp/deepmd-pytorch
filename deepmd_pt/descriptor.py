@@ -85,7 +85,7 @@ def build_inside_clist(coord, region: Region3D, ncell):
     cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
     delta = cell_offset - ncell
     a2c = compute_serial_cid(cell_offset, ncell) # cell id of atoms
-    arange = torch.arange(0, loc_ncell, 1, device=env.DEVICE)
+    arange = torch.arange(0, loc_ncell, 1)
     cellid = (a2c == arange.unsqueeze(-1)) # one hot cellid
     c2a = cellid.nonzero()
     lst = []
@@ -116,12 +116,12 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
-    xi = torch.arange(-ngcell[0], ncell[0]+ngcell[0], 1).to(env.DEVICE)
-    yi = torch.arange(-ngcell[1], ncell[1]+ngcell[1], 1).to(env.DEVICE)
-    zi = torch.arange(-ngcell[2], ncell[2]+ngcell[2], 1).to(env.DEVICE)
-    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=env.DEVICE)
-    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=env.DEVICE)
-    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=env.DEVICE)
+    xi = torch.arange(-ngcell[0], ncell[0]+ngcell[0], 1)
+    yi = torch.arange(-ngcell[1], ncell[1]+ngcell[1], 1)
+    zi = torch.arange(-ngcell[2], ncell[2]+ngcell[2], 1)
+    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long)
+    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long)
+    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long)
     xyz = xyz.view(-1, 3)
     mask_a = (xyz >= 0).all(dim=-1)
     mask_b = (xyz<ncell).all(dim=-1)
@@ -144,7 +144,7 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     merged_coord = torch.cat([coord, tmp_coord])
     merged_coord_shift = torch.cat([torch.zeros_like(coord), coord_shift[tmp]])
     merged_atype = torch.cat([atype, tmp_atype])
-    merged_mapping = torch.cat([torch.arange(atype.numel()).to(env.DEVICE), aid])
+    merged_mapping = torch.cat([torch.arange(atype.numel()), aid])
     return merged_coord_shift, merged_atype, merged_mapping
 
 
@@ -161,7 +161,7 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     coord_r = coord.view(1, -1, 3)
     distance = coord_l - coord_r
     distance = torch.linalg.norm(distance, dim=-1)
-    distance += torch.eye(nall, dtype=torch.bool, device=env.DEVICE)*env.DISTANCE_INF
+    distance += torch.eye(nall, dtype=torch.bool)*env.DISTANCE_INF
     distance = distance[:nloc] # shape: [nloc, nall]
 
     lst = []

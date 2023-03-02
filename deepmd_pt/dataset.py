@@ -230,7 +230,7 @@ class DeepmdDataSet(Dataset):
     def nsystems(self):
         return len(self._data_systems)
 
-    def __len__():
+    def __len__(self):
         return self.nsystems
 
     def __getitem__(self, index=None, batch = None):
@@ -277,10 +277,10 @@ class DeepmdDataSet(Dataset):
             results.append(b_data)
             for key in ['coord', 'box', 'force', 'energy']:
                 if key in b_data.keys():
-                    b_data[key] = torch.tensor(b_data[key], device=env.DEVICE, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+                    b_data[key] = torch.tensor(b_data[key], dtype=env.GLOBAL_PT_FLOAT_PRECISION)
             for key in ['type', 'natoms_vec']:
                 if key in b_data.keys():
-                    b_data[key] = torch.tensor(b_data[key], device=env.DEVICE, dtype=torch.long)
+                    b_data[key] = torch.tensor(b_data[key], dtype=torch.long)
             b_data['natoms_vec'] = b_data['natoms_vec'].unsqueeze(0).expand(self._batch_size, -1)
         if len(results) == 1:
             results = results[0]
