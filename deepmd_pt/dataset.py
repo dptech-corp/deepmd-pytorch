@@ -7,49 +7,11 @@ from typing import List
 from torch.utils.data import Dataset
 from deepmd_pt import env, my_random
 from deepmd_pt.descriptor import Region3D, normalize_coord, make_env_mat
-
-
-def _shuffle_data(data):
-    ret = {}
-    nframes = data['coord'].shape[0]
-    idx = np.arange (nframes)
-    my_random.shuffle(idx)
-    for kk in data :
-        if type(data[kk]) == np.ndarray and \
-            len(data[kk].shape) == 2 and \
-            data[kk].shape[0] == nframes and \
-            not ('find_' in kk) and \
-            'type' != kk:
-            ret[kk] = data[kk][idx]
-        else :
-            ret[kk] = data[kk]
-    return ret, idx
-
-
-def _get_subdata(data, idx=None):
-    new_data = {}
-    for ii in data:
-        dd = data[ii]
-        if 'find_' in ii:
-            new_data[ii] = dd
-        else:
-            if idx is not None:
-                new_data[ii] = dd[idx]
-            else:
-                new_data[ii] = dd
-    return new_data
-
-
-def _make_idx_map(atom_type):
-    natoms = atom_type.shape[0]
-    idx = np.arange(natoms)
-    idx_map = np.lexsort((idx, atom_type))
-    return idx_map
-
+from tqdm import trange
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, type_map: List[str] = None):
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None):
         '''Construct DeePMD-style frame collection of one system.
 
         Args:
@@ -75,6 +37,9 @@ class DeepmdDataSystem(object):
         self._sys_path = sys_path
         self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
         self._dirs.sort()
+        self.rcut = rcut
+        self.sec = sec
+        self.sets = [None for i in range(len(self._sys_path))]
 
     def add(self, 
             key: str, 
@@ -113,15 +78,21 @@ class DeepmdDataSystem(object):
             set_size = self._frames['coord'].shape[0]
         if self._iterator + batch_size > set_size:
             set_idx = self._set_count % len(self._dirs)
-            frames = self._load_set(self._dirs[set_idx])
-            self._frames, _ = _shuffle_data(frames)
+            if self.sets[set_idx] is None:
+                frames = self._load_set(self._dirs[set_idx])
+                frames = self.preprocess(frames)
+                self.sets[set_idx] = frames
+            else:
+                frames = self.sets[set_idx]
+            self._frames = frames
+            self._shuffle_data()
             set_size = self._frames['coord'].shape[0]
             self._iterator = 0
             self._set_count += 1
         iterator = min(self._iterator + batch_size, set_size)
         idx = np.arange(self._iterator, iterator)
         self._iterator += batch_size
-        return _get_subdata(self._frames, idx)
+        return self._get_subdata(idx)
 
     def get_ntypes(self):
         '''Number of atom types in the system.'''
@@ -205,45 +176,25 @@ class DeepmdDataSystem(object):
                 data = np.zeros([nframes,ndof]).astype(env.GLOBAL_NP_FLOAT_PRECISION)
             return np.float32(0.0), data
 
+    def preprocess(self, batch):
+        n_frames = batch['coord'].shape[0]
+        for key in ['coord', 'box', 'force', 'energy']:
+            if key in batch.keys():
+                batch[key] = torch.tensor(batch[key], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+        for key in ['type']:
+            if key in batch.keys():
+                batch[key] = torch.tensor(batch[key], dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        batch['coord'] = batch['coord'].view(n_frames, -1, 3)
+        batch['atype'] = batch.pop('type')
 
-class DeepmdDataSet(Dataset):
-
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None):
-        '''Construct DeePMD-style dataset containing frames cross different systems.
-
-        Args:
-        - systems: Paths to systems.
-        - batch_size: Max frame count in a batch.
-        - type_map: Atom types.
-        '''
-        self._batch_size = batch_size
-        self._type_map = type_map
-        self._data_systems = [DeepmdDataSystem(ii, type_map=self._type_map) for ii in systems]
-        self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
-        self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
-        self.rcut = rcut
-        self.sel = sel
-        if not sel is None:
-            self.sec = torch.cumsum(torch.tensor(sel), dim=0)
-
-    @property
-    def nsystems(self):
-        return len(self._data_systems)
-
-    def __len__(self):
-        return self.nsystems
-
-    def __getitem__(self, index=None, batch = None):
-        if batch is None:
-            batch = self.get_batch(index, pt=True, tf=False)
-        batch['coord'] = batch['coord'].view(self._batch_size, -1, 3)
+        keys = ['selected', 'shift', 'mapping']
         coord = batch['coord']
-        atype = batch['type']
+        atype = batch['atype']
         box = batch['box']
         rcut = self.rcut
         sec = sec = self.sec
         selected, shift, mapping = [], [], []
-        for sid in range(self._batch_size):
+        for sid in trange(n_frames):
             region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
             _coord = normalize_coord(coord[sid], region, nloc)
@@ -258,30 +209,84 @@ class DeepmdDataSet(Dataset):
         batch['selected'] = selected
         batch['shift'] = shift
         batch['mapping'] = mapping
-        batch['atype'] = batch.pop('type')
-        batch['natoms'] = batch.pop('natoms_vec')
         return batch
+        
+    def _shuffle_data(self):
+        nframes = self._frames['coord'].shape[0]
+        idx = np.arange(nframes)
+        my_random.shuffle(idx)
+        self.idx_mapping = idx
 
-    def get_batch(self, sys_idx=None, pt=False, tf=True):
+    def _get_subdata(self, idx=None):
+        data = self._frames
+        idx = self.idx_mapping[idx]
+        new_data = {}
+        for ii in data:
+            dd = data[ii]
+            if 'find_' in ii:
+                new_data[ii] = dd
+            else:
+                if idx is not None:
+                    new_data[ii] = dd[idx]
+                else:
+                    new_data[ii] = dd
+        return new_data
+
+
+def _make_idx_map(atom_type):
+    natoms = atom_type.shape[0]
+    idx = np.arange(natoms)
+    idx_map = np.lexsort((idx, atom_type))
+    return idx_map
+
+
+class DeepmdDataSet(Dataset):
+
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None):
+        '''Construct DeePMD-style dataset containing frames cross different systems.
+
+        Args:
+        - systems: Paths to systems.
+        - batch_size: Max frame count in a batch.
+        - type_map: Atom types.
+        '''
+        self._batch_size = batch_size
+        self._type_map = type_map
+        if not sel is None:
+            sec = torch.cumsum(torch.tensor(sel), dim=0)
+        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
+        self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
+        self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
+        self.cache = [{} for sys in self._data_systems]
+
+    @property
+    def nsystems(self):
+        return len(self._data_systems)
+
+    def __len__(self):
+        return self.nsystems
+
+    def __getitem__(self, index=None):
         '''Get a batch of frames from the selected system.'''
-        if sys_idx is None:
-            sys_idx = my_random.choice(np.arange(self.nsystems))
-        b_data = self._data_systems[sys_idx].get_batch(self._batch_size)
-        b_data['natoms_vec'] = self._natoms_vec[sys_idx]
+        if index is None:
+            index = my_random.choice(np.arange(self.nsystems))
+        b_data = self._data_systems[index].get_batch(self._batch_size)
+        b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
+        b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(self._batch_size, -1)
+        return b_data
 
-        results = []
-        if tf:
-            results.append(b_data)
-        if pt:
-            b_data = b_data.copy()
-            results.append(b_data)
-            for key in ['coord', 'box', 'force', 'energy']:
-                if key in b_data.keys():
-                    b_data[key] = torch.tensor(b_data[key], dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-            for key in ['type', 'natoms_vec']:
-                if key in b_data.keys():
-                    b_data[key] = torch.tensor(b_data[key], dtype=torch.long)
-            b_data['natoms_vec'] = b_data['natoms_vec'].unsqueeze(0).expand(self._batch_size, -1)
-        if len(results) == 1:
-            results = results[0]
-        return results
+    def get_batch(self, sys_idx=None):
+        """
+        TF-compatible batch for testing
+        """
+        pt_batch = self[sys_idx]
+        np_batch = {}
+        for key in ['coord', 'box', 'force', 'energy']:
+            if key in pt_batch.keys():
+                np_batch[key] = pt_batch[key].cpu().numpy()
+        for key in ['atype', 'natoms']:
+            if key in pt_batch.keys():
+                np_batch[key] = pt_batch[key].cpu().numpy()
+        np_batch['coord'] = np_batch['coord'].reshape(self._batch_size, -1)
+        np_batch['natoms'] = np_batch['natoms'][0]
+        return np_batch, pt_batch

@@ -51,8 +51,8 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
         return sess.run([stat_descrpt, force], feed_dict={
             coord: batch['coord'],
             box: batch['box'],
-            natoms_vec: batch['natoms_vec'],
-            atype: batch['type'],
+            natoms_vec: batch['natoms'],
+            atype: batch['atype'],
             default_mesh: np.array([0, 0, 0, 2, 2, 2])
         })
 
@@ -60,17 +60,17 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
 class TestSeA(unittest.TestCase):
 
     def setUp(self):
-        my_random.seed(10)
+        my_random.seed(20)
+        self.rcut = 6.
+        self.rcut_smth = 0.5
+        self.sel = [46, 92]
+        self.bsz = 4
         ds = DeepmdDataSet([
             os.path.join(CUR_DIR, 'water/data/data_0'),
             os.path.join(CUR_DIR, 'water/data/data_1'),
             os.path.join(CUR_DIR, 'water/data/data_2')
-        ], 2, ['O', 'H'])
-        self.np_batch, self.pt_batch = ds.get_batch(pt=True)
-        self.rcut = 6.
-        self.rcut_smth = 0.5
-        self.sel = [46, 92]
-
+        ], self.bsz, ['O', 'H'], self.rcut, self.sel)
+        self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
         self.ntypes = len(self.sel)
         self.nnei = sum(self.sel)
@@ -87,13 +87,16 @@ class TestSeA(unittest.TestCase):
             mean=avg_zero,
             stddev=std_ones
         )
+
         pt_coord = self.pt_batch['coord']
         pt_coord.requires_grad_(True)
+        index = self.pt_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
+        extended_coord = torch.gather(pt_coord, dim=1, index=index)
+        extended_coord = extended_coord - self.pt_batch['shift']
         my_d = smoothDescriptor(
-            pt_coord.to(DEVICE),
-            self.pt_batch['type'],
-            self.pt_batch['natoms_vec'],
-            self.pt_batch['box'],
+            extended_coord.to(DEVICE),
+            self.pt_batch['selected'],
+            self.pt_batch['atype'],
             avg_zero.reshape([-1, self.nnei, 4]).to(DEVICE),
             std_ones.reshape([-1, self.nnei, 4]).to(DEVICE),
             self.rcut,
@@ -101,7 +104,8 @@ class TestSeA(unittest.TestCase):
             self.sec
         )
         my_d.sum().backward()
-        my_force = pt_coord.grad.cpu().detach().numpy()
+        my_force = pt_coord.grad.view(self.bsz, -1).cpu().detach().numpy()
+        my_d = my_d.view(self.bsz, -1)
         self.assertTrue(np.allclose(base_d, my_d.cpu().detach().numpy()))
         self.assertTrue(np.allclose(base_force, -my_force))
 

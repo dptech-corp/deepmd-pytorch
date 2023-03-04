@@ -5,23 +5,12 @@ from typing import Any, Dict
 
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
-from torch.utils.data import DataLoader
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
 from env import DEVICE, JIT
 if torch.__version__.startswith("2"):
     import torch._dynamo
-
-def autoReset(dataloader):
-    iterable = iter(dataloader)
-    while True:
-        try:
-            batch = next(iterable)
-        except StopIteration:
-            iterable = iter(dataloader)
-            batch = next(iterable)
-        yield batch
       
 class Trainer(object):
 
@@ -51,9 +40,6 @@ class Trainer(object):
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
         )   
-        self.dl = DataLoader(self.training_data, collate_fn=lambda lst: lst[0],
-        num_workers=4, prefetch_factor=2)
-        self.dl = autoReset(self.dl)
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if torch.__version__.startswith("2") and JIT:
             torch._dynamo.config.verbose = True
@@ -78,10 +64,7 @@ class Trainer(object):
         logging.info('Start to train %d steps.', self.num_steps)
         
         def step(step_id):
-            bdata = next(self.dl)
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
-                if key in bdata.keys():
-                    bdata[key] = bdata[key].to(DEVICE)
+            bdata = self.training_data.__getitem__()
             optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
 
@@ -114,8 +97,6 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
-            if step_id == 100:
-                break
         if JIT:
             if torch.__version__.startswith("2"):
                 bdata = self.training_data.get_batch(tf=False, pt=True)

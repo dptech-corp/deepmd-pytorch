@@ -21,8 +21,6 @@ def make_stat_input(dataset, nbatches):
         for _ in range(nbatches):
             stat_data = dataset[ii]
             for dd in stat_data:
-                if dd == 'natoms_vec':
-                    stat_data[dd] = stat_data[dd].astype(np.int32) 
                 sys_stat[dd].append(stat_data[dd])
         for key in ['coord', 'box', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'shift']:
             sys_stat[key] = torch.cat(sys_stat[key], dim=0)
