@@ -20,7 +20,7 @@ def analyze_descrpt(matrix, ndescrpt, natoms):
     sysr2 = []  # 每类元素的径向平方均值
     sysa2 = []  # 每类元素的轴向平方均值
     for type_i in range(ntypes):
-        end_index = start_index + ndescrpt * natoms[0, 2+type_i]
+        end_index = start_index + natoms[0, 2+type_i]
         dd = matrix[:, start_index:end_index]  # 本元素所有原子的 descriptor
         start_index = end_index
         dd = np.reshape (dd, [-1, 4])  # Shape is [nframes*natoms[2+type_id]*self.nnei, 4]
