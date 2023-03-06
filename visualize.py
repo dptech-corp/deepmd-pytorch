@@ -33,8 +33,8 @@ def draw_line_2d(path, step_interval, rolling=1000):
     for idx in range(0, len(lcurve), step_interval):
         item = lcurve[idx]
         step = item[0].rstrip(',').split('=')[-1]
-        e = item[3].rstrip(',').split('=')[-1]
-        f = item[5].rstrip(',').split('=')[-1]
+        e = item[1].rstrip(',').split('=')[-1]
+        f = item[2].rstrip(',').split('=')[-1]
         #e = item[4].rstrip(',').split('=')[-1]
         #f = item[6].rstrip(',').split('=')[-1]
         #e = item[3].rstrip(',').split('=')[-1]
@@ -47,7 +47,8 @@ def draw_line_2d(path, step_interval, rolling=1000):
     rmse_f = rolling_window(np.array(rmse_f), rolling).mean(axis=-1)
     pyplot.plot(steps[rolling-1:], rmse_e, label='Energy')
     pyplot.plot(steps[rolling-1:], rmse_f, label='Force')
-
+    import pdb
+    pdb.set_trace()
 
 def run(FLAGS):
     pyplot.figure(figsize=(15,5))

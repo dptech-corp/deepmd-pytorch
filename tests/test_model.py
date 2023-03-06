@@ -230,7 +230,7 @@ class TestEnergy(unittest.TestCase):
     def test_consistency(self):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
-        my_ds = DeepmdDataSet(kDataSystems, self.batch_size, self.type_map)
+        my_ds = DeepmdDataSet(kDataSystems, self.batch_size, self.type_map, self.rcut, self.sel)
         my_model = EnergyModel(
             model_params={
                 'descriptor': {
@@ -274,19 +274,16 @@ class TestEnergy(unittest.TestCase):
                 param.data.copy_(torch.from_numpy(var))
 
         # Start forward computing
-        pt_coord = torch.from_numpy(batch['coord']).to(DEVICE)
-        pt_coord.requires_grad_(True)
-        atype = torch.tensor(batch['type'], device=DEVICE, dtype=torch.long)
-        natoms = torch.tensor(batch['natoms_vec'], device=DEVICE, dtype=torch.long)
-        box = torch.tensor(batch['box'], device=DEVICE)
-        l_energy = torch.from_numpy(batch['energy']).to(DEVICE)
-        l_force = torch.from_numpy(batch['force']).to(DEVICE)
-        p_energy, p_force = my_model(pt_coord, atype, natoms, box)
+        batch = my_ds._data_systems[0].preprocess(batch)
+        batch['coord'].requires_grad_(True)
+        batch['natoms'] = torch.tensor([[192, 192, 64, 128], [192, 192, 64, 128]])
+        p_energy, p_force = my_model(batch['coord'], batch['atype'], batch['natoms'],
+         batch['mapping'], batch['shift'], batch['selected'])
         p_energy = p_energy.squeeze(-1)
         cur_lr = my_lr.value(self.wanted_step)
-        loss = my_loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)[0]
+        loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.cpu().detach().numpy()))
-        self.assertTrue(np.allclose(head_dict['force'], p_force.cpu().detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['force'], p_force.view(self.batch_size, -1).cpu().detach().numpy()))
         rtol = 1e-1
         atol = 1e-5
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
@@ -308,22 +305,6 @@ class TestEnergy(unittest.TestCase):
                 tol = abs(var_grad)*rtol+atol
                 mask = abs(diff) < tol
                 print(var_name)
-                import pdb
-                pdb.set_trace()
-"""
-        for g in optimizer.param_groups:
-            g['lr'] = cur_lr
-        before = next(iter(my_model.named_parameters()))[1].clone()
-        optimizer.step()
-        after = next(iter(my_model.named_parameters()))[1].clone()
-        grad = next(iter(my_model.named_parameters()))[1].grad
-
-        batch, head_dict, stat_dict, new_vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step+1)
-        for name, param in my_model.named_parameters():
-            var_name = torch2tf(name)
-            var = new_vs_dict[var_name].value
-            self.assertTrue(np.allclose(var, param.data.cpu().detach(), rtol=1e-4, atol=1e-6))
-"""
 
 if __name__ == '__main__':
     unittest.main()
