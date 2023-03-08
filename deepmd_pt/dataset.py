@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from deepmd_pt import env, my_random
 from deepmd_pt.descriptor import Region3D, normalize_coord, make_env_mat
 from tqdm import trange
+import h5py
 
 class DeepmdDataSystem(object):
 
@@ -18,6 +19,20 @@ class DeepmdDataSystem(object):
         - sys_path: Paths to the system.
         - type_map: Atom types.
         '''
+        if '.hdf5' in sys_path:
+            tmp = sys_path.split("/")
+            path = "/".join(tmp[:-1])
+            sys = tmp[-1]
+            self.file = h5py.File(path)[sys]
+            self._dirs = []
+            for item in self.file.keys():
+                if 'set.' in item:
+                    self._dirs.append(item)
+            self._dirs.sort()
+        else:
+            self.file = None
+            self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
+            self._dirs.sort()
         self._atom_type = self._load_type(sys_path)
         self._natoms = len(self._atom_type)
 
@@ -35,8 +50,6 @@ class DeepmdDataSystem(object):
         self.add('force',  3, atomic=True,  must=False, high_prec=False)
 
         self._sys_path = sys_path
-        self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
-        self._dirs.sort()
         self.rcut = rcut
         self.sec = sec
         self.sets = [None for i in range(len(self._sys_path))]
@@ -76,6 +89,11 @@ class DeepmdDataSystem(object):
             self._iterator = 0
         else:
             set_size = self._frames['coord'].shape[0]
+        if batch_size == 'auto':
+            if self._natoms > 32:
+                batch_size = 1
+            else:
+                batch_size = (32//self._natoms)
         if self._iterator + batch_size > set_size:
             set_idx = self._set_count % len(self._dirs)
             if self.sets[set_idx] is None:
@@ -116,40 +134,56 @@ class DeepmdDataSystem(object):
         return tmp.astype(np.int32)
 
     def _load_type(self, sys_path):
-        return np.loadtxt(os.path.join(sys_path, 'type.raw'), dtype=np.int32, ndmin=1)
+        if not self.file is None:
+            return self.file['type.raw'][:]
+        else:
+            return np.loadtxt(os.path.join(sys_path, 'type.raw'), dtype=np.int32, ndmin=1)
 
     def _load_type_map(self, sys_path):
-        fname = os.path.join(sys_path, 'type_map.raw')
-        if os.path.isfile(fname):
-            with open(fname, 'r') as fin:
-                content = fin.read()
-            return content.split()                
+        if not self.file is None:
+            tmp = self.file['type_map.raw'][:].tolist()
+            tmp = [item.decode('ascii') for item in tmp]
+            return tmp
         else:
-            return None
+            fname = os.path.join(sys_path, 'type_map.raw')
+            if os.path.isfile(fname):
+                with open(fname, 'r') as fin:
+                    content = fin.read()
+                return content.split()                
+            else:
+                return None
 
     def _load_set(self, set_name):
-        path = os.path.join(set_name, "coord.npy")
-        if self._data_dict['coord']['high_prec'] :
-            coord = np.load(path).astype(env.GLOBAL_ENER_FLOAT_PRECISION)
-        else:
-            coord = np.load(path).astype(env.GLOBAL_NP_FLOAT_PRECISION)
-        if coord.ndim == 1:
-            coord = coord.reshape([1, -1])
-        assert(coord.shape[1] == self._data_dict['coord']['ndof'] * self._natoms)
+        if self.file is None:
+            path = os.path.join(set_name, "coord.npy")
+            if self._data_dict['coord']['high_prec'] :
+                coord = np.load(path).astype(env.GLOBAL_ENER_FLOAT_PRECISION)
+            else:
+                coord = np.load(path).astype(env.GLOBAL_NP_FLOAT_PRECISION)
+            if coord.ndim == 1:
+                coord = coord.reshape([1, -1])
+            assert(coord.shape[1] == self._data_dict['coord']['ndof'] * self._natoms)
 
-        nframes = coord.shape[0]
-        data = {'type': np.tile(self._atom_type[self._idx_map], (nframes, 1))}
-        for kk in self._data_dict.keys():
-            data['find_'+kk], data[kk] = self._load_data(
-                set_name, 
-                kk, 
-                nframes, 
-                self._data_dict[kk]['ndof'],
-                atomic = self._data_dict[kk]['atomic'],
-                high_prec = self._data_dict[kk]['high_prec'],
-                must = self._data_dict[kk]['must']
-            )
-        return data
+            nframes = coord.shape[0]
+            data = {'type': np.tile(self._atom_type[self._idx_map], (nframes, 1))}
+            for kk in self._data_dict.keys():
+                data['find_'+kk], data[kk] = self._load_data(
+                    set_name, 
+                    kk, 
+                    nframes, 
+                    self._data_dict[kk]['ndof'],
+                    atomic = self._data_dict[kk]['atomic'],
+                    high_prec = self._data_dict[kk]['high_prec'],
+                    must = self._data_dict[kk]['must']
+                )
+            return data
+        else:
+            data = {}
+            for key in ['coord', 'energy', 'force', 'box']:
+                data[key] = self.file[set_name][f"{key}.npy"][:]
+            nframes = data['coord'].shape[0]
+            data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
+            return data
 
     def _load_data(self, set_name, key, nframes, ndof, atomic=False, must=True, high_prec=False):
         if atomic:
@@ -186,6 +220,7 @@ class DeepmdDataSystem(object):
                 batch[key] = torch.tensor(batch[key], dtype=torch.long, device=env.PREPROCESS_DEVICE)
         batch['coord'] = batch['coord'].view(n_frames, -1, 3)
         batch['atype'] = batch.pop('type')
+        batch['energy'] = batch['energy'].view(-1, 1)
 
         keys = ['selected', 'shift', 'mapping']
         coord = batch['coord']

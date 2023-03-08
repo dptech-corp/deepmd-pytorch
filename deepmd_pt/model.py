@@ -39,7 +39,8 @@ class EnergyModel(torch.nn.Module):
         fitting_param['embedding_width'] = self.embedding_net.dim_out
         energy = [item['energy'] for item in sampled]
         natoms = [item['natoms'] for item in sampled]
-        fitting_param['bias_atom_e'] = compute_output_stats(energy, natoms)[:, 0]
+        tmp = compute_output_stats(energy, natoms)
+        fitting_param['bias_atom_e'] = tmp[:, 0]
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected):
