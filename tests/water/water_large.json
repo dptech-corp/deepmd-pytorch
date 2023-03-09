@@ -53,16 +53,16 @@
     "training": {
         "training_data": {
             "systems": [
-                "/data/water_train.hdf5/O64H128",
-                "/data/water_train.hdf5/O96H192"
+                "tests/water/data/water_train.hdf5/O64H128",
+                "tests/water/data/water_train.hdf5/O96H192"
             ],
             "batch_size": 1,
             "_comment": "that's all"
         },
         "validation_data": {
             "systems": [
-                "/data/water_test.hdf5/O64H128",
-                "/data/water_test.hdf5/O96H192"
+                "tests/water/data/water_test.hdf5/O64H128",
+                "tests/water/data/water_test.hdf5/O96H192"
             ],
             "batch_size": 1,
             "numb_btch": 3,

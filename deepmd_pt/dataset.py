@@ -99,7 +99,12 @@ class DeepmdDataSystem(object):
             if self.sets[set_idx] is None:
                 frames = self._load_set(self._dirs[set_idx])
                 frames = self.preprocess(frames)
-                self.sets[set_idx] = frames
+                cnt = 0
+                for item in self.sets:
+                    if not item is None:
+                        cnt += 1
+                if cnt < env.CACHE_PER_SYS:
+                    self.sets[set_idx] = frames
             else:
                 frames = self.sets[set_idx]
             self._frames = frames
