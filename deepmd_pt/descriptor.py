@@ -63,10 +63,10 @@ def compute_serial_cid(cell_offset, ncell):
 def compute_pbc_shift(cell_offset, ncell):
     '''Tell shift count to move the atom into region.'''
     shift = torch.zeros_like(cell_offset)
-    shift = shift + (cell_offset < 0)
-    shift = shift + -(cell_offset >= ncell).to(torch.long)
-    assert torch.all(cell_offset + ncell > 0)
-    assert torch.all(cell_offset - ncell < ncell)
+    shift = shift + (cell_offset < 0)*-(torch.div(cell_offset, ncell, rounding_mode='floor'))
+    shift = shift + (cell_offset >= ncell)*-(torch.div((cell_offset-ncell), ncell, rounding_mode='floor')+1)
+    assert torch.all(cell_offset + shift*ncell >= 0)
+    assert torch.all(cell_offset + shift*ncell < ncell)
     return shift
 
 
@@ -90,7 +90,7 @@ def build_inside_clist(coord, region: Region3D, ncell):
     c2a = cellid.nonzero()
     lst = []
     cnt = 0
-    bincount = torch.bincount(a2c)
+    bincount = torch.bincount(a2c, minlength = nloc)
     for i in range(loc_ncell):
         n = bincount[i]
         lst.append(c2a[cnt: cnt+n, 1])
@@ -112,7 +112,6 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
     cell_size = to_face / ncell
     ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
-    expanded = cell_size * ngcell
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
@@ -135,7 +134,7 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     n_atoms = coord.shape[0]
     aid = [c2a[ci] + i*n_atoms for i, ci in enumerate(cid)]
     aid = torch.cat(aid) 
-    tmp = aid//n_atoms
+    tmp = torch.div(aid, n_atoms, rounding_mode='trunc')
     aid = aid % n_atoms
     tmp_coord = coord[aid] - coord_shift[tmp]
     tmp_atype = atype[aid]

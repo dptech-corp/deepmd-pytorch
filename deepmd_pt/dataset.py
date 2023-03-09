@@ -99,7 +99,12 @@ class DeepmdDataSystem(object):
             if self.sets[set_idx] is None:
                 frames = self._load_set(self._dirs[set_idx])
                 frames = self.preprocess(frames)
-                self.sets[set_idx] = frames
+                cnt = 0
+                for item in self.sets:
+                    if not item is None:
+                        cnt += 1
+                if cnt < env.CACHE_PER_SYS:
+                    self.sets[set_idx] = frames
             else:
                 frames = self.sets[set_idx]
             self._frames = frames
@@ -239,11 +244,15 @@ class DeepmdDataSystem(object):
             shift.append(b)
             mapping.append(c)
         selected = torch.stack(selected)
-        shift = torch.stack(shift)
-        mapping = torch.stack(mapping)
         batch['selected'] = selected
-        batch['shift'] = shift
-        batch['mapping'] = mapping
+
+        natoms_extended = max([item.shape[0] for item in shift])
+        batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+        batch['mapping'] = torch.zeros((n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        for i in range(len(shift)):
+            natoms_tmp = shift[i].shape[0]
+            batch['shift'][i, :natoms_tmp] = shift[i]
+            batch['mapping'][i, :natoms_tmp] = mapping[i]
         return batch
         
     def _shuffle_data(self):
@@ -307,7 +316,8 @@ class DeepmdDataSet(Dataset):
             index = my_random.choice(np.arange(self.nsystems))
         b_data = self._data_systems[index].get_batch(self._batch_size)
         b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
-        b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(self._batch_size, -1)
+        batch_size = b_data['coord'].shape[0]
+        b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(batch_size, -1)
         return b_data
 
     def get_batch(self, sys_idx=None):
