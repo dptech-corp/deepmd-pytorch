@@ -37,7 +37,7 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
                                         rcut_r=rcut,
                                         rcut_r_smth=rcut_smth,
                                         sel_a=sel,
-                                        sel_r=[0, 0])
+                                        sel_r=[0 for i in sel])
 
         net_deriv_reshape = tf.ones_like(stat_descrpt)
         force = op_module.prod_force_se_a(net_deriv_reshape,
@@ -48,7 +48,7 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
                                           n_r_sel=0)
 
     with tf.Session(graph=g) as sess:
-        return sess.run([stat_descrpt, force], feed_dict={
+        return sess.run([stat_descrpt, force, nlist], feed_dict={
             coord: batch['coord'],
             box: batch['box'],
             natoms_vec: batch['natoms'],
@@ -63,6 +63,7 @@ class TestSeA(unittest.TestCase):
         my_random.seed(20)
         self.rcut = 6.
         self.rcut_smth = 0.5
+        """
         self.sel = [46, 92]
         self.bsz = 4
         ds = DeepmdDataSet([
@@ -70,6 +71,11 @@ class TestSeA(unittest.TestCase):
             os.path.join(CUR_DIR, 'water/data/data_1'),
             os.path.join(CUR_DIR, 'water/data/data_2')
         ], self.bsz, ['O', 'H'], self.rcut, self.sel)
+        """
+        self.sel = [128]
+        self.bsz = 1
+        ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12", "/data/cu_train.hdf5/Cu16", "/data/cu_train.hdf5/Cu32"], self.bsz, ['Cu'], self.rcut, self.sel)
+        
         self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
         self.ntypes = len(self.sel)
@@ -78,8 +84,7 @@ class TestSeA(unittest.TestCase):
     def test_consistency(self):
         avg_zero = torch.zeros([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
         std_ones = torch.ones([self.ntypes, self.nnei*4], dtype=GLOBAL_PT_FLOAT_PRECISION)
-
-        base_d, base_force = base_se_a(
+        base_d, base_force, nlist = base_se_a(
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
@@ -104,10 +109,24 @@ class TestSeA(unittest.TestCase):
             self.sec
         )
         my_d.sum().backward()
-        my_force = pt_coord.grad.view(self.bsz, -1).cpu().detach().numpy()
-        my_d = my_d.view(self.bsz, -1)
-        self.assertTrue(np.allclose(base_d, my_d.cpu().detach().numpy()))
+        my_force = pt_coord.grad.view(self.bsz, -1, 3).cpu().detach().numpy()
+        base_force = base_force.reshape(self.bsz, -1, 3)
+        base_d = base_d.reshape(self.bsz, -1, self.nnei, 4)
+        my_d = my_d.view(self.bsz, -1, self.nnei, 4).cpu().detach().numpy()
+        nlist = nlist.reshape(self.bsz, -1, self.nnei)
+
+        mapping = self.pt_batch['mapping'].cpu()
+        selected = self.pt_batch['selected'].view(self.bsz, -1).cpu()
+        mask = selected == -1
+        selected = selected * ~mask
+        my_nlist = torch.gather(mapping, dim=-1, index=selected)
+        my_nlist = my_nlist * ~mask - mask.long()
+        my_nlist = my_nlist.cpu().view(self.bsz, -1, self.nnei).numpy()
+        import pdb
+        pdb.set_trace()
+        self.assertTrue(np.allclose(base_d, my_d))
         self.assertTrue(np.allclose(base_force, -my_force))
+        self.assertTrue(np.allclose(nlist, my_nlist))
 
 if __name__ == '__main__':
     unittest.main()

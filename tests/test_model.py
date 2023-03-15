@@ -24,11 +24,16 @@ from deepmd_pt.env import *
 from deepmd_pt import my_random
 
 CUR_DIR = os.path.dirname(__file__)
+
 kDataSystems = [
     os.path.join(CUR_DIR, 'water/data/data_0'),
     os.path.join(CUR_DIR, 'water/data/data_1'),
     os.path.join(CUR_DIR, 'water/data/data_2')
 ]
+set_prefix = None
+
+
+#kDataSystems = ['/data/cu_train.hdf5']
 
 VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 
@@ -139,6 +144,8 @@ class DpTrainer(object):
         return batch, head_dict, stat_dict, vs_dict
 
     def _get_dp_dataset(self):
+        import pdb
+        pdb.set_trace()
         data = DeepmdDataSystem(
             systems=kDataSystems,
             batch_size=self.batch_size,
