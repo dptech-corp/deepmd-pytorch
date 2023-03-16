@@ -74,7 +74,7 @@ class TestSeA(unittest.TestCase):
         """
         self.sel = [128]
         self.bsz = 1
-        ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12", "/data/cu_train.hdf5/Cu16", "/data/cu_train.hdf5/Cu32"], self.bsz, ['Cu'], self.rcut, self.sel)
+        ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
         """
         self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
@@ -122,11 +122,11 @@ class TestSeA(unittest.TestCase):
         my_nlist = torch.gather(mapping, dim=-1, index=selected)
         my_nlist = my_nlist * ~mask - mask.long()
         my_nlist = my_nlist.cpu().view(self.bsz, -1, self.nnei).numpy()
+        self.assertTrue(np.allclose(nlist, my_nlist))
         import pdb
         pdb.set_trace()
         self.assertTrue(np.allclose(base_d, my_d))
         self.assertTrue(np.allclose(base_force, -my_force))
-        self.assertTrue(np.allclose(nlist, my_nlist))
 
 if __name__ == '__main__':
     unittest.main()
