@@ -11,11 +11,13 @@ class Region3D(object):
     def __init__(self, boxt):
         '''Construct a simulation box.'''
         boxt = boxt.reshape([3, 3])
-        self.boxt = boxt.permute(1, 0)  # 用于世界坐标转内部坐标
+        self.boxt = boxt  # 用于世界坐标转内部坐标
         self.rec_boxt = torch.linalg.inv(self.boxt)  # 用于内部坐标转世界坐标
 
         # 计算空间属性
         self.volume = torch.linalg.det(self.boxt)  # 平行六面体空间的体积
+
+        boxt = boxt.permute(1, 0)
         c_yz = torch.cross(boxt[1], boxt[2])
         self._h2yz = self.volume / torch.linalg.norm(c_yz)
         c_zx = torch.cross(boxt[2], boxt[0])
@@ -90,7 +92,7 @@ def build_inside_clist(coord, region: Region3D, ncell):
     c2a = cellid.nonzero()
     lst = []
     cnt = 0
-    bincount = torch.bincount(a2c, minlength = nloc)
+    bincount = torch.bincount(a2c, minlength = loc_ncell)
     for i in range(loc_ncell):
         n = bincount[i]
         lst.append(c2a[cnt: cnt+n, 1])
@@ -164,6 +166,7 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     distance = distance[:nloc] # shape: [nloc, nall]
 
     lst = []
+    selected = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
     for i, nnei in enumerate(sec):
         if i > 0:
             nnei = nnei - sec[i-1]
@@ -172,9 +175,12 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
         sorted, indices = tmp.sort(dim=1)
         mask = (sorted < rcut).to(torch.long)
         indices = indices * mask + -(1)*(1-mask) # -1 for padding
-        lst.append(indices[:, :nnei]) 
-
-    selected = torch.cat(lst, dim=-1)
+        if i == 0:
+            start = 0
+        else:
+            start = sec[i-1]
+        end = min(sec[i], start + indices.shape[1])
+        selected[:, start:end] = indices[:, :nnei]
     return selected
 
 def compute_smooth_weight(distance, rmin:float, rmax:float):
