@@ -4,11 +4,9 @@ import torch
 from deepmd_pt import env
 from deepmd_pt.descriptor import smoothDescriptor
 try:
-    from typing_extensions import Final
+    from typing import Final
 except:
     from torch.jit import Final
-
-
 
 def analyze_descrpt(matrix, ndescrpt, natoms):
     '''Collect avg, square avg and count of descriptors in a batch.'''
@@ -131,7 +129,8 @@ class TypeFilter(torch.nn.Module):
 
 
 class EmbeddingNet(torch.nn.Module):
-
+    ndescrpt: Final[int]
+    __constants__ = ['ndescrpt']
     def __init__(self, rcut, rcut_smth, sel, neuron=[24, 48, 96], axis_neuron=8, **kwargs):
         '''Construct an embedding net of type `se_a`.
 
@@ -150,7 +149,7 @@ class EmbeddingNet(torch.nn.Module):
 
         self.ntypes = len(sel)  # 元素数量
         self.sec = torch.cumsum(torch.tensor(sel), dim=0)  # 每种元素在邻居中的位移
-        self.nnei = self.sec[-1]  # 总的邻居数量
+        self.nnei = sum(sel) # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
         wanted_shape = (self.ntypes, self.nnei, 4)
@@ -235,15 +234,18 @@ class EmbeddingNet(torch.nn.Module):
         dmatrix = smoothDescriptor(
             extended_coord, selected, atype,
             self.mean, self.stddev,
-            self.rcut, self.rcut_smth, self.sec)  # shape is [nframes, nall*self.ndescrpt]
+            self.rcut, self.rcut_smth, self.sec)
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         xyz_scatter = torch.empty(1,)
-        for ii, transform in enumerate(self.filter_layers):
-            ret = transform(dmatrix)  # shape is [nframes*nall, 4, self.filter_neuron[-1]]
-            if ii == 0:
-                xyz_scatter = ret
-            else:
-                xyz_scatter = xyz_scatter + ret
+
+        ret = self.filter_layers[0](dmatrix) 
+        xyz_scatter = ret
+
+        for ii, transform in enumerate(self.filter_layers[1:]):
+             # shape is [nframes*nall, 4, self.filter_neuron[-1]]
+            ret = transform(dmatrix) 
+            xyz_scatter = xyz_scatter + ret
+
         xyz_scatter /= self.nnei
         xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)
         xyz_scatter_2 = xyz_scatter[:,:,0:self.axis_neuron]

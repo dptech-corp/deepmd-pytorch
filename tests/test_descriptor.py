@@ -63,7 +63,7 @@ class TestSeA(unittest.TestCase):
         my_random.seed(20)
         self.rcut = 6.
         self.rcut_smth = 0.5
-
+        """
         self.sel = [46, 92]
         self.bsz = 4
         ds = DeepmdDataSet([
@@ -75,7 +75,7 @@ class TestSeA(unittest.TestCase):
         self.sel = [128]
         self.bsz = 1
         ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
-        """
+        
         self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
         self.ntypes = len(self.sel)

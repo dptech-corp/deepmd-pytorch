@@ -144,8 +144,6 @@ class DpTrainer(object):
         return batch, head_dict, stat_dict, vs_dict
 
     def _get_dp_dataset(self):
-        import pdb
-        pdb.set_trace()
         data = DeepmdDataSystem(
             systems=kDataSystems,
             batch_size=self.batch_size,

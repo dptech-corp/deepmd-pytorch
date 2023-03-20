@@ -15,6 +15,31 @@ python -m pstats
 # References
 Original DeePMDKit on TensorFlow https://github.com/deepmodeling/deepmd-kit
 DeepMD on PyTorch demo https://github.com/shishaochen/deepmd_on_pytorch
-# Known Problems
-test_descriptor.py fails sometimes when there are multiple neighbors of the same distance. 
+# Structure 
+```
+# model
+model.py
+    emebdding_net.py
+        descriptor.py (differentiable part, se_a mat)
+    fitting.py
+    stat.py
+dataset.py
+    descriptor.py (non-differentiable part, env_mat)
+
+# training & inference
+main.py
+    train.py
+        loss.py
+        learning_rate.py
+    inference.py
+
+# misc
+my_random.py
+env.py
+```
+
+# Known Problems & TODO
+1. Currently it cannnot achieve comparable accuracy to the TF version on the Cu dataset (rmse_e_val/atom 2e-3, rmse_f_val 1.3e-2)
+2. test_descriptor.py fails sometimes when there are multiple neighbors of the same distance. 
 This may be because of the unstable sorting algorithm and should not affect the accuracy.
+3. 

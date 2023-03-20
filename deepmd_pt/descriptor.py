@@ -228,7 +228,6 @@ def make_se_a_mat(selected, coord, rcut:float, ruct_smth:float):
     t1 = diff/length**2
     weight = compute_smooth_weight(length, ruct_smth, rcut)
     descriptor = torch.cat([t0, t1], dim=-1) *weight * mask.unsqueeze(-1)
-    descriptor[~mask] = 0
     return descriptor
 
 

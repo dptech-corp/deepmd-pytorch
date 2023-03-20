@@ -66,6 +66,5 @@ class EnergyModel(torch.nn.Module):
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
-        if not force is None:
-            force = -force
+        force = -force
         return energy, force
