@@ -59,17 +59,17 @@ class TestSeA(unittest.TestCase):
 
     def setUp(self):
         my_random.seed(0)
-        ds = DeepmdDataSet([
-            os.path.join(CUR_DIR, 'water/data/data_0'),
-            os.path.join(CUR_DIR, 'water/data/data_1'),
-            os.path.join(CUR_DIR, 'water/data/data_2')
-        ], 2, ['O', 'H'])
-        self.np_batch, self.torch_batch = ds.get_batch(pt=True)
         self.rcut = 6.
         self.rcut_smth = 0.5
         self.sel = [46, 92]
         self.filter_neuron = [25, 50, 100]
         self.axis_neuron = 16
+        ds = DeepmdDataSet([
+            os.path.join(CUR_DIR, 'water/data/data_0'),
+            os.path.join(CUR_DIR, 'water/data/data_1'),
+            os.path.join(CUR_DIR, 'water/data/data_2')
+        ], 2, ['O', 'H'], self.rcut, self.sel)
+        self.np_batch, self.torch_batch = ds.get_batch()
 
     def test_consistency(self):
         dp_d = DescrptSeA(
@@ -83,8 +83,8 @@ class TestSeA(unittest.TestCase):
         dp_embedding, dp_force, dp_vars = base_se_a(
             descriptor=dp_d,
             coord=self.np_batch['coord'],
-            atype=self.np_batch['type'],
-            natoms=self.np_batch['natoms_vec'],
+            atype=self.np_batch['atype'],
+            natoms=self.np_batch['natoms'],
             box=self.np_batch['box'],
         )
 
@@ -102,13 +102,16 @@ class TestSeA(unittest.TestCase):
                 with torch.no_grad():
                     # Keep parameter value consistency between 2 implentations
                     param.data.copy_(torch.from_numpy(var))
+
         pt_coord = self.torch_batch['coord']
         pt_coord.requires_grad_(True)
+        index = self.torch_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
+        extended_coord = torch.gather(pt_coord, dim=1, index=index)
+        extended_coord = extended_coord - self.torch_batch['shift']
         env_embedding = embedding_net(
-            pt_coord,
-            self.torch_batch['type'],
-            self.torch_batch['natoms_vec'],
-            self.torch_batch['box']
+            extended_coord,
+            self.torch_batch['selected'],
+            self.torch_batch['atype']
         )
         my_embedding = env_embedding.cpu().detach().numpy()
         fake_energy = torch.sum(env_embedding)
@@ -117,6 +120,7 @@ class TestSeA(unittest.TestCase):
 
         # Check
         self.assertTrue(np.allclose(dp_embedding, my_embedding))
+        dp_force = dp_force.reshape(*my_force.shape)
         self.assertTrue(np.allclose(dp_force, my_force))
 
 

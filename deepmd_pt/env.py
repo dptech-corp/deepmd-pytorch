@@ -7,6 +7,6 @@ GLOBAL_ENER_FLOAT_PRECISION = np.float64
 DISTANCE_INF = 1e8
 DEVICE = torch.device(0)
 PREPROCESS_DEVICE = torch.device(0)
-JIT = True
+JIT = False
 ENERGY_BIAS_TRAINABLE = True
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory

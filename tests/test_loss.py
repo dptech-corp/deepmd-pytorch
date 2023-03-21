@@ -29,7 +29,7 @@ class TestLearningRate(unittest.TestCase):
             os.path.join(CUR_DIR, 'water/data/data_0'),
             os.path.join(CUR_DIR, 'water/data/data_1'),
             os.path.join(CUR_DIR, 'water/data/data_2')
-        ], self.batch_size, ['O', 'H'])
+        ], self.batch_size, ['O', 'H'], rcut=1., sel=[1, 1])
 
     def test_consistency(self):
         base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f)
@@ -71,12 +71,12 @@ class TestLearningRate(unittest.TestCase):
             }
             t_loss = base.build(t_cur_lr, t_natoms, model_dict, label_dict, '')
 
-        batch = self.dataset.get_batch()
+        np_batch, pt_batch = self.dataset.get_batch()
         mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f)
         cur_lr = 1.2
-        natoms = batch['natoms_vec']
-        l_energy = batch['energy']
-        l_force = batch['force']
+        natoms = np_batch['natoms']
+        l_energy = np_batch['energy']
+        l_force = np_batch['force']
         p_energy = np.ones_like(l_energy)
         p_force = np.ones_like(l_force)
         nloc = natoms[0]
@@ -100,7 +100,7 @@ class TestLearningRate(unittest.TestCase):
             })
         my_loss = mine(
             cur_lr,
-            natoms,
+            pt_batch['natoms'],
             torch.from_numpy(p_energy),
             torch.from_numpy(p_force),
             torch.from_numpy(l_energy),

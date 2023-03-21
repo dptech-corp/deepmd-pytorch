@@ -3,7 +3,6 @@ import torch
 
 from collections import defaultdict
 
-
 def make_stat_input(dataset, nbatches):
     '''Pack data for statistics.
 
