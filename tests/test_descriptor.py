@@ -56,7 +56,6 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
             default_mesh: np.array([0, 0, 0, 2, 2, 2])
         })
 
-
 class TestSeA(unittest.TestCase):
 
     def setUp(self):
@@ -64,18 +63,19 @@ class TestSeA(unittest.TestCase):
         self.rcut = 6.
         self.rcut_smth = 0.5
         
-        self.sel = [46, 92]
-        self.bsz = 4
-        ds = DeepmdDataSet([
-            os.path.join(CUR_DIR, 'water/data/data_0'),
-            os.path.join(CUR_DIR, 'water/data/data_1'),
-            os.path.join(CUR_DIR, 'water/data/data_2')
-        ], self.bsz, ['O', 'H'], self.rcut, self.sel)
-        """
-        self.sel = [128]
-        self.bsz = 1
-        ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
-        """
+        if TEST_DATASET == 'water':
+            self.sel = [46, 92]
+            self.bsz = 4
+            ds = DeepmdDataSet([
+                os.path.join(CUR_DIR, 'water/data/data_0'),
+                os.path.join(CUR_DIR, 'water/data/data_1'),
+                os.path.join(CUR_DIR, 'water/data/data_2')
+            ], self.bsz, ['O', 'H'], self.rcut, self.sel)
+        elif TEST_DATASET == 'Cu':
+            self.sel = [128]
+            self.bsz = 1
+            ds = DeepmdDataSet(["/data/cu_test.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
+            
         self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
         self.ntypes = len(self.sel)

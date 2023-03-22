@@ -8,5 +8,7 @@ DISTANCE_INF = 1e8
 DEVICE = torch.device(0)
 PREPROCESS_DEVICE = torch.device(0)
 JIT = False
-ENERGY_BIAS_TRAINABLE = True
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
+TEST_DATASET = 'Cu' # or Cu
+
+ENERGY_BIAS_TRAINABLE = True

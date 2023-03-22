@@ -12,7 +12,7 @@ from deepmd.descriptor import DescrptSeA
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.embedding_net import EmbeddingNet
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE
+from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_DATASET
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -64,11 +64,17 @@ class TestSeA(unittest.TestCase):
         self.sel = [46, 92]
         self.filter_neuron = [25, 50, 100]
         self.axis_neuron = 16
-        ds = DeepmdDataSet([
-            os.path.join(CUR_DIR, 'water/data/data_0'),
-            os.path.join(CUR_DIR, 'water/data/data_1'),
-            os.path.join(CUR_DIR, 'water/data/data_2')
-        ], 2, ['O', 'H'], self.rcut, self.sel)
+        if TEST_DATASET == 'water':
+            ds = DeepmdDataSet([
+                os.path.join(CUR_DIR, 'water/data/data_0'),
+                os.path.join(CUR_DIR, 'water/data/data_1'),
+                os.path.join(CUR_DIR, 'water/data/data_2')
+            ], 2, ['O', 'H'], self.rcut, self.sel)
+        elif TEST_DATASET == 'Cu':
+            self.sel = [128]
+            self.bsz = 1
+            ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
+            
         self.np_batch, self.torch_batch = ds.get_batch()
 
     def test_consistency(self):

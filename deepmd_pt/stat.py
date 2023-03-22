@@ -11,8 +11,7 @@ def make_stat_input(dataset, nbatches):
     - nbatches: Batch count for collecting stats.
 
     Returns:
-    - all_stat: A dictionary of list of list storing data for stat.
-        data can be accessed by all_stat[key][sys_idx][batch_idx][frame_idx]
+    - a list of dicts, each of which contains data from a system
     '''
     lst = []
     for ii in range(dataset.nsystems):

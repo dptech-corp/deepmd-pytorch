@@ -8,7 +8,7 @@ import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
 from deepmd import op
-from deepmd.common import data_requirement
+from deepmd.common import data_requirement, expand_sys_str
 from deepmd.descriptor import DescrptSeA
 from deepmd.fit import EnerFitting
 from deepmd.loss import EnerStdLoss
@@ -25,15 +25,14 @@ from deepmd_pt import my_random
 
 CUR_DIR = os.path.dirname(__file__)
 
-kDataSystems = [
-    os.path.join(CUR_DIR, 'water/data/data_0'),
-    os.path.join(CUR_DIR, 'water/data/data_1'),
-    os.path.join(CUR_DIR, 'water/data/data_2')
-]
-set_prefix = None
-
-
-#kDataSystems = ['/data/cu_train.hdf5']
+if TEST_DATASET == 'water':
+    kDataSystems = [
+        os.path.join(CUR_DIR, 'water/data/data_0'),
+        os.path.join(CUR_DIR, 'water/data/data_1'),
+        os.path.join(CUR_DIR, 'water/data/data_2')
+    ]
+elif TEST_DATASET == 'Cu':
+    kDataSystems = "/data/cu_test.hdf5"
 
 VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 
@@ -60,11 +59,15 @@ class DpTrainer(object):
 
     def __init__(self):
         self.batch_size = 3
-        self.type_map = ['O', 'H']
+        if TEST_DATASET == 'water':
+            self.type_map = ['O', 'H']
+            self.sel = [46, 92]
+        elif TEST_DATASET == 'Cu':
+            self.type_map = ['Cu']
+            self.sel = [138]
         self.ntypes = len(self.type_map)
         self.rcut = 6.
         self.rcut_smth = 0.5
-        self.sel = [46, 92]
         self.filter_neuron = [25, 50, 100]
         self.axis_neuron = 16
         self.n_neuron = [32, 32, 32]
@@ -144,6 +147,9 @@ class DpTrainer(object):
         return batch, head_dict, stat_dict, vs_dict
 
     def _get_dp_dataset(self):
+        global kDataSystems
+        if TEST_DATASET == 'Cu':
+            kDataSystems = expand_sys_str(kDataSystems)
         data = DeepmdDataSystem(
             systems=kDataSystems,
             batch_size=self.batch_size,
@@ -226,7 +232,7 @@ class TestEnergy(unittest.TestCase):
 
     def setUp(self):
         self.dp_trainer = DpTrainer()
-        self.wanted_step = 1
+        self.wanted_step = 4
         for key in dir(self.dp_trainer):
             if not key.startswith('_') or key == 'get_intermediate_state':
                 value = getattr(self.dp_trainer, key)
@@ -281,15 +287,15 @@ class TestEnergy(unittest.TestCase):
         # Start forward computing
         batch = my_ds._data_systems[0].preprocess(batch)
         batch['coord'].requires_grad_(True)
-        batch['natoms'] = torch.tensor([[192, 192, 64, 128], [192, 192, 64, 128]])
+        batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         p_energy, p_force = my_model(batch['coord'], batch['atype'], batch['natoms'],
-         batch['mapping'], batch['shift'], batch['selected'])
+        batch['mapping'], batch['shift'], batch['selected'])
         p_energy = p_energy.squeeze(-1)
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(self.batch_size, -1).cpu().detach().numpy()))
-        rtol = 1e-1
+        rtol = 1e-2
         atol = 1e-5
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
 
@@ -305,11 +311,7 @@ class TestEnergy(unittest.TestCase):
             var_name = torch2tf(name)
             var_grad = vs_dict[var_name].gradient
             param_grad = param.grad.cpu().numpy()
-            if not np.allclose(var_grad, param_grad, rtol=rtol, atol=atol):
-                diff = var_grad - param_grad
-                tol = abs(var_grad)*rtol+atol
-                mask = abs(diff) < tol
-                print(var_name)
+            assert np.allclose(var_grad, param_grad, rtol=rtol, atol=atol)
 
 if __name__ == '__main__':
     unittest.main()

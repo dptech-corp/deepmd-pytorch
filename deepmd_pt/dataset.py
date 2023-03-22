@@ -19,6 +19,7 @@ class DeepmdDataSystem(object):
         - sys_path: Paths to the system.
         - type_map: Atom types.
         '''
+        sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
             path = "/".join(tmp[:-1])
