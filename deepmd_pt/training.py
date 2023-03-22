@@ -97,8 +97,6 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
-            if step_id == 100:
-                break
         if JIT:
             if torch.__version__.startswith("2"):
                 bdata = self.training_data.__getitem__()

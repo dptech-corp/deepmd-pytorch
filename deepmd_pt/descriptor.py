@@ -162,7 +162,8 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     coord_r = coord.view(1, -1, 3)
     distance = coord_l - coord_r
     distance = torch.linalg.norm(distance, dim=-1)
-    distance += torch.eye(nall, dtype=torch.bool, device=env.PREPROCESS_DEVICE)*env.DISTANCE_INF
+    DISTANCE_INF = distance.max().detach() + rcut
+    distance += torch.eye(nall, dtype=torch.bool, device=env.PREPROCESS_DEVICE)*DISTANCE_INF
     distance = distance[:nloc] # shape: [nloc, nall]
 
     lst = []
@@ -171,7 +172,7 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
         if i > 0:
             nnei = nnei - sec[i-1]
         mask = atype.unsqueeze(0)==i
-        tmp = distance + (~mask) * env.DISTANCE_INF
+        tmp = distance + (~mask) * DISTANCE_INF
         sorted, indices = tmp.sort(dim=1)
         mask = (sorted < rcut).to(torch.long)
         indices = indices * mask + -(1)*(1-mask) # -1 for padding

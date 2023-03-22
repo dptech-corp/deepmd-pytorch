@@ -17,7 +17,7 @@
             ],
             "resnet_dt": false,
             "axis_neuron": 16,
-            "seed": 1,
+            "seed": 20,
             "_comment": " that's all"
         },
         "fitting_net": {
@@ -27,7 +27,7 @@
                 240
             ],
             "resnet_dt": true,
-            "seed": 1,
+            "seed": 20,
             "_comment": " that's all"
         },
         "data_stat_nbatch": 20,
