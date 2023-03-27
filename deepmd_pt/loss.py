@@ -34,7 +34,7 @@ class EnergyStdLoss(torch.nn.Module):
         l2_ener_loss = torch.mean(torch.square(p_energy - l_energy))
         atom_norm_ener = 1./ natoms[0, 0]
         energy_loss = atom_norm_ener * (pref_e * l2_ener_loss)
-        diff_f = l_force.view(-1) - p_force.view(-1)
+        diff_f = l_force- p_force
         l2_force_loss = torch.mean(torch.square(diff_f))
         force_loss = (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
         rmse_e = l2_ener_loss.sqrt() * atom_norm_ener

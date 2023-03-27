@@ -14,7 +14,7 @@ if torch.__version__.startswith("2"):
       
 class Trainer(object):
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], resume_from = None):
         '''Construct a DeePMD trainer.
 
         Args:
@@ -58,6 +58,11 @@ class Trainer(object):
         loss_params['starter_learning_rate'] = lr_params['start_lr']
         self.loss = EnergyStdLoss(**loss_params)
 
+        if resume_from is not None:
+            state_dict = torch.load(resume_from)
+            self.model.load_state_dict(state_dict)
+            logging.info(f"Resuming from {resume_from}.")
+
     def run(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
         fout = open(self.disp_file, 'w')
@@ -76,6 +81,9 @@ class Trainer(object):
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
             mapping, shift, selected = bdata['mapping'], bdata['shift'], bdata['selected']
             p_energy, p_force = self.model(coord, atype, natoms, mapping, shift, selected)
+            l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
+            assert l_energy.shape == p_energy.shape
+            assert l_force.shape == p_force.shape
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
             loss_val = loss.cpu().detach().numpy().tolist()
             logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)

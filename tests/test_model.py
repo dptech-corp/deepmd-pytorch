@@ -32,7 +32,7 @@ if TEST_DATASET == 'water':
         os.path.join(CUR_DIR, 'water/data/data_2')
     ]
 elif TEST_DATASET == 'Cu':
-    kDataSystems = "/data/cu_test.hdf5"
+    kDataSystems = "/data/cu_test.hdf5#/Cu16"
 
 VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 
@@ -59,27 +59,28 @@ class DpTrainer(object):
 
     def __init__(self):
         self.batch_size = 3
-        if TEST_DATASET == 'water':
-            self.type_map = ['O', 'H']
-            self.sel = [46, 92]
-        elif TEST_DATASET == 'Cu':
-            self.type_map = ['Cu']
-            self.sel = [138]
-        self.ntypes = len(self.type_map)
         self.rcut = 6.
         self.rcut_smth = 0.5
         self.filter_neuron = [25, 50, 100]
         self.axis_neuron = 16
         self.n_neuron = [32, 32, 32]
         self.data_stat_nbatch = 3
-        self.start_lr = 1.1
+        self.start_lr = 0.001
         self.stop_lr = 3.51e-8
         self.decay_steps = 500
         self.stop_steps = 1600
-        self.start_pref_e = 0.02
-        self.limit_pref_e = 1.
-        self.start_pref_f = 0#1000.
-        self.limit_pref_f = 0#1.
+        self.start_pref_e = 1.
+        self.limit_pref_e = 2.
+        self.start_pref_f = 2.
+        self.limit_pref_f = 1.
+        if TEST_DATASET == 'water':
+            self.type_map = ['O', 'H']
+            self.sel = [46, 92]
+        elif TEST_DATASET == 'Cu':
+            self.type_map = ['Cu']
+            self.sel = [138]
+            self.n_neuron = [240, 240, 240]
+        self.ntypes = len(self.type_map)
 
     def get_intermediate_state(self, num_steps=1):
         dp_model = self._get_dp_model()
@@ -232,7 +233,7 @@ class TestEnergy(unittest.TestCase):
 
     def setUp(self):
         self.dp_trainer = DpTrainer()
-        self.wanted_step = 4
+        self.wanted_step = 0
         for key in dir(self.dp_trainer):
             if not key.startswith('_') or key == 'get_intermediate_state':
                 value = getattr(self.dp_trainer, key)
@@ -282,23 +283,24 @@ class TestEnergy(unittest.TestCase):
             var_name = torch2tf(name)
             var = vs_dict[var_name].value
             with torch.no_grad():
-                param.data.copy_(torch.from_numpy(var))
-
+                src = torch.from_numpy(var)
+                dst = param.data
+                print(name)
+                print(src.mean(), src.std())
+                print(dst.mean(), dst.std())
+                dst.copy_(src)
         # Start forward computing
         batch = my_ds._data_systems[0].preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         p_energy, p_force = my_model(batch['coord'], batch['atype'], batch['natoms'],
         batch['mapping'], batch['shift'], batch['selected'])
-        p_energy = p_energy.squeeze(-1)
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
-        self.assertTrue(np.allclose(head_dict['energy'], p_energy.cpu().detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(self.batch_size, -1).cpu().detach().numpy()))
-        rtol = 1e-2
-        atol = 1e-5
+        rtol= 1e-5; atol=1e-8
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
-
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
         def step(step_id):
@@ -310,8 +312,8 @@ class TestEnergy(unittest.TestCase):
         for name, param in my_model.named_parameters():
             var_name = torch2tf(name)
             var_grad = vs_dict[var_name].gradient
-            param_grad = param.grad.cpu().numpy()
+            param_grad = param.grad.cpu()
+            var_grad = torch.tensor(var_grad)
             assert np.allclose(var_grad, param_grad, rtol=rtol, atol=atol)
-
 if __name__ == '__main__':
     unittest.main()

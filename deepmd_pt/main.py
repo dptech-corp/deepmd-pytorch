@@ -11,7 +11,7 @@ def train(FLAGS):
     with open(FLAGS.INPUT, 'r') as fin:
         content = fin.read()
     config = json.loads(content)
-    trainer = training.Trainer(config)
+    trainer = training.Trainer(config, resume_from=FLAGS.CKPT)
     trainer.run()
 
 def test(FLAGS):
@@ -19,17 +19,20 @@ def test(FLAGS):
     with open(FLAGS.INPUT, 'r') as fin:
         content = fin.read()
     config = json.loads(content)
-    trainer = inference.Trainer(config)
+    trainer = inference.Trainer(config, FLAGS.CKPT)
     trainer.run()
 
 
 def main(args=None):
-    parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy suface.')
+    parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
     train_parser = subparsers.add_parser('train', help='Train a model.')
     train_parser.add_argument('INPUT', help='A Json-format configuration file.')
-    train_parser = subparsers.add_parser('test', help='Test a model.')
-    train_parser.add_argument('INPUT', help='A Json-format configuration file.')
+    train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
+
+    test_parser = subparsers.add_parser('test', help='Test a model.')
+    test_parser.add_argument('INPUT', help='A Json-format configuration file.')
+    test_parser.add_argument('CKPT', nargs=1, help='Resumes from checkpoint.')
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)
