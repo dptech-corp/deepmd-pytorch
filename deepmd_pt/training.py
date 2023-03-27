@@ -51,6 +51,8 @@ class Trainer(object):
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
         lr_params['stop_steps'] = self.num_steps
         self.lr_exp = LearningRateExp(**lr_params)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lambda step: self.lr_exp.value(step)/self.lr_exp.start_lr)
 
         # Loss
         loss_params = config.pop('loss')
@@ -64,15 +66,13 @@ class Trainer(object):
             logging.info(f"Resuming from {resume_from}.")
 
     def run(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
         fout = open(self.disp_file, 'w')
         logging.info('Start to train %d steps.', self.num_steps)
         
         def step(step_id):
             bdata = self.training_data.__getitem__()
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
-
             l_energy = bdata['energy']
             l_force = bdata['force']
 
@@ -90,7 +90,8 @@ class Trainer(object):
 
             # Backpropagation
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
+            self.scheduler.step()
 
             # Log and persist
             if step_id % self.disp_freq == 0:
