@@ -247,7 +247,6 @@ class DeepmdDataSystem(object):
             mapping.append(c)
         selected = torch.stack(selected)
         batch['selected'] = selected
-
         natoms_extended = max([item.shape[0] for item in shift])
         batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
         batch['mapping'] = torch.zeros((n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE)

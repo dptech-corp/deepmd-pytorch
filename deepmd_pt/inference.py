@@ -15,7 +15,7 @@ if torch.__version__.startswith("2"):
 
 class Trainer(object):
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], ckpt):
         '''Construct a DeePMD trainer.
 
         Args:
@@ -47,9 +47,9 @@ class Trainer(object):
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
         )   
-        #self.test_data = training_data
+        self.test_data = training_data
         self.model = EnergyModel(model_params, self.test_data).to(DEVICE)
-        state_dict = torch.load("model.ckpt")
+        state_dict = torch.load(ckpt)
         self.model.load_state_dict(state_dict)
 
         # Loss

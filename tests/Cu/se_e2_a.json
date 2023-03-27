@@ -51,25 +51,25 @@
     "training": {
         "training_data": {
             "systems": [
-                "/data/cu_train.hdf5/Cu12",
-                "/data/cu_train.hdf5/Cu16",
-                "/data/cu_train.hdf5/Cu32"
+                "data/cu_train.hdf5/Cu12",
+                "data/cu_train.hdf5/Cu16",
+                "data/cu_train.hdf5/Cu32"
             ],
             "batch_size": "auto",
             "_comment": "that's all"
         },
         "validation_data": {
             "systems": [
-                "/data/cu_test.hdf5/Cu12",
-                "/data/cu_test.hdf5/Cu16",
-                "/data/cu_test.hdf5/Cu32"
+                "data/cu_test.hdf5/Cu12",
+                "data/cu_test.hdf5/Cu16",
+                "data/cu_test.hdf5/Cu32"
             ],
             "batch_size": 1,
             "numb_btch": 3,
             "_comment": "that's all"
         },
         "numb_steps": 1000000,
-        "seed": 10,
+        "seed": 100,
         "disp_file": "lcurve.out",
         "disp_freq": 2,
         "save_freq": 10000,

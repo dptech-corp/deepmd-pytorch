@@ -1,11 +1,11 @@
 {
     "job_name": "torch water",
-    "command": " source deactivate && conda activate gnn && PYTHONPATH=./ python3 -u deepmd_pt/main.py train tests/water/warer_large.json >tmp_log 2>&1",
+    "command": " source deactivate && conda activate gnn && PYTHONPATH=./ python3 -u deepmd_pt/main.py train tests/water/water_large.json >tmp_log 2>&1",
     "log_file": "tmp_log",
     "backward_files": ["lcurve.out", "model.ckpt"],
     "project_id": 11176,
     "platform": "ali",
     "machine_type": "c12_m92_1 * NVIDIA V100",
     "job_type": "container",
-    "image_address": "registry.dp.tech/dptech/prod-1324/e3nn-with-torchmdgpu:v2"
+    "image_address": "registry.dp.tech/dptech/prod-195/stable:torch2.0_cu116"
 }

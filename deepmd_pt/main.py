@@ -32,7 +32,7 @@ def main(args=None):
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
-    test_parser.add_argument('CKPT', nargs=1, help='Resumes from checkpoint.')
+    test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)
