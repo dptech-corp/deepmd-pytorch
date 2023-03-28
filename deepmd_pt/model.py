@@ -17,7 +17,6 @@ class EnergyModel(torch.nn.Module):
         - training_data: The training dataset.
         '''
         super(EnergyModel, self).__init__()
-
         # Descriptor + Embedding Net
         descriptor_param = model_params.pop('descriptor')
         assert descriptor_param['type'] == 'se_e2_a', 'Only descriptor `se_e2_a` is supported!'
