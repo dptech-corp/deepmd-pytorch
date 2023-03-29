@@ -272,10 +272,10 @@ class TestEnergy(unittest.TestCase):
 
         # Keep statistics consistency between 2 implentations
         my_em = my_model.embedding_net
-        my_em.mean = stat_dict['descriptor.mean'].reshape([self.ntypes, my_em.nnei, 4])
-        my_em.mean = torch.tensor(my_em.mean, device=DEVICE)
-        my_em.stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.nnei, 4])
-        my_em.stddev = torch.tensor(my_em.stddev, device=DEVICE)
+        mean = stat_dict['descriptor.mean'].reshape([self.ntypes, my_em.nnei, 4])
+        my_em.mean = torch.tensor(mean, device=DEVICE)
+        stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.nnei, 4])
+        my_em.stddev = torch.tensor(stddev, device=DEVICE)
         my_model.fitting_net.bias_atom_e = stat_dict['fitting_net.bias_atom_e']
 
         # Keep parameter value consistency between 2 implentations

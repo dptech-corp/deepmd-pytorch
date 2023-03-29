@@ -225,6 +225,7 @@ class DeepmdDataSystem(object):
             if key in batch.keys():
                 batch[key] = torch.tensor(batch[key], dtype=torch.long, device=env.PREPROCESS_DEVICE)
         batch['coord'] = batch['coord'].view(n_frames, -1, 3)
+        batch['force'] = batch['force'].view(n_frames, -1, 3)
         batch['atype'] = batch.pop('type')
         batch['energy'] = batch['energy'].view(-1, 1)
 
@@ -335,4 +336,5 @@ class DeepmdDataSet(Dataset):
                 np_batch[key] = pt_batch[key].cpu().numpy()
         np_batch['coord'] = np_batch['coord'].reshape(self._batch_size, -1)
         np_batch['natoms'] = np_batch['natoms'][0]
+        np_batch['force'] = np_batch['force'].reshape(self._batch_size, -1)
         return np_batch, pt_batch

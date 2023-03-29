@@ -16,7 +16,7 @@
    "attn_layer": 2,
    "attn_dotr": true,
    "attn_mask": false,
-   "seed": 1801819940,
+   "seed": 10,
    "_activation_function": "tanh"
   },
   "fitting_net": {
@@ -28,7 +28,7 @@
    "resnet_dt": true,
    "_coord_norm": true,
    "_type_fitting_net": false,
-   "seed": 2375417769,
+   "seed": 10,
    "_activation_function": "tanh"
   },
   "type_map": [
@@ -104,7 +104,7 @@
    "_comment": "that's all"
   },
   "numb_steps": 2000000,
-  "seed": 3982377700,
+  "seed": 10,
   "_comment": "that's all",
   "disp_file": "lcurve.out",
   "disp_freq": 2000,

@@ -47,7 +47,7 @@ class Trainer(object):
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
         )   
-        #self.test_data = training_data
+        self.test_data = training_data
         self.model = EnergyModel(model_params, self.test_data).to(DEVICE)
         state_dict = torch.load(ckpt)
         self.model.load_state_dict(state_dict)

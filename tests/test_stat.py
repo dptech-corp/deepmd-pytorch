@@ -122,10 +122,10 @@ class TestDataset(unittest.TestCase):
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
         my_en.compute_input_stats(sampled)
-        my_en.mean = my_en.mean.cpu().numpy()
-        my_en.stddev = my_en.stddev.cpu().numpy()
-        self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.reshape([-1])))
-        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.reshape([-1])))
+        my_en.mean = my_en.mean
+        my_en.stddev = my_en.stddev
+        self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1])))
+        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1])))
 
 if __name__ == '__main__':
     unittest.main()

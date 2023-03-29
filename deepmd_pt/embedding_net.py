@@ -153,11 +153,11 @@ class EmbeddingNet(torch.nn.Module):
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
         wanted_shape = (self.ntypes, self.nnei, 4)
-        self.mean = torch.zeros(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-        self.stddev = torch.ones(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-        self.mean = torch.nn.Parameter(self.mean)
-        self.stddev = torch.nn.Parameter(self.stddev)
-        
+        mean = torch.zeros(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+        stddev = torch.ones(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+        self.register_buffer('mean', mean)
+        self.register_buffer('stddev', stddev)
+
         filter_layers = []
         start_index = 0
         for type_i in range(self.ntypes):
@@ -216,9 +216,9 @@ class EmbeddingNet(torch.nn.Module):
             all_davg.append(davg)
             all_dstd.append(dstd)
         mean = np.stack(all_davg)
-        self.mean = torch.nn.Parameter(torch.tensor(mean, device=env.DEVICE))
+        self.mean.copy_(torch.tensor(mean, device=env.DEVICE))
         stddev = np.stack(all_dstd)
-        self.stdev = torch.nn.Parameter(torch.tensor(stddev, device=env.DEVICE))
+        self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
     def forward(self, extended_coord, selected, atype):
         '''Calculate decoded embedding for each atom.
