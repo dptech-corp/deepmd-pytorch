@@ -60,10 +60,11 @@ class EnergyModel(torch.nn.Module):
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         embedding = self.embedding_net(extended_coord, selected, atype)
-        atom_energy = self.fitting_net(embedding, natoms)
-        energy = atom_energy.sum(dim=-1, keepdim=True)
+        atom_energy = self.fitting_net(embedding, atype)
+        energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
+        assert force is not None
         force = -force
         return energy, force

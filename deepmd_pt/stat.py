@@ -14,13 +14,15 @@ def make_stat_input(dataset, nbatches):
     - a list of dicts, each of which contains data from a system
     '''
     lst = []
+    keys = ['coord', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'shift']
     for ii in range(dataset.nsystems):
-        sys_stat = defaultdict(list)
+        sys_stat = {key:[] for key in keys}
         for _ in range(nbatches):
             stat_data = dataset[ii]
             for dd in stat_data:
-                sys_stat[dd].append(stat_data[dd])
-        for key in ['coord', 'box', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'shift']:
+                if dd in keys:
+                    sys_stat[dd].append(stat_data[dd])
+        for key in keys:
             sys_stat[key] = torch.cat(sys_stat[key], dim=0)
         lst.append(sys_stat)
     return lst

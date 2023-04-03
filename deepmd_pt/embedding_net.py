@@ -245,7 +245,7 @@ class EmbeddingNet(torch.nn.Module):
 
         for ii, transform in enumerate(self.filter_layers[1:]):
              # shape is [nframes*nall, 4, self.filter_neuron[-1]]
-            ret = transform(dmatrix) 
+            ret = transform.forward(dmatrix) 
             xyz_scatter = xyz_scatter + ret
 
         xyz_scatter /= self.nnei

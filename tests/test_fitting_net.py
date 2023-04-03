@@ -91,7 +91,13 @@ class TestFittingNet(unittest.TestCase):
                 param.data.copy_(torch.from_numpy(var))
         embedding = torch.from_numpy(self.embedding)
         embedding = embedding.view(4, -1, self.embedding_width)
-        my_energy = my_fn(embedding, torch.from_numpy(self.natoms).unsqueeze(0)).detach()
+        natoms = torch.from_numpy(self.natoms)
+        atype = torch.zeros(1, natoms[0], dtype=torch.long)
+        cnt = 0
+        for i in range(natoms.shape[0]-2):
+            atype[:, cnt:cnt+natoms[i+2]] = i
+            cnt += natoms[i+2]
+        my_energy = my_fn(embedding, atype).detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
 if __name__ == '__main__':

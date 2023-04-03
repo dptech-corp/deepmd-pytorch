@@ -26,7 +26,7 @@ def compare(ut, base, given):
         for idx in range(len(base)):
             compare(ut, base[idx], given[idx])
     elif isinstance(base, np.ndarray):
-        ut.assertTrue(np.allclose(base.reshape(-1), given.cpu().reshape(-1)))
+        ut.assertTrue(np.allclose(base.reshape(-1), given.reshape(-1)))
     else:
         ut.assertEqual(base, given)
 
@@ -91,16 +91,17 @@ class TestDataset(unittest.TestCase):
             my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['Cu'], 1.0, [1, 1])
         else:
             my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['O', 'H'], 1.0, [1, 1])
-        my_sampled = my_make(my_dataset, self.data_stat_nbatch)
-        dp_keys = set(self.dp_merged.keys())
+        my_sampled = my_make(my_dataset, self.data_stat_nbatch) # list of dicts, each dict contains samples from a system
+        dp_keys = set(self.dp_merged.keys()) # dict of list of batches
         self.dp_merged['natoms'] = self.dp_merged['natoms_vec']
         for key in dp_keys:
-            if not key in my_sampled[0]:
+            if not key in my_sampled[0] or key in 'coord':
+                # coord is pre-normalized
                 continue
             lst = []
             for item in my_sampled:
                 for j in range(self.data_stat_nbatch):
-                    lst.append(item[key][j*self.batch_size:(j+1)*self.batch_size])
+                    lst.append(item[key][j*self.batch_size:(j+1)*self.batch_size].cpu().numpy())
             compare(self, self.dp_merged[key], lst)
 
     def test_descriptor(self):

@@ -5,6 +5,7 @@ from deepmd_pt import env
 from deepmd_pt import my_random
 import unittest
 import torch
+import os
 
 class TestEnergy(unittest.TestCase):
 
@@ -26,11 +27,11 @@ class TestEnergy(unittest.TestCase):
         self.limit_pref_f = 1.
         if env.TEST_DATASET == 'water':
             self.type_map = ['O', 'H']
-            self.sel = [46, 92],
+            self.sel = [46, 92]
             kDataSystems = [
-                os.path.join(CUR_DIR, 'water/data/data_0'),
-                os.path.join(CUR_DIR, 'water/data/data_1'),
-                os.path.join(CUR_DIR, 'water/data/data_2')
+                os.path.join('data/water/data/data_0'),
+                os.path.join('data/water/data/data_1'),
+                os.path.join('data/water/data/data_2')
             ]
         elif env.TEST_DATASET == 'Cu':
             self.type_map = ['Cu']

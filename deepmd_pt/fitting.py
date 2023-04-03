@@ -122,7 +122,7 @@ class EnergyFittingNet(torch.nn.Module):
             logging.info('Set seed to %d in fitting net.', kwargs['seed'])
             torch.manual_seed(kwargs['seed'])
 
-    def forward(self, inputs, natoms):
+    def forward(self, inputs, atype):
         '''Based on embedding net output, alculate total energy.
 
         Args:
@@ -132,18 +132,12 @@ class EnergyFittingNet(torch.nn.Module):
         Returns:
         - `torch.Tensor`: Total energy with shape [nframes, natoms[0]].
         '''
-        start_index = 0
-        outs = []
+        outs = 0
         for type_i, filter_layer in enumerate(self.filter_layers):
-            offset = start_index
-            length = natoms[0, 2+type_i]
-            inputs_i = inputs[:, offset:offset+length]
-            inputs_i = inputs_i.reshape(-1, self.embedding_width)  # Shape is [nframes*natoms[2+type_i], self.embedding_width]
-            final_layer = filter_layer(inputs_i)
-            final_layer = final_layer.view(-1, natoms[0,2+type_i])  # Shape is [nframes, natoms[2+type_i]]
+            mask = atype == type_i
+            atom_energy = filter_layer(inputs)
             if not env.ENERGY_BIAS_TRAINABLE:
-                final_layer = final_layer + self.bias_atom_e[type_i]
-            outs.append(final_layer)
-            start_index += natoms[0, 2+type_i]
-        outs = torch.cat(outs, dim=1)  # Shape is [nframes, natoms[0]]
+                atom_energy = atom_energy + self.bias_atom_e[type_i]
+            atom_energy = atom_energy * mask.unsqueeze(-1)
+            outs = outs + atom_energy # Shape is [nframes, natoms[0], 1]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)

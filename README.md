@@ -38,6 +38,16 @@ my_random.py
 env.py
 ```
 
+# Deploy
+first install libtorch
+```
+python test.py
+mkdir build
+cd build
+cmake  -DCMAKE_PREFIX_PATH=/root/libtorch/share/cmake/Torch -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc  ..
+cmake --build .
+make
+```
 # Known Problems & TODO
 1. Currently it cannnot achieve comparable accuracy to the TF version on the Cu dataset (rmse_e_val/atom 2e-3, rmse_f_val 1.3e-2)
 2. test_descriptor.py fails sometimes when there are multiple neighbors of the same distance. 
