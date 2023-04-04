@@ -186,10 +186,12 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
 
 def compute_smooth_weight(distance, rmin:float, rmax:float):
     '''Compute smooth weight for descriptor elements.'''
-    mask = torch.logical_and(distance > rmin, distance < rmax)
+    min_mask = distance <= rmin
+    max_mask = distance >= rmax
+    mid_mask = torch.logical_not(torch.logical_or(min_mask, max_mask))
     uu = (distance - rmin) / (rmax - rmin)
     vv = uu*uu*uu * (-6 * uu*uu + 15*uu - 10) + 1
-    return vv * mask
+    return vv * mid_mask + min_mask
 
 
 def make_env_mat(coord, atype,  # 原子坐标和相应类型

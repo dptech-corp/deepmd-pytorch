@@ -78,7 +78,7 @@ class TestDataset(unittest.TestCase):
         energy = self.dp_sampled['energy']
         natoms = self.dp_sampled['natoms_vec']
         self.energy, self.natoms = my_merge(energy, natoms)
-
+    
     def test_stat_output(self):
         dp_fn = EnerFitting(self.dp_d, self.n_neuron)
         dp_fn.compute_output_stats(self.dp_sampled)
@@ -97,8 +97,11 @@ class TestDataset(unittest.TestCase):
                 continue
             lst = []
             for item in my_sampled:
+                cnt = 0
                 for j in range(self.data_stat_nbatch):
-                    lst.append(item[key][j*self.batch_size:(j+1)*self.batch_size].cpu().numpy())
+                    bsz = self.dp_merged['coord'][j].shape[0]
+                    lst.append(item[key][cnt:cnt+bsz].cpu().numpy())
+                    cnt += bsz
             compare(self, self.dp_merged[key], lst)
 
     def test_descriptor(self):
@@ -121,6 +124,6 @@ class TestDataset(unittest.TestCase):
         my_en.stddev = my_en.stddev
         self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1])))
         self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1])))
-
+    
 if __name__ == '__main__':
     unittest.main()

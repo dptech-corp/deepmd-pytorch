@@ -237,7 +237,6 @@ class DeepmdDataSystem(object):
         sec = sec = self.sec
         selected, shift, mapping = [], [], []
         for sid in trange(n_frames):
-           # box[sid] = torch.eye(3).view(-1)* 100
             region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
             _coord = normalize_coord(coord[sid], region, nloc)

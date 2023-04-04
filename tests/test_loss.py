@@ -12,6 +12,7 @@ from deepmd.loss.ener import EnerStdLoss
 from deepmd_pt.loss import EnergyStdLoss
 import json
 from deepmd_pt.env import TEST_CONFIG
+from deepmd.common import expand_sys_str
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -34,7 +35,10 @@ class TestLearningRate(unittest.TestCase):
         self.rcut_smth = model_config['descriptor']['rcut_smth']
         self.sel = model_config['descriptor']['sel']
         self.batch_size = config['training']['training_data']['batch_size']
-        self.dataset = DeepmdDataSet(config['training']['validation_data']['systems'],
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        self.dataset = DeepmdDataSet(self.systems,
          self.batch_size, model_config['type_map'], self.rcut, self.sel)
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
@@ -88,9 +92,10 @@ class TestLearningRate(unittest.TestCase):
         p_energy = np.ones_like(l_energy)
         p_force = np.ones_like(l_force)
         nloc = natoms[0]
-        virial = np.zeros(shape=[self.batch_size, 9])
-        atom_energy = np.zeros(shape=[self.batch_size, nloc])
-        atom_pref = np.zeros(shape=[self.batch_size, nloc*3])
+        batch_size = pt_batch['coord'].shape[0]
+        virial = np.zeros(shape=[batch_size, 9])
+        atom_energy = np.zeros(shape=[batch_size, nloc])
+        atom_pref = np.zeros(shape=[batch_size, nloc*3])
 
         with tf.Session(graph=g) as sess:
             base_loss, _ = sess.run(t_loss, feed_dict={
