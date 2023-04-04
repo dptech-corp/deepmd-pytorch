@@ -2,13 +2,14 @@ import numpy as np
 import re
 import torch
 import unittest
+import json
 
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
 from deepmd.fit.ener import EnerFitting
 
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION
+from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
 from deepmd_pt.fitting import EnergyFittingNet
 
 class FakeDescriptor(object):

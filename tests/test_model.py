@@ -3,6 +3,7 @@ import numpy as np
 import os
 import torch
 import unittest
+import json
 
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
@@ -22,17 +23,6 @@ from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
 from deepmd_pt.env import *
 from deepmd_pt import my_random
-
-CUR_DIR = os.path.dirname(__file__)
-
-if TEST_DATASET == 'water':
-    kDataSystems = [
-        os.path.join(CUR_DIR, 'water/data/data_0'),
-        os.path.join(CUR_DIR, 'water/data/data_1'),
-        os.path.join(CUR_DIR, 'water/data/data_2')
-    ]
-elif TEST_DATASET == 'Cu':
-    kDataSystems = "/data/cu_test.hdf5#/Cu16"
 
 VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 
@@ -58,12 +48,21 @@ def torch2tf(torch_name):
 class DpTrainer(object):
 
     def __init__(self):
-        self.batch_size = 3
-        self.rcut = 6.
-        self.rcut_smth = 0.5
-        self.filter_neuron = [25, 50, 100]
-        self.axis_neuron = 16
-        self.n_neuron = [32, 32, 32]
+        with open(TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        self.batch_size = config['training']['training_data']['batch_size']
+        self.type_map = model_config['type_map']
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
+        self.n_neuron = model_config['fitting_net']['neuron']
         self.data_stat_nbatch = 3
         self.start_lr = 0.001
         self.stop_lr = 3.51e-8
@@ -73,13 +72,6 @@ class DpTrainer(object):
         self.limit_pref_e = 2.
         self.start_pref_f = 2.
         self.limit_pref_f = 1.
-        if TEST_DATASET == 'water':
-            self.type_map = ['O', 'H']
-            self.sel = [46, 92]
-        elif TEST_DATASET == 'Cu':
-            self.type_map = ['Cu']
-            self.sel = [138]
-            self.n_neuron = [240, 240, 240]
         self.ntypes = len(self.type_map)
 
     def get_intermediate_state(self, num_steps=1):
@@ -148,11 +140,8 @@ class DpTrainer(object):
         return batch, head_dict, stat_dict, vs_dict
 
     def _get_dp_dataset(self):
-        global kDataSystems
-        if TEST_DATASET == 'Cu':
-            kDataSystems = expand_sys_str(kDataSystems)
         data = DeepmdDataSystem(
-            systems=kDataSystems,
+            systems=self.systems,
             batch_size=self.batch_size,
             test_size=1,
             rcut=self.rcut,
@@ -242,7 +231,7 @@ class TestEnergy(unittest.TestCase):
     def test_consistency(self):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
-        my_ds = DeepmdDataSet(kDataSystems, self.batch_size, self.type_map, self.rcut, self.sel)
+        my_ds = DeepmdDataSet(self.systems, self.batch_size, self.type_map, self.rcut, self.sel)
         my_model = EnergyModel(
             model_params={
                 'descriptor': {
@@ -298,7 +287,7 @@ class TestEnergy(unittest.TestCase):
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
-        self.assertTrue(np.allclose(head_dict['force'], p_force.view(self.batch_size, -1).cpu().detach().numpy()))
+        self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
         rtol= 1e-5; atol=1e-8
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)

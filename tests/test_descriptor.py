@@ -12,6 +12,8 @@ from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.descriptor import smoothDescriptor
 from deepmd_pt.env import *
+from deepmd.common import expand_sys_str
+import json
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -60,22 +62,18 @@ class TestSeA(unittest.TestCase):
 
     def setUp(self):
         my_random.seed(20)
-        self.rcut = 6.
-        self.rcut_smth = 0.5
-        
-        if TEST_DATASET == 'water':
-            self.sel = [46, 92]
-            self.bsz = 4
-            ds = DeepmdDataSet([
-                os.path.join(CUR_DIR, 'water/data/data_0'),
-                os.path.join(CUR_DIR, 'water/data/data_1'),
-                os.path.join(CUR_DIR, 'water/data/data_2')
-            ], self.bsz, ['O', 'H'], self.rcut, self.sel)
-        elif TEST_DATASET == 'Cu':
-            self.sel = [128]
-            self.bsz = 1
-            ds = DeepmdDataSet(["/data/cu_test.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
-            
+        with open(TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.bsz = config['training']['training_data']['batch_size']
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        ds = DeepmdDataSet(self.systems, self.bsz, model_config['type_map'], self.rcut, self.sel)
         self.np_batch, self.pt_batch = ds.get_batch()
         self.sec = np.cumsum(self.sel)
         self.ntypes = len(self.sel)
@@ -109,19 +107,20 @@ class TestSeA(unittest.TestCase):
             self.sec
         )
         my_d.sum().backward()
-        my_force = pt_coord.grad.view(self.bsz, -1, 3).cpu().detach().numpy()
-        base_force = base_force.reshape(self.bsz, -1, 3)
-        base_d = base_d.reshape(self.bsz, -1, self.nnei, 4)
-        my_d = my_d.view(self.bsz, -1, self.nnei, 4).cpu().detach().numpy()
-        nlist = nlist.reshape(self.bsz, -1, self.nnei)
+        bsz = pt_coord.shape[0]
+        my_force = pt_coord.grad.view(bsz, -1, 3).cpu().detach().numpy()
+        base_force = base_force.reshape(bsz, -1, 3)
+        base_d = base_d.reshape(bsz, -1, self.nnei, 4)
+        my_d = my_d.view(bsz, -1, self.nnei, 4).cpu().detach().numpy()
+        nlist = nlist.reshape(bsz, -1, self.nnei)
 
         mapping = self.pt_batch['mapping'].cpu()
-        selected = self.pt_batch['selected'].view(self.bsz, -1).cpu()
+        selected = self.pt_batch['selected'].view(bsz, -1).cpu()
         mask = selected == -1
         selected = selected * ~mask
         my_nlist = torch.gather(mapping, dim=-1, index=selected)
         my_nlist = my_nlist * ~mask - mask.long()
-        my_nlist = my_nlist.cpu().view(self.bsz, -1, self.nnei).numpy()
+        my_nlist = my_nlist.cpu().view(bsz, -1, self.nnei).numpy()
         self.assertTrue(np.allclose(nlist, my_nlist))
         self.assertTrue(np.allclose(base_d, my_d))
         self.assertTrue(np.allclose(base_force, -my_force))

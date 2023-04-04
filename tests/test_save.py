@@ -6,16 +6,28 @@ from deepmd_pt import my_random
 import unittest
 import torch
 import os
+import json
+from deepmd.common import expand_sys_str
 
 class TestEnergy(unittest.TestCase):
 
     def setUp(self):
-        self.batch_size = 3
-        self.rcut = 6.
-        self.rcut_smth = 0.5
-        self.filter_neuron = [25, 50, 100]
-        self.axis_neuron = 16
-        self.n_neuron = [32, 32, 32]
+        with open(env.TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        self.batch_size = config['training']['training_data']['batch_size']
+        self.type_map = model_config['type_map']
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
+        self.n_neuron = model_config['fitting_net']['neuron']
+
         self.data_stat_nbatch = 3
         self.start_lr = 0.001
         self.stop_lr = 3.51e-8
@@ -25,22 +37,10 @@ class TestEnergy(unittest.TestCase):
         self.limit_pref_e = 2.
         self.start_pref_f = 2.
         self.limit_pref_f = 1.
-        if env.TEST_DATASET == 'water':
-            self.type_map = ['O', 'H']
-            self.sel = [46, 92]
-            kDataSystems = [
-                os.path.join('data/water/data/data_0'),
-                os.path.join('data/water/data/data_1'),
-                os.path.join('data/water/data/data_2')
-            ]
-        elif env.TEST_DATASET == 'Cu':
-            self.type_map = ['Cu']
-            self.sel = [138]
-            self.n_neuron = [240, 240, 240]
-            kDataSystems = ["/data/cu_test.hdf5#/Cu16"]
+
         self.ntypes = len(self.type_map)
         self.dataset = DeepmdDataSet(
-            systems=kDataSystems,
+            systems=self.systems,
             batch_size=self.batch_size,
             type_map=self.type_map,
             rcut=self.rcut,

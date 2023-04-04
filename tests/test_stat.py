@@ -2,6 +2,7 @@ import numpy as np
 import os
 import torch
 import unittest
+import json
 
 from deepmd.descriptor.se_a import DescrptSeA
 from deepmd.fit.ener import EnerFitting
@@ -33,27 +34,26 @@ def compare(ut, base, given):
 class TestDataset(unittest.TestCase):
 
     def setUp(self):
-        if env.TEST_DATASET == 'water':
-            self.systems = [
-                os.path.join(CUR_DIR, 'water/data/data_0'),
-                os.path.join(CUR_DIR, 'water/data/data_1'),
-                os.path.join(CUR_DIR, 'water/data/data_2')
-            ]
-            self.sel = [46, 92]
-        elif env.TEST_DATASET == 'Cu':
-            self.systems = "/data/cu_test.hdf5"
-            self.sel = [128]
-        self.batch_size = 3
-        self.rcut = 6.
+        with open(env.TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.batch_size = config['training']['training_data']['batch_size']
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        self.my_dataset = DeepmdDataSet(self.systems, self.batch_size, model_config['type_map'], self.rcut, self.sel)
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.data_stat_nbatch = 2
-        self.rcut_smth = 0.5
-        self.filter_neuron = [25, 50, 100]
-        self.axis_neuron = 16
-        self.n_neuron = [240, 240, 240]
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
+        self.n_neuron = model_config['fitting_net']['neuron']
 
         dp_random.seed(10)
-        if env.TEST_DATASET == 'Cu':
-            self.systems = expand_sys_str(self.systems)
         dp_dataset = DeepmdDataSystem(self.systems, self.batch_size, 1, self.rcut)
         dp_dataset.add('energy', 1, atomic=False, must=False, high_prec=True)
         dp_dataset.add('force',  3, atomic=True,  must=False, high_prec=False)
@@ -87,10 +87,7 @@ class TestDataset(unittest.TestCase):
 
     def test_stat_input(self):
         my_random.seed(10)
-        if env.TEST_DATASET == 'Cu':
-            my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['Cu'], 1.0, [1, 1])
-        else:
-            my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['O', 'H'], 1.0, [1, 1])
+        my_dataset = self.my_dataset
         my_sampled = my_make(my_dataset, self.data_stat_nbatch) # list of dicts, each dict contains samples from a system
         dp_keys = set(self.dp_merged.keys()) # dict of list of batches
         self.dp_merged['natoms'] = self.dp_merged['natoms_vec']
@@ -112,10 +109,7 @@ class TestDataset(unittest.TestCase):
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
         my_random.seed(10)
-        if env.TEST_DATASET == 'Cu':
-            my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['Cu'], self.rcut, self.sel)
-        else:
-            my_dataset = DeepmdDataSet(self.systems, self.batch_size, ['O', 'H'], self.rcut, self.sel)
+        my_dataset = self.my_dataset
         my_en = EmbeddingNet(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = my_make(my_dataset, self.data_stat_nbatch)
         for sys in sampled:

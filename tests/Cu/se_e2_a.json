@@ -50,20 +50,12 @@
     },
     "training": {
         "training_data": {
-            "systems": [
-                "data/cu_train.hdf5/Cu12",
-                "data/cu_train.hdf5/Cu16",
-                "data/cu_train.hdf5/Cu32"
-            ],
+            "systems": "data/cu_train.hdf5",
             "batch_size": "auto",
             "_comment": "that's all"
         },
         "validation_data": {
-            "systems": [
-                "data/cu_test.hdf5/Cu12",
-                "data/cu_test.hdf5/Cu16",
-                "data/cu_test.hdf5/Cu32"
-            ],
+            "systems": "data/cu_test.hdf5",
             "batch_size": 1,
             "numb_btch": 3,
             "_comment": "that's all"

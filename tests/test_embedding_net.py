@@ -2,6 +2,7 @@ import numpy as np
 import os
 import re
 import torch
+import json
 import unittest
 
 import tensorflow.compat.v1 as tf
@@ -12,7 +13,8 @@ from deepmd.descriptor import DescrptSeA
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.embedding_net import EmbeddingNet
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_DATASET
+from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
+from deepmd.common import expand_sys_str
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -59,22 +61,20 @@ class TestSeA(unittest.TestCase):
 
     def setUp(self):
         my_random.seed(0)
-        self.rcut = 6.
-        self.rcut_smth = 0.5
-        self.sel = [46, 92]
-        self.filter_neuron = [25, 50, 100]
-        self.axis_neuron = 16
-        if TEST_DATASET == 'water':
-            ds = DeepmdDataSet([
-                os.path.join(CUR_DIR, 'water/data/data_0'),
-                os.path.join(CUR_DIR, 'water/data/data_1'),
-                os.path.join(CUR_DIR, 'water/data/data_2')
-            ], 2, ['O', 'H'], self.rcut, self.sel)
-        elif TEST_DATASET == 'Cu':
-            self.sel = [128]
-            self.bsz = 1
-            ds = DeepmdDataSet(["/data/cu_train.hdf5/Cu12"], self.bsz, ['Cu'], self.rcut, self.sel)
-            
+        with open(TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.bsz = config['training']['training_data']['batch_size']
+        self.systems = config['training']['validation_data']['systems']
+        if isinstance(self.systems, str):
+            self.systems = expand_sys_str(self.systems)
+        ds = DeepmdDataSet(self.systems, self.bsz, model_config['type_map'], self.rcut, self.sel)
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.np_batch, self.torch_batch = ds.get_batch()
 
     def test_consistency(self):

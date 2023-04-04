@@ -334,7 +334,8 @@ class DeepmdDataSet(Dataset):
         for key in ['atype', 'natoms']:
             if key in pt_batch.keys():
                 np_batch[key] = pt_batch[key].cpu().numpy()
-        np_batch['coord'] = np_batch['coord'].reshape(self._batch_size, -1)
+        batch_size = pt_batch['coord'].shape[0]
+        np_batch['coord'] = np_batch['coord'].reshape(batch_size, -1)
         np_batch['natoms'] = np_batch['natoms'][0]
-        np_batch['force'] = np_batch['force'].reshape(self._batch_size, -1)
+        np_batch['force'] = np_batch['force'].reshape(batch_size, -1)
         return np_batch, pt_batch

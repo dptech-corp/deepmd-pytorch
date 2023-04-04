@@ -10,6 +10,8 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd.loss.ener import EnerStdLoss
 
 from deepmd_pt.loss import EnergyStdLoss
+import json
+from deepmd_pt.env import TEST_CONFIG
 
 
 CUR_DIR = os.path.dirname(__file__)
@@ -24,12 +26,18 @@ class TestLearningRate(unittest.TestCase):
         self.start_pref_f = 1000.
         self.limit_pref_f = 1.
 
-        self.batch_size = 3
-        self.dataset = DeepmdDataSet([
-            os.path.join(CUR_DIR, 'water/data/data_0'),
-            os.path.join(CUR_DIR, 'water/data/data_1'),
-            os.path.join(CUR_DIR, 'water/data/data_2')
-        ], self.batch_size, ['O', 'H'], rcut=1., sel=[1, 1])
+        with open(TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+        config = json.loads(content)
+        model_config = config['model']
+        self.rcut = model_config['descriptor']['rcut']
+        self.rcut_smth = model_config['descriptor']['rcut_smth']
+        self.sel = model_config['descriptor']['sel']
+        self.batch_size = config['training']['training_data']['batch_size']
+        self.dataset = DeepmdDataSet(config['training']['validation_data']['systems'],
+         self.batch_size, model_config['type_map'], self.rcut, self.sel)
+        self.filter_neuron = model_config['descriptor']['neuron']
+        self.axis_neuron = model_config['descriptor']['axis_neuron']
 
     def test_consistency(self):
         base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f)

@@ -8,6 +8,6 @@ DEVICE = torch.device(0)
 PREPROCESS_DEVICE = torch.device(0)
 JIT = True
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
-TEST_DATASET = 'water'
+TEST_CONFIG = 'tests/Cu/se_e2_a.json'
 
 ENERGY_BIAS_TRAINABLE = True
