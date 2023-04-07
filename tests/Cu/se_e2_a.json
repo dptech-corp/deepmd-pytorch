@@ -61,7 +61,7 @@
             "_comment": "that's all"
         },
         "numb_steps": 1000000,
-        "seed": 100,
+        "seed": 20,
         "disp_file": "lcurve.out",
         "disp_freq": 2,
         "save_freq": 10000,

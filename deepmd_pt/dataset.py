@@ -296,6 +296,9 @@ class DeepmdDataSet(Dataset):
         self._type_map = type_map
         if not sel is None:
             sec = torch.cumsum(torch.tensor(sel), dim=0)
+        if isinstance(systems, str):
+            with h5py.File(systems) as file:
+                systems = [os.path.join(systems, item) for item in file.keys()]
         self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
         self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
         self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
