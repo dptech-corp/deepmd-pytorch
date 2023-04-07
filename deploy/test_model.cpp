@@ -10,15 +10,9 @@ int main(int argc, const char* argv[]) {
   }
   auto device = torch::kCUDA;
   torch::jit::script::Module module;
-  try {
-    // Deserialize the ScriptModule from a file using torch::jit::load().
-    module = torch::jit::load(argv[1]);
-    module.to(device);
-  }
-  catch (const c10::Error& e) {
-    std::cerr << "error loading the model\n";
-    return -1;
-  }
+  // Deserialize the ScriptModule from a file using torch::jit::load().
+  module = torch::jit::load(argv[1]);
+  module.to(device);
   auto options = torch::TensorOptions();
   auto int_options = torch::TensorOptions().dtype(torch::kInt64);
   auto coord_options = torch::TensorOptions().requires_grad(true);

@@ -67,6 +67,8 @@ class TestDataset(unittest.TestCase):
             neuron=self.filter_neuron,
             axis_neuron=self.axis_neuron
         )
+    
+    def test_stat_output(self):
         def my_merge(energy, natoms):
             energy_lst = []
             natoms_lst = []
@@ -77,12 +79,10 @@ class TestDataset(unittest.TestCase):
             return energy_lst, natoms_lst
         energy = self.dp_sampled['energy']
         natoms = self.dp_sampled['natoms_vec']
-        self.energy, self.natoms = my_merge(energy, natoms)
-    
-    def test_stat_output(self):
+        energy, natoms = my_merge(energy, natoms)
         dp_fn = EnerFitting(self.dp_d, self.n_neuron)
         dp_fn.compute_output_stats(self.dp_sampled)
-        bias_atom_e = compute_output_stats(self.energy, self.natoms)
+        bias_atom_e = compute_output_stats(energy, natoms)
         self.assertTrue(np.allclose(dp_fn.bias_atom_e, bias_atom_e[:,0]))
 
     def test_stat_input(self):
@@ -97,11 +97,9 @@ class TestDataset(unittest.TestCase):
                 continue
             lst = []
             for item in my_sampled:
-                cnt = 0
+                bsz = item['energy'].shape[0]//self.data_stat_nbatch
                 for j in range(self.data_stat_nbatch):
-                    bsz = self.dp_merged['coord'][j].shape[0]
-                    lst.append(item[key][cnt:cnt+bsz].cpu().numpy())
-                    cnt += bsz
+                    lst.append(item[key][j*bsz:(j+1)*bsz].cpu().numpy())
             compare(self, self.dp_merged[key], lst)
 
     def test_descriptor(self):

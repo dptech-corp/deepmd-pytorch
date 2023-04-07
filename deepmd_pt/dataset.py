@@ -91,10 +91,7 @@ class DeepmdDataSystem(object):
         else:
             set_size = self._frames['coord'].shape[0]
         if batch_size == 'auto':
-            if self._natoms > 32:
-                batch_size = 1
-            else:
-                batch_size = (32//self._natoms)
+            batch_size = -(-32//self._natoms)
         if self._iterator + batch_size > set_size:
             set_idx = self._set_count % len(self._dirs)
             if self.sets[set_idx] is None:

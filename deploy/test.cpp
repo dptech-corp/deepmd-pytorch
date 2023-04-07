@@ -20,7 +20,7 @@ int main(int argc, const char* argv[]) {
   }
   // Create a vector of inputs.
   std::vector<torch::jit::IValue> inputs;
-  inputs.push_back(torch::zeros({10}));
+  inputs.push_back(torch::ones({10, 3}));
 
   // Execute the model and turn its output into a tensor.
   at::Tensor output = module.forward(inputs).toTensor();
