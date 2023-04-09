@@ -231,7 +231,8 @@ class DeepmdDataSystem(object):
         atype = batch['atype']
         box = batch['box']
         rcut = self.rcut
-        sec = sec = self.sec
+        sec = self.sec
+        assert batch['atype'].max() < self.sec.shape[0] 
         selected, shift, mapping = [], [], []
         for sid in trange(n_frames):
             region = Region3D(box[sid])
