@@ -79,8 +79,8 @@ class Trainer(object):
             # Compute prediction error
             bdata['coord'].requires_grad_(True)
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
-            mapping, shift, selected = bdata['mapping'], bdata['shift'], bdata['selected']
-            p_energy, p_force = self.model(coord, atype, natoms, mapping, shift, selected)
+            mapping, shift, selected, box = bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box']
+            p_energy, p_force = self.model(coord, atype, natoms, mapping, shift, selected, box)
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape
@@ -110,7 +110,7 @@ class Trainer(object):
         if JIT:
             if torch.__version__.startswith("2"):
                 bdata = self.training_data.__getitem__()
-                keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected']
+                keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'box']
                 bdata = {key:bdata[key] for key in keys}
                 exported_model = torch._dynamo.export(self.model, **bdata)
                 torch.save(exported_model, "compiled_model.pt")
