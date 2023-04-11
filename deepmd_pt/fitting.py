@@ -110,7 +110,8 @@ class EnergyFittingNet(torch.nn.Module):
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         assert self.ntypes == len(bias_atom_e), 'Element count mismatches!'
-        self.bias_atom_e = torch.tensor(bias_atom_e)
+        bias_atom_e = torch.tensor(bias_atom_e)
+        self.register_buffer('bias_atom_e', bias_atom_e)
 
         filter_layers = []
         for type_i in range(self.ntypes):

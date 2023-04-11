@@ -9,6 +9,7 @@ from deepmd_pt import env, my_random
 from deepmd_pt.descriptor import Region3D, normalize_coord, make_env_mat
 from tqdm import trange
 import h5py
+import torch.distributed as dist
 
 class DeepmdDataSystem(object):
 
@@ -54,6 +55,11 @@ class DeepmdDataSystem(object):
         self.rcut = rcut
         self.sec = sec
         self.sets = [None for i in range(len(self._sys_path))]
+
+        self.nframes = 0
+        for item in self._dirs:
+            frames = self._load_set(item, fast=True)
+            self.nframes += frames
 
     def add(self, 
             key: str, 
@@ -156,7 +162,7 @@ class DeepmdDataSystem(object):
             else:
                 return None
 
-    def _load_set(self, set_name):
+    def _load_set(self, set_name, fast = False):
         if self.file is None:
             path = os.path.join(set_name, "coord.npy")
             if self._data_dict['coord']['high_prec'] :
@@ -166,8 +172,9 @@ class DeepmdDataSystem(object):
             if coord.ndim == 1:
                 coord = coord.reshape([1, -1])
             assert(coord.shape[1] == self._data_dict['coord']['ndof'] * self._natoms)
-
             nframes = coord.shape[0]
+            if fast:
+                return nframes
             data = {'type': np.tile(self._atom_type[self._idx_map], (nframes, 1))}
             for kk in self._data_dict.keys():
                 data['find_'+kk], data[kk] = self._load_data(
@@ -182,9 +189,11 @@ class DeepmdDataSystem(object):
             return data
         else:
             data = {}
+            nframes = self.file[set_name][f"coord.npy"].shape[0]
+            if fast:
+                return nframes
             for key in ['coord', 'energy', 'force', 'box']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
-            nframes = data['coord'].shape[0]
             data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
             return data
 
@@ -285,7 +294,7 @@ def _make_idx_map(atom_type):
 
 class DeepmdDataSet(Dataset):
 
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None):
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None, weight=None):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -300,11 +309,20 @@ class DeepmdDataSet(Dataset):
         if isinstance(systems, str):
             with h5py.File(systems) as file:
                 systems = [os.path.join(systems, item) for item in file.keys()]
+        if dist.is_initialized():
+            world_size = dist.get_world_size()
+            rank = dist.get_rank()
+            systems = [item for i, item in enumerate(systems) if i%world_size == rank]
         self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
+        if weight is None:
+            weight = lambda name, sys: sys.nframes
+        self.probs = [weight(item, self._data_systems[i]) for i, item in enumerate(systems)]
+        self.probs = torch.tensor(self.probs, dtype=torch.float)
+        self.probs /= self.probs.sum()
         self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
         self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
         self.cache = [{} for sys in self._data_systems]
-
+        
     @property
     def nsystems(self):
         return len(self._data_systems)
@@ -315,7 +333,7 @@ class DeepmdDataSet(Dataset):
     def __getitem__(self, index=None):
         '''Get a batch of frames from the selected system.'''
         if index is None:
-            index = my_random.choice(np.arange(self.nsystems))
+            index = my_random.choice(np.arange(self.nsystems), self.probs)
         b_data = self._data_systems[index].get_batch(self._batch_size)
         b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
         batch_size = b_data['coord'].shape[0]

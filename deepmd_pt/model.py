@@ -44,19 +44,15 @@ class EnergyModel(torch.nn.Module):
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, box):
         '''Return total energy of the system.
-
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
         - atype: Atom types with shape [nframes, natoms[1]].
         - natoms: Atom statisics with shape [self.ntypes+2].
         - box: Simulation box with shape [nframes, 9].
-
         Returns:
         - energy: Energy per atom.
         - force: XYZ force per atom.
         '''
-        assert coord.requires_grad, 'Coordinate tensor must require gradient!'
-        coord.requires_grad_(False)
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
@@ -69,11 +65,9 @@ class EnergyModel(torch.nn.Module):
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
         assert extended_force is not None
-        force = torch.zeros_like(coord)
-        for sid in range(mapping.shape[0]):
-            for gid in range(mapping.shape[1]):
-                force[sid,mapping[sid,gid],:] = force[sid,mapping[sid,gid],:] + extended_force[sid,gid,:]
         stress = torch.transpose(extended_red_coord, 1, 2)@extended_force
+        mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
+        force = torch.zeros_like(coord)
+        force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
-        coord.requires_grad_(True)
         return [energy, force, stress]

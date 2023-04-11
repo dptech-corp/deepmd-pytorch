@@ -53,5 +53,5 @@ int main(int argc, const char* argv[]) {
   auto outputs = module.forward(inputs).toTensorVector();
   at::Tensor energy = outputs[0];
   at::Tensor force = outputs[1];
-  std::cout << "ok\n";
+  std::cout << energy<< force<< "ok\n";
 }

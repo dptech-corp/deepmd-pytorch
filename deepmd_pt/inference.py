@@ -70,7 +70,6 @@ class Trainer(object):
             l_force = bdata['force']
 
             # Compute prediction error
-            coord.requires_grad_(True)
             p_energy, p_force = self.model(coord, atype, natoms, bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box'])
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
