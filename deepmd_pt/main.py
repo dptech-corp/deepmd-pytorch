@@ -1,18 +1,38 @@
+import os
 import argparse
 import json
 import logging
-
+import torch
+from deepmd_pt import env
 from deepmd_pt import training
 from deepmd_pt import inference
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
+def train(rank, world_size, FLAGS):
+    def setup(rank, world_size):
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12350'
+        dist.init_process_group("gloo", rank=rank, world_size=world_size)
+        if not env.DEVICE == torch.device('cpu'):
+            device_count = torch.cuda.device_count()
+            if device_count < world_size:
+                logging.warn("There are more processes than GPUs !")
+            env.DEVICE = torch.device(rank%device_count)
+            env.PREPROCESS_DEVICE = torch.device(rank%device_count)
 
-def train(FLAGS):
+    def cleanup():
+        dist.destroy_process_group()
+    setup(rank, world_size)
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         content = fin.read()
     config = json.loads(content)
     trainer = training.Trainer(config, resume_from=FLAGS.CKPT)
-    trainer.run()
+    try:
+        trainer.run()
+    finally:
+        cleanup()
 
 def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
@@ -35,7 +55,15 @@ def main(args=None):
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
-        train(FLAGS)
+        world_size = env.WORLD_SIZE
+        if world_size > 1:
+            mp.spawn(train,
+                    args=(world_size, FLAGS),
+                    nprocs=world_size,
+                    join=True)
+        else:
+            train(0, world_size, FLAGS)
+
     elif FLAGS.command == 'test':
         test(FLAGS)
     else:

@@ -11,6 +11,8 @@ from deepmd_pt.model import EnergyModel
 from env import DEVICE, JIT
 if torch.__version__.startswith("2"):
     import torch._dynamo
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
       
 class Trainer(object):
 
@@ -39,13 +41,28 @@ class Trainer(object):
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
-        )   
+        )  
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if torch.__version__.startswith("2") and JIT:
             torch._dynamo.config.verbose = True
             self.model = torch.compile(self.model, dynamic=True, backend="eager")
         elif JIT:
             self.model = torch.jit.script(self.model)
+        self.rank = 0
+        if dist.is_initialized() and dist.get_world_size()>1:
+            self.model = DDP(self.model)
+            self.rank = dist.get_rank()
+            module = self.model.module
+            logging.basicConfig()
+            if self.rank == 0:
+                logging.getLogger().setLevel(logging.INFO)
+                torch.save(module.state_dict(), self.save_ckpt)
+                dist.barrier()
+            else:
+                logging.getLogger().setLevel(logging.ERROR)
+                dist.barrier()
+                state_dict = torch.load(self.save_ckpt)
+                self.model.module.load_state_dict(state_dict)
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -106,16 +123,19 @@ class Trainer(object):
 
         for step_id in range(self.num_steps):
             step(step_id)
-            break
-        if JIT:
-            if torch.__version__.startswith("2"):
-                bdata = self.training_data.__getitem__()
-                keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected']
-                bdata = {key:bdata[key] for key in keys}
-                exported_model = torch._dynamo.export(self.model, **bdata)
-                torch.save(exported_model, "compiled_model.pt")
-            else:
-                self.model.save("torchscript_model.pt")
+        if self.rank == 0:
+            module = self.model
+            if isinstance(module, DDP):
+                module = module.module
+            if JIT:
+                if torch.__version__.startswith("2"):
+                    bdata = self.training_data.__getitem__()
+                    keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected']
+                    bdata = {key:bdata[key] for key in keys}
+                    exported_model = torch._dynamo.export(module, **bdata)
+                    torch.save(exported_model, "compiled_model.pt")
+                else:
+                    module.save("torchscript_model.pt")
+            torch.save(module.state_dict(), self.save_ckpt)
         fout.close()
         logging.info('Saving model after all steps...')
-        torch.save(self.model.state_dict(), self.save_ckpt)
