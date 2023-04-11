@@ -282,8 +282,8 @@ class TestEnergy(unittest.TestCase):
         batch = my_ds._data_systems[0].preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
-        p_energy, p_force, p_stress = my_model(batch['coord'], batch['atype'], batch['natoms'],
-        batch['mapping'], batch['shift'], batch['selected'], batch['box'])
+        p_energy, p_force = my_model(batch['coord'], batch['atype'], batch['natoms'],
+        batch['mapping'], batch['shift'], batch['selected'])
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
