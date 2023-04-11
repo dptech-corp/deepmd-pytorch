@@ -66,7 +66,7 @@ class TestEnergy(unittest.TestCase):
 
     def test_saveload(self):
         batch = self.dataset.__getitem__()
-        keys = ["coord", "atype", "natoms", "mapping", "shift", "selected"]
+        keys = ["coord", "atype", "natoms", "mapping", "shift", "selected", "box"]
         batch = {key:batch[key] for key in batch if key in keys}
         batch['coord'].requires_grad = True
         result1 = self.model(**batch)

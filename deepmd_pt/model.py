@@ -42,7 +42,7 @@ class EnergyModel(torch.nn.Module):
         fitting_param['bias_atom_e'] = tmp[:, 0]
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, box):
         '''Return total energy of the system.
 
         Args:
@@ -55,10 +55,12 @@ class EnergyModel(torch.nn.Module):
         - energy: Energy per atom.
         - force: XYZ force per atom.
         '''
-        assert coord.requires_grad, 'Coordinate tensor must require gradient!'
+        coord.requires_grad_(True)
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
+        extended_red_coord = extended_coord@torch.linalg.inv(box.reshape([-1, 3, 3]))
+        extended_coord.requires_grad_(True)
         embedding = self.embedding_net(extended_coord, selected, atype)
         atom_energy = self.fitting_net(embedding, atype)
         energy = atom_energy.sum(dim=1)
@@ -67,4 +69,6 @@ class EnergyModel(torch.nn.Module):
         force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
         assert force is not None
         force = -force
+        extended_force = - extended_coord.grad
+        stress = torch.transpose(extended_red_coord, 1, 2)@extended_force
         return [energy, force]
