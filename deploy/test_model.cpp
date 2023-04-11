@@ -8,7 +8,8 @@ int main(int argc, const char* argv[]) {
     std::cerr << "usage: example-app <path-to-exported-script-module>\n";
     return -1;
   }
-  auto device = torch::kCUDA;
+  //auto device = torch::kCUDA;
+  auto device = torch::kCPU;
   torch::jit::script::Module module;
   // Deserialize the ScriptModule from a file using torch::jit::load().
   module = torch::jit::load(argv[1]);
@@ -52,5 +53,5 @@ int main(int argc, const char* argv[]) {
   auto outputs = module.forward(inputs).toTensorVector();
   at::Tensor energy = outputs[0];
   at::Tensor force = outputs[1];
-  std::cout << "ok\n";
+  std::cout << energy<< force<< "ok\n";
 }

@@ -18,13 +18,18 @@ int main(int argc, const char* argv[]) {
     std::cerr << "error loading the model\n";
     return -1;
   }
+  auto device = torch::kCUDA;
+  //auto device = torch::kCPU;
+  // Deserialize the ScriptModule from a file using torch::jit::load().
+  module.to(device);
   // Create a vector of inputs.
   std::vector<torch::jit::IValue> inputs;
-  inputs.push_back(torch::ones({10, 3}));
+  auto options = torch::TensorOptions().dtype(torch::kFloat64).requires_grad(true);
+  inputs.push_back(torch::ones({10, 3}, options).to(device));
 
   // Execute the model and turn its output into a tensor.
-  at::Tensor output = module.forward(inputs).toTensor();
-  std::cout << output << '\n';
-
-  std::cout << "ok\n";
+  auto outputs = module.forward(inputs).toTensorVector();
+  at::Tensor energy = outputs[0];
+  at::Tensor force = outputs[1];
+  std::cout <<energy << force << "ok\n";
 }

@@ -67,4 +67,4 @@ class EnergyModel(torch.nn.Module):
         force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
         assert force is not None
         force = -force
-        return energy, force
+        return [energy, force]
