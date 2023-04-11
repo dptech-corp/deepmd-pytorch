@@ -20,11 +20,12 @@ int main(int argc, const char* argv[]) {
   }
   // Create a vector of inputs.
   std::vector<torch::jit::IValue> inputs;
-  inputs.push_back(torch::ones({10, 3}));
+  auto options = torch::TensorOptions().dtype(torch::kFloat64).requires_grad(true);
+  inputs.push_back(torch::ones({10, 3}, options));
 
   // Execute the model and turn its output into a tensor.
-  at::Tensor output = module.forward(inputs).toTensor();
-  std::cout << output << '\n';
-
-  std::cout << "ok\n";
+  auto outputs = module.forward(inputs).toTensorVector();
+  at::Tensor energy = outputs[0];
+  at::Tensor force = outputs[1];
+  std::cout <<energy << force << "ok\n";
 }

@@ -8,7 +8,8 @@ int main(int argc, const char* argv[]) {
     std::cerr << "usage: example-app <path-to-exported-script-module>\n";
     return -1;
   }
-  auto device = torch::kCUDA;
+  //auto device = torch::kCUDA;
+  auto device = torch::kCPU;
   torch::jit::script::Module module;
   // Deserialize the ScriptModule from a file using torch::jit::load().
   module = torch::jit::load(argv[1]);
