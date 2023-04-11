@@ -49,4 +49,14 @@ cmake --build .
 make
 ```
 # Known Problems & TODO
-1. Pass test_stat.py on the Cu dataset.
+1. C++ interface does not work on GPU
+# Test
+First modify TEST_CONFIG in env.py to the input config you want to test. For example, `tests/water/se_e2.json` is the config for a tiny water problem. The water dataset is contained in the repository.
+
+The tests are aligned with deepmdkit 2.1.5, may fail with deepmdkit 2.2 or higher.
+
+# Distributed Data Parallelism
+The systems are shared by processes.
+``` 
+systems = [item for i, item in enumerate(systems) if i%world_size == rank]
+```

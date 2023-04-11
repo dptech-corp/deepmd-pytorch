@@ -265,7 +265,7 @@ class TestEnergy(unittest.TestCase):
         my_em.mean = torch.tensor(mean, device=DEVICE)
         stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.nnei, 4])
         my_em.stddev = torch.tensor(stddev, device=DEVICE)
-        my_model.fitting_net.bias_atom_e = stat_dict['fitting_net.bias_atom_e']
+        my_model.fitting_net.bias_atom_e = torch.tensor(stat_dict['fitting_net.bias_atom_e'], device=DEVICE)
 
         # Keep parameter value consistency between 2 implentations
         for name, param in my_model.named_parameters():

@@ -55,8 +55,7 @@ class EnergyModel(torch.nn.Module):
         - energy: Energy per atom.
         - force: XYZ force per atom.
         '''
-        assert coord.requires_grad, 'Coordinate tensor must require gradient!'
-        coord.requires_grad_(False)
+        coord.requires_grad_(True)
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
@@ -67,13 +66,9 @@ class EnergyModel(torch.nn.Module):
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-        extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-        assert extended_force is not None
-        force = torch.zeros_like(coord)
-        for sid in range(mapping.shape[0]):
-            for gid in range(mapping.shape[1]):
-                force[sid,mapping[sid,gid],:] = force[sid,mapping[sid,gid],:] + extended_force[sid,gid,:]
-        stress = torch.transpose(extended_red_coord, 1, 2)@extended_force
+        force = torch.autograd.grad([energy], [coord], grad_outputs=lst, create_graph=True)[0]
+        assert force is not None
         force = -force
-        coord.requires_grad_(True)
-        return [energy, force, stress]
+        extended_force = - extended_coord.grad
+        stress = torch.transpose(extended_red_coord, 1, 2)@extended_force
+        return [energy, force]
