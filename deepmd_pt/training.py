@@ -123,19 +123,19 @@ class Trainer(object):
         for step_id in range(self.num_steps):
             step(step_id)
 
-      if self.rank == 0:
-          module = self.model
-          if isinstance(module, DDP):
-              module = module.module
-          if JIT:
-              if torch.__version__.startswith("2"):
-                  bdata = self.training_data.__getitem__()
-                  keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected']
-                  bdata = {key:bdata[key] for key in keys}
-                  exported_model = torch._dynamo.export(module, **bdata)
-                  torch.save(exported_model, "compiled_model.pt")
-              else:
-                  module.save("torchscript_model.pt")
-          torch.save(module.state_dict(), self.save_ckpt)
+        if self.rank == 0:
+            module = self.model
+            if isinstance(module, DDP):
+                module = module.module
+            if JIT:
+                if torch.__version__.startswith("2"):
+                    bdata = self.training_data.__getitem__()
+                    keys = ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected']
+                    bdata = {key:bdata[key] for key in keys}
+                    exported_model = torch._dynamo.export(module, **bdata)
+                    torch.save(exported_model, "compiled_model.pt")
+                else:
+                    module.save("torchscript_model.pt")
+            torch.save(module.state_dict(), self.save_ckpt)
         fout.close()
         logging.info('Saving model after all steps...')
