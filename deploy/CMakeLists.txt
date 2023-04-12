@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(test)
 
-set(Torch_DIR /root/libtorch/share/cmake/Torch)
+set(Torch_DIR /root/libtorch_cu116/libtorch/share/cmake/Torch)
 find_package(Torch REQUIRED)
 
 add_executable(test test_model.cpp)
