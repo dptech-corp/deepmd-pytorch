@@ -56,7 +56,6 @@ class EnergyModel(torch.nn.Module):
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
-        extended_red_coord = extended_coord@torch.linalg.inv(box.reshape([-1, 3, 3]))
         extended_coord.requires_grad_(True)
         embedding = self.embedding_net(extended_coord, selected, atype)
         atom_energy = self.fitting_net(embedding, atype)
@@ -65,9 +64,9 @@ class EnergyModel(torch.nn.Module):
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
         assert extended_force is not None
-        stress = torch.transpose(extended_red_coord, 1, 2)@extended_force
+        virial = -torch.transpose(extended_coord, 1, 2)@extended_force
         mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
         force = torch.zeros_like(coord)
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
-        return [energy, force, stress]
+        return [energy, force, virial]

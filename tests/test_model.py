@@ -110,7 +110,8 @@ class DpTrainer(object):
             t_heads = {
                 'loss': l2_l,
                 'energy': model_pred['energy'],
-                'force': model_pred['force']
+                'force': model_pred['force'],
+                'virial': model_pred['virial'],
             }
 
         # Get statistics of each component
@@ -282,7 +283,7 @@ class TestEnergy(unittest.TestCase):
         batch = my_ds._data_systems[0].preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
-        p_energy, p_force, p_stress = my_model(batch['coord'], batch['atype'], batch['natoms'],
+        p_energy, p_force, p_virial = my_model(batch['coord'], batch['atype'], batch['natoms'],
         batch['mapping'], batch['shift'], batch['selected'], batch['box'])
         cur_lr = my_lr.value(self.wanted_step)
         loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
@@ -290,6 +291,7 @@ class TestEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
         rtol= 1e-5; atol=1e-8
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
+        self.assertTrue(np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
         def step(step_id):
