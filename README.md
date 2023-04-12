@@ -39,17 +39,15 @@ env.py
 ```
 
 # Deploy
-first install libtorch
+Tested with libtorch pre-CXX11 abi cu116, cuda 11.6, torch 1.13
 ```
 python test.py
 mkdir build
 cd build
-cmake  -DCMAKE_PREFIX_PATH=/root/libtorch/share/cmake/Torch -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc  ..
+cmake  -DCMAKE_PREFIX_PATH=/root/libtorch_cu116/libtorch/share/cmake/Torch -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc  ..
 cmake --build .
 make
 ```
-# Known Problems & TODO
-1. C++ interface does not work on GPU
 # Test
 First modify TEST_CONFIG in env.py to the input config you want to test. For example, `tests/water/se_e2.json` is the config for a tiny water problem. The water dataset is contained in the repository.
 
@@ -60,3 +58,5 @@ The systems are shared by processes.
 ``` 
 systems = [item for i, item in enumerate(systems) if i%world_size == rank]
 ```
+# Known Problems & TODO
+1. torch.linalg.inv may fail for non-singular matrices when using the C++ API.

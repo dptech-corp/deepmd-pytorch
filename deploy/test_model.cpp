@@ -8,20 +8,19 @@ int main(int argc, const char* argv[]) {
     std::cerr << "usage: example-app <path-to-exported-script-module>\n";
     return -1;
   }
-  //auto device = torch::kCUDA;
-  auto device = torch::kCPU;
+  auto device = torch::kCUDA;
+  //auto device = torch::kCPU;
   torch::jit::script::Module module;
   // Deserialize the ScriptModule from a file using torch::jit::load().
   module = torch::jit::load(argv[1]);
   module.to(device);
   auto options = torch::TensorOptions();
   auto int_options = torch::TensorOptions().dtype(torch::kInt64);
-  auto coord_options = torch::TensorOptions().requires_grad(true);
   // Create a vector of inputs.
   std::vector<torch::jit::IValue> inputs;
   //coord, atype, natoms, mapping, shift, selected 
   double coord_value[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-  at::Tensor coord = torch::from_blob(coord_value, {1, 3, 3}, coord_options).to(device);
+  at::Tensor coord = torch::from_blob(coord_value, {1, 3, 3}, options).to(device);
   long atype_value[3] = {0, 1, 1};
   at::Tensor atype = torch::from_blob(atype_value, {1, 3}, int_options).to(device);
   long natoms_value[4] = {3, 3, 1, 2};
@@ -42,12 +41,16 @@ int main(int argc, const char* argv[]) {
   selected_value[138] = 0;
   selected_value[138*2] = 0;
   at::Tensor selected = torch::from_blob(selected_value, {1, 3, 138}, int_options).to(device);
+  //double box_value[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+  //at::Tensor box = torch::from_blob(box_value, {1, 3, 3}, options).to(device);
+  at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
   inputs.push_back(coord);
   inputs.push_back(atype);
   inputs.push_back(natoms);
   inputs.push_back(mapping);
   inputs.push_back(shift);
   inputs.push_back(selected);
+  inputs.push_back(box);
 
   // Execute the model and turn its output into a tensor.
   auto outputs = module.forward(inputs).toTensorVector();

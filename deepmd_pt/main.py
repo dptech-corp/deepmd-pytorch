@@ -18,8 +18,7 @@ def train(rank, world_size, FLAGS):
             device_count = torch.cuda.device_count()
             if device_count < world_size:
                 logging.warn("There are more processes than GPUs !")
-            env.DEVICE = torch.device(rank%device_count)
-            env.PREPROCESS_DEVICE = torch.device(rank%device_count)
+            torch.cuda.set_device(rank%device_count)
 
     def cleanup():
         dist.destroy_process_group()
