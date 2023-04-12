@@ -4,8 +4,8 @@ import torch
 GLOBAL_NP_FLOAT_PRECISION = np.float64
 GLOBAL_PT_FLOAT_PRECISION = torch.float64
 GLOBAL_ENER_FLOAT_PRECISION = np.float64
-DEVICE = torch.device(0)
-PREPROCESS_DEVICE = torch.device(0)
+DEVICE = torch.device('cpu')
+PREPROCESS_DEVICE = torch.device('cpu')
 JIT = True
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
 TEST_CONFIG = 'tests/water/se_e2_a.json'
