@@ -1,3 +1,4 @@
 *.log
 *.pyc
 **/.ipynb_checkpoints
+deepmd_pt/_version.py
