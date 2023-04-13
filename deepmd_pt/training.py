@@ -93,7 +93,7 @@ class Trainer(object):
             # Compute prediction error
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
             mapping, shift, selected, box = bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box']
-            p_energy, p_force, stress = self.model(coord, atype, natoms, mapping, shift, selected, box)
+            p_energy, p_force, p_virial = self.model(coord, atype, natoms, mapping, shift, selected, box)
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape

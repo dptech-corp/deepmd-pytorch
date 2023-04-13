@@ -15,8 +15,6 @@ classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
 ]
 dependencies = [
-     'tensorflow==2.10.0',
-     'deepmd-kit==2.1.5',
      'torch',
      'tqdm',
 ]
