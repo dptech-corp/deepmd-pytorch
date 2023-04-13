@@ -17,7 +17,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install -e .
-        pip install coverage pytest
+        pip install -r tests/requirements.txt
     - name: Test
       run: DEVICE=cpu PREPROCESS_DEVICE=cpu coverage run --source=./deepmd_pt -m unittest -v -f && coverage report
     - uses: codecov/codecov-action@v3
