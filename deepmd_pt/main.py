@@ -1,3 +1,5 @@
+      
+
 import os
 import argparse
 import json
@@ -11,9 +13,10 @@ import torch.distributed as dist
 
 def train(rank, world_size, FLAGS):
     def setup(rank, world_size):
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12350'
-        dist.init_process_group("gloo", rank=rank, world_size=world_size)
+        if os.environ.get('MASTER_ADDR') is None:
+            os.environ['MASTER_ADDR'] = 'localhost'
+        if os.environ.get('MASTER_PORT') is None:
+            os.environ['MASTER_PORT'] = "12345"
         if not env.DEVICE == torch.device('cpu'):
             device_count = torch.cuda.device_count()
             if device_count < world_size:
@@ -55,11 +58,13 @@ def main(args=None):
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         world_size = env.WORLD_SIZE
+        if os.environ.get('WORLD_SIZE') is not None:
+           world_size = int(os.environ.get('WORLD_SIZE'))
         if world_size > 1:
-            mp.spawn(train,
-                    args=(world_size, FLAGS),
-                    nprocs=world_size,
-                    join=True)
+            backend = 'nccl' if torch.cuda.is_available() else 'gloo'
+            dist.init_process_group(backend=backend,rank=int(os.environ.get('RANK')),world_size=world_size)
+            rank = dist.get_rank()
+            train(rank,world_size,FLAGS)
         else:
             train(0, world_size, FLAGS)
 
