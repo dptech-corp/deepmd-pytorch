@@ -41,9 +41,9 @@ int main(int argc, const char* argv[]) {
   selected_value[138] = 0;
   selected_value[138*2] = 0;
   at::Tensor selected = torch::from_blob(selected_value, {1, 3, 138}, int_options).to(device);
-  //double box_value[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-  //at::Tensor box = torch::from_blob(box_value, {1, 3, 3}, options).to(device);
-  at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
+  double box_value[9] = {10, 0, 0, 0, 10, 0, 0, 0, 10};
+  at::Tensor box = torch::from_blob(box_value, {1, 3, 3}, options).to(device);
+ // at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
   inputs.push_back(coord);
   inputs.push_back(atype);
   inputs.push_back(natoms);

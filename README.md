@@ -59,4 +59,3 @@ The systems are shared by processes.
 systems = [item for i, item in enumerate(systems) if i%world_size == rank]
 ```
 # Known Problems & TODO
-1. torch.linalg.inv may fail for non-singular matrices when using the C++ API.
