@@ -8,7 +8,7 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
-from env import DEVICE, JIT
+from deepmd_pt.env import DEVICE, JIT
 if torch.__version__.startswith("2"):
     import torch._dynamo
 

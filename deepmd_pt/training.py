@@ -8,7 +8,7 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
-from env import DEVICE, JIT
+from deepmd_pt.env import DEVICE, JIT
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -42,6 +42,14 @@ class Trainer(object):
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
         )  
+        validationdataset_params = training_params.pop('validation_data')
+        self.validation_data = DeepmdDataSet(
+            systems=validationdataset_params['systems'],
+            batch_size=validationdataset_params['batch_size'],
+            type_map=model_params['type_map'],
+            rcut=model_params['descriptor']['rcut'],
+            sel=model_params['descriptor']['sel']
+        )
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if JIT:
             self.model = torch.jit.script(self.model)
@@ -81,14 +89,14 @@ class Trainer(object):
 
     def run(self):
         fout = open(self.disp_file, 'w')
+        fout.write('step\tloss_t\tloss_v\trmse_e_t\trmse_f_t\trmse_v_t\trmse_e_v\trmse_f_v\trmse_v_v\tlr\n')
         logging.info('Start to train %d steps.', self.num_steps)
         
-        def step(step_id):
-            bdata = self.training_data.__getitem__()
-            self.optimizer.zero_grad()
+        def get_loss(bdata):
             cur_lr = self.lr_exp.value(step_id)
             l_energy = bdata['energy']
             l_force = bdata['force']
+            l_virial = bdata['virial']
 
             # Compute prediction error
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
@@ -97,10 +105,23 @@ class Trainer(object):
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape
-            loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
+            assert l_virial.shape == p_virial.shape
+            loss, rmse_e, rmse_f, rmse_v = self.loss(cur_lr, natoms, p_energy, p_force, p_virial, l_energy, l_force, l_virial)
+            return loss, rmse_e, rmse_f, rmse_v
+        def get_rmse(bdata):
+            loss, rmse_e, rmse_f, rmse_v = get_loss(bdata)
             loss_val = loss.cpu().detach().numpy().tolist()
-            logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
-
+            # logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
+            rmse_e_val = rmse_e.cpu().detach().numpy().tolist()
+            rmse_f_val = rmse_f.cpu().detach().numpy().tolist()
+            rmse_v_val = rmse_v.cpu().detach().numpy().tolist()
+            return loss_val, rmse_e_val, rmse_f_val, rmse_v_val
+        
+        def step(step_id):
+            self.optimizer.zero_grad()
+            # train
+            bdata = self.training_data.__getitem__()
+            loss, __, __, __ = get_loss(bdata)
             # Backpropagation
             loss.backward()
             self.optimizer.step()
@@ -108,14 +129,17 @@ class Trainer(object):
 
             # Log and persist
             if step_id % self.disp_freq == 0:
-                rmse_e_val = rmse_e.cpu().detach().numpy().tolist()
-                rmse_f_val = rmse_f.cpu().detach().numpy().tolist()
-                record = 'step=%d, rmse_e=%f, rmse_f=%f\n' % (step_id, rmse_e_val, rmse_f_val)
+                cur_lr = self.lr_exp.value(step_id)
+                # training_data loss
+                train_data = self.training_data.__getitem__()
+                loss_t, rmse_e_t, rmse_f_t, rmse_v_t = get_rmse(train_data)
+                validation_data = self.validation_data.__getitem__()
+                loss_v, rmse_e_v, rmse_f_v, rmse_v_v = get_rmse(validation_data)
+                record = '%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n' % (step_id, loss_t, loss_v, rmse_e_t, rmse_e_v, rmse_f_t, rmse_f_v, rmse_v_t, rmse_v_v, cur_lr)
                 fout.write(record)
                 fout.flush()
-            if step_id > 0:
-                if step_id % self.save_freq == 0:
-                    torch.save(self.model.state_dict(), self.save_ckpt)
+            if step_id > 0 and step_id % self.save_freq == 0:
+                torch.save(self.model.state_dict(), self.save_ckpt)
 
         for step_id in range(self.num_steps):
             step(step_id)

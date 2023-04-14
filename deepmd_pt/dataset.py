@@ -50,6 +50,7 @@ class DeepmdDataSystem(object):
         self.add('coord', 3, atomic=True, must=True)
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force',  3, atomic=True,  must=False, high_prec=False)
+        self.add('virial',  9, atomic=False,  must=False, high_prec=True)
 
         self._sys_path = sys_path
         self.rcut = rcut
@@ -189,11 +190,13 @@ class DeepmdDataSystem(object):
             return data
         else:
             data = {}
+            # N = 50
             nframes = self.file[set_name][f"coord.npy"].shape[0]
             if fast:
                 return nframes
-            for key in ['coord', 'energy', 'force', 'box']:
-                data[key] = self.file[set_name][f"{key}.npy"][:]
+            for key in self.file[set_name].keys():#['coord', 'energy', 'virial', 'force', 'box']:
+                thiskey = key[:-4]
+                data[thiskey] = self.file[set_name][key][:]
             data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
             return data
 
@@ -224,7 +227,7 @@ class DeepmdDataSystem(object):
 
     def preprocess(self, batch):
         n_frames = batch['coord'].shape[0]
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in batch.keys():
                 batch[key] = torch.tensor(batch[key], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
         for key in ['type']:
@@ -234,6 +237,10 @@ class DeepmdDataSystem(object):
         batch['force'] = batch['force'].view(n_frames, -1, 3)
         batch['atype'] = batch.pop('type')
         batch['energy'] = batch['energy'].view(-1, 1)
+        if 'virial' not in batch.keys():
+            batch['virial'] = torch.zeros((n_frames, 3, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+        else:
+            batch['virial'] = batch['virial'].view(n_frames, 3, 3)
 
         keys = ['selected', 'shift', 'mapping']
         coord = batch['coord']
@@ -346,7 +353,7 @@ class DeepmdDataSet(Dataset):
         """
         pt_batch = self[sys_idx]
         np_batch = {}
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in pt_batch.keys():
                 np_batch[key] = pt_batch[key].cpu().numpy()
         for key in ['atype', 'natoms']:
