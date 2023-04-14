@@ -13,7 +13,8 @@ class LearningRateExp(object):
         - stop_steps: When is the last step.
         '''
         self.start_lr = start_lr
-        self.decay_steps = decay_steps
+        default_ds = 100 if stop_steps // 10 > 100 else stop_steps // 100 + 1
+        self.decay_steps = default_ds if decay_steps >= stop_steps else decay_steps
         self.decay_rate = np.exp(np.log(stop_lr / start_lr) / (stop_steps / decay_steps))
 
     def value(self, step):

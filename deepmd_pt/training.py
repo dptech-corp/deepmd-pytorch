@@ -89,7 +89,8 @@ class Trainer(object):
 
     def run(self):
         fout = open(self.disp_file, 'w')
-        fout.write('step\tloss_t\tloss_v\trmse_e_t\trmse_f_t\trmse_v_t\trmse_e_v\trmse_f_v\trmse_v_v\tlr\n')
+        first_line = '%10s%15s%15s%15s%15s%15s%15s%15s%15s%15s\n'%('step','rmse_val','rmse_trn', 'rmse_e_val','rmse_e_trn', 'rmse_f_val', 'rmse_f_trn', 'rmse_v_val', 'rmse_v_trn', 'lr')
+        fout.write(first_line)
         logging.info('Start to train %d steps.', self.num_steps)
         
         def get_loss(bdata):
@@ -135,7 +136,7 @@ class Trainer(object):
                 loss_t, rmse_e_t, rmse_f_t, rmse_v_t = get_rmse(train_data)
                 validation_data = self.validation_data.__getitem__()
                 loss_v, rmse_e_v, rmse_f_v, rmse_v_v = get_rmse(validation_data)
-                record = '%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n' % (step_id, loss_t, loss_v, rmse_e_t, rmse_e_v, rmse_f_t, rmse_f_v, rmse_v_t, rmse_v_v, cur_lr)
+                record = '{:10.0f}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}\n'.format(step_id, loss_v, loss_t, rmse_e_v, rmse_e_t, rmse_f_v, rmse_f_t, rmse_v_v, rmse_v_t, cur_lr)
                 fout.write(record)
                 fout.flush()
             if step_id > 0 and step_id % self.save_freq == 0:

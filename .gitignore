@@ -2,3 +2,8 @@
 *.pyc
 **/.ipynb_checkpoints
 deepmd_pt/_version.py
+main.py
+.vscode
+input.json
+deepmd_pt/__init__.py
+*.out
