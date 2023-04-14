@@ -1,5 +1,6 @@
 import logging
 import torch
+import time
 
 from typing import Any, Dict
 
@@ -108,15 +109,18 @@ class Trainer(object):
 
             # Log and persist
             if step_id % self.disp_freq == 0:
+                train_time = time.time() - self.t0
                 rmse_e_val = rmse_e.cpu().detach().numpy().tolist()
                 rmse_f_val = rmse_f.cpu().detach().numpy().tolist()
-                record = 'step=%d, rmse_e=%f, rmse_f=%f\n' % (step_id, rmse_e_val, rmse_f_val)
+                record = 'step=%d, rmse_e=%f, rmse_f=%f, training time of %d steps=%fs\n' % (step_id, rmse_e_val, rmse_f_val,self. disp_freq, train_time)
                 fout.write(record)
                 fout.flush()
+                self.t0 = time.time()
             if step_id > 0:
                 if step_id % self.save_freq == 0:
                     torch.save(self.model.state_dict(), self.save_ckpt)
 
+        self.t0 = time.time()
         for step_id in range(self.num_steps):
             step(step_id)
 
