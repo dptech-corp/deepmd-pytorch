@@ -16,7 +16,7 @@ import torch.distributed as dist
       
 class Trainer(object):
 
-    def __init__(self, config: Dict[str, Any], resume_from = None):
+    def __init__(self, config: Dict[str, Any], resume_from = None, config_path='.'):
         '''Construct a DeePMD trainer.
 
         Args:
@@ -40,7 +40,8 @@ class Trainer(object):
             batch_size=dataset_params['batch_size'],
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
-            sel=model_params['descriptor']['sel']
+            sel=model_params['descriptor']['sel'],
+            config_path=config_path
         )  
         validationdataset_params = training_params.pop('validation_data')
         self.validation_data = DeepmdDataSet(
@@ -48,7 +49,8 @@ class Trainer(object):
             batch_size=validationdataset_params['batch_size'],
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
-            sel=model_params['descriptor']['sel']
+            sel=model_params['descriptor']['sel'],
+            config_path=config_path
         )
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if JIT:

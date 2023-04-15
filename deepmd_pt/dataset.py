@@ -13,32 +13,35 @@ import torch.distributed as dist
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None):
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, config_path='.'):
         '''Construct DeePMD-style frame collection of one system.
 
         Args:
         - sys_path: Paths to the system.
         - type_map: Atom types.
         '''
+        self.config_path = config_path
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
-            path = "/".join(tmp[:-1])
+            real_path = self.get_real_path("/".join(tmp[:-1]))
             sys = tmp[-1]
-            self.file = h5py.File(path)[sys]
+            self.file = h5py.File(real_path)[sys]
             self._dirs = []
             for item in self.file.keys():
                 if 'set.' in item:
                     self._dirs.append(item)
             self._dirs.sort()
+            real_path = real_path + '/%s'%sys
         else:
+            real_path = self.get_real_path(sys_path)
             self.file = None
-            self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
+            self._dirs = glob.glob(os.path.join(real_path, 'set.*'))
             self._dirs.sort()
-        self._atom_type = self._load_type(sys_path)
+        self._atom_type = self._load_type(real_path)
         self._natoms = len(self._atom_type)
 
-        self._type_map = self._load_type_map(sys_path)
+        self._type_map = self._load_type_map(real_path)
         if type_map is not None and self._type_map is not None:
             atom_type = [type_map.index(self._type_map[ii]) for ii in self._atom_type]
             self._atom_type = np.array(atom_type, dtype=np.int32)
@@ -52,7 +55,7 @@ class DeepmdDataSystem(object):
         self.add('force',  3, atomic=True,  must=False, high_prec=False)
         self.add('virial',  9, atomic=False,  must=False, high_prec=True)
 
-        self._sys_path = sys_path
+        self._sys_path = real_path
         self.rcut = rcut
         self.sec = sec
         self.sets = [None for i in range(len(self._sys_path))]
@@ -62,6 +65,12 @@ class DeepmdDataSystem(object):
             frames = self._load_set(item, fast=True)
             self.nframes += frames
 
+    def get_real_path(self, sys_path):
+        if not os.path.exists(sys_path) and self.config_path != '.':
+            real_path = os.path.abspath(os.path.join(self.config_path, sys_path))
+        else:
+            real_path = sys_path
+        return real_path
     def add(self, 
             key: str, 
             ndof: int, 
@@ -301,7 +310,7 @@ def _make_idx_map(atom_type):
 
 class DeepmdDataSet(Dataset):
 
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None, weight=None):
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None, weight=None, config_path='.'):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -320,7 +329,7 @@ class DeepmdDataSet(Dataset):
             world_size = dist.get_world_size()
             rank = dist.get_rank()
             systems = [item for i, item in enumerate(systems) if i%world_size == rank]
-        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
+        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map, config_path=config_path) for ii in systems]
         if weight is None:
             weight = lambda name, sys: sys.nframes
         self.probs = [weight(item, self._data_systems[i]) for i, item in enumerate(systems)]
@@ -340,7 +349,10 @@ class DeepmdDataSet(Dataset):
     def __getitem__(self, index=None):
         '''Get a batch of frames from the selected system.'''
         if index is None:
-            index = my_random.choice(np.arange(self.nsystems), self.probs)
+            # index = my_random.choice(np.arange(self.nsystems), self.probs)
+            # torch tensor to numpy
+            x = self.probs.cpu().numpy()
+            index = my_random.choice(np.arange(self.nsystems), x)
         b_data = self._data_systems[index].get_batch(self._batch_size)
         b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
         batch_size = b_data['coord'].shape[0]

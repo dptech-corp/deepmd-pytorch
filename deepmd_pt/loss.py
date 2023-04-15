@@ -6,7 +6,7 @@ from deepmd_pt.env import GLOBAL_PT_FLOAT_PRECISION
 class EnergyStdLoss(torch.nn.Module):
 
     def __init__(self, starter_learning_rate,
-        start_pref_e=0.02, limit_pref_e=1., start_pref_f=1000., limit_pref_f=1., start_pref_v=0.02, limit_pref_v=1., **kwargs):
+        start_pref_e=0.02, limit_pref_e=1., start_pref_f=1000., limit_pref_f=1., start_pref_v=0, limit_pref_v=0, **kwargs):
         '''Construct a layer to compute loss on energy and force.'''
         super(EnergyStdLoss, self).__init__()
         self.starter_learning_rate = starter_learning_rate
@@ -46,10 +46,10 @@ class EnergyStdLoss(torch.nn.Module):
         force_loss = (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
         rmse_f = l2_force_loss.sqrt()
         # virial
-        if l_virial.sum() > 1e-8:
+        if l_virial.abs().sum() > 1e-8:
             pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
             diff_v = l_virial - p_virial
-            l2_virial_loss = torch.mean(torch.square(diff_v))
+            l2_virial_loss = torch.mean(torch.square(diff_v))* atom_norm_ener
             virial_loss = (pref_v * l2_virial_loss).to(GLOBAL_PT_FLOAT_PRECISION)
             rmse_v = l2_virial_loss.sqrt()
         else:
