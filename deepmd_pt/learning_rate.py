@@ -19,4 +19,4 @@ class LearningRateExp(object):
 
     def value(self, step):
         '''Get the learning rate at the given step.'''
-        return self.start_lr * np.power(self.decay_rate, step / self.decay_steps)
+        return self.start_lr * np.power(self.decay_rate, step // self.decay_steps)

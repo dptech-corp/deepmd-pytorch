@@ -49,9 +49,9 @@ class EnergyStdLoss(torch.nn.Module):
         if l_virial.abs().sum() > 1e-8:
             pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
             diff_v = l_virial - p_virial
-            l2_virial_loss = torch.mean(torch.square(diff_v))* atom_norm_ener
-            virial_loss = (pref_v * l2_virial_loss).to(GLOBAL_PT_FLOAT_PRECISION)
-            rmse_v = l2_virial_loss.sqrt()
+            l2_virial_loss = torch.mean(torch.square(diff_v))
+            virial_loss = (pref_v * l2_virial_loss* atom_norm_ener).to(GLOBAL_PT_FLOAT_PRECISION)
+            rmse_v = l2_virial_loss.sqrt()* atom_norm_ener
         else:
             virial_loss, rmse_v = torch.tensor(0), torch.tensor(0)
-        return energy_loss + force_loss + virial_loss, rmse_e.detach(), rmse_f.detach(), rmse_v.detach()
+        return torch.sqrt(energy_loss + force_loss + virial_loss), rmse_e.detach(), rmse_f.detach(), rmse_v.detach()

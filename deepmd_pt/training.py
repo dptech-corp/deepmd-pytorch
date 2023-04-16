@@ -124,7 +124,7 @@ class Trainer(object):
             self.optimizer.zero_grad()
             # train
             bdata = self.training_data.__getitem__()
-            loss, __, __, __ = get_loss(bdata)
+            loss, rmse_e_t, rmse_f_t, rmse_v_t = get_loss(bdata)
             # Backpropagation
             loss.backward()
             self.optimizer.step()
@@ -134,13 +134,14 @@ class Trainer(object):
             if step_id % self.disp_freq == 0:
                 cur_lr = self.lr_exp.value(step_id)
                 # training_data loss
-                train_data = self.training_data.__getitem__()
-                loss_t, rmse_e_t, rmse_f_t, rmse_v_t = get_rmse(train_data)
+                # train_data = self.training_data.__getitem__()
+                # loss_t, rmse_e_t, rmse_f_t, rmse_v_t = get_rmse(train_data)
                 validation_data = self.validation_data.__getitem__()
                 loss_v, rmse_e_v, rmse_f_v, rmse_v_v = get_rmse(validation_data)
-                record = '{:10.0f}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}\n'.format(step_id, loss_v, loss_t, rmse_e_v, rmse_e_t, rmse_f_v, rmse_f_t, rmse_v_v, rmse_v_t, cur_lr)
+                record = '{:10.0f}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}{:15.3E}\n'.format(step_id, loss_v, loss, rmse_e_v, rmse_e_t, rmse_f_v, rmse_f_t, rmse_v_v, rmse_v_t, cur_lr)
                 fout.write(record)
                 fout.flush()
+                
             if step_id > 0 and step_id % self.save_freq == 0:
                 torch.save(self.model.state_dict(), self.save_ckpt)
 
