@@ -1,4 +1,4 @@
-      
+
 
 import os
 import argparse
@@ -11,36 +11,20 @@ from deepmd_pt import inference
 import torch.multiprocessing as mp
 import torch.distributed as dist
 
-def train(rank, world_size, FLAGS):
-    def setup(rank, world_size):
-        if os.environ.get('MASTER_ADDR') is None:
-            os.environ['MASTER_ADDR'] = 'localhost'
-        if os.environ.get('MASTER_PORT') is None:
-            os.environ['MASTER_PORT'] = "12345"
-        if not env.DEVICE == torch.device('cpu'):
-            device_count = torch.cuda.device_count()
-            if device_count < world_size:
-                logging.warn("There are more processes than GPUs !")
-            torch.cuda.set_device(rank%device_count)
-
-    def cleanup():
-        dist.destroy_process_group()
-    setup(rank, world_size)
+def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
-        content = fin.read()
-    config = json.loads(content)
+        config = json.load(fin)
     trainer = training.Trainer(config, resume_from=FLAGS.CKPT)
     try:
         trainer.run()
     finally:
-        cleanup()
+        dist.destroy_process_group()
 
 def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
-        content = fin.read()
-    config = json.loads(content)
+        config = json.load(fin)
     trainer = inference.Trainer(config, FLAGS.CKPT)
     trainer.run()
 
@@ -57,17 +41,7 @@ def main(args=None):
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
-        world_size = env.WORLD_SIZE
-        if os.environ.get('WORLD_SIZE') is not None:
-           world_size = int(os.environ.get('WORLD_SIZE'))
-        if world_size > 1:
-            backend = 'nccl' if torch.cuda.is_available() else 'gloo'
-            dist.init_process_group(backend=backend,rank=int(os.environ.get('RANK')),world_size=world_size)
-            rank = dist.get_rank()
-            train(rank,world_size,FLAGS)
-        else:
-            train(0, world_size, FLAGS)
-
+        train(FLAGS)
     elif FLAGS.command == 'test':
         test(FLAGS)
     else:

@@ -5,16 +5,23 @@ import torch
 GLOBAL_NP_FLOAT_PRECISION = np.float64
 GLOBAL_PT_FLOAT_PRECISION = torch.float64
 GLOBAL_ENER_FLOAT_PRECISION = np.float64
-if os.environ.get("DEVICE") == "cpu":
+
+# Make sure DDP uses correct device if applicable
+local_rank = os.environ.get("LOCAL_RANK")
+if local_rank is None:
+    local_rank=0
+
+if os.environ.get("DEVICE") == "cpu" or torch.cuda.is_available() is False:
     DEVICE = torch.device('cpu')
 else:
-    DEVICE = torch.device('cuda')
-if os.environ.get("PREPROCESS_DEVICE") == "cpu":
+    DEVICE=torch.device(f"cuda:{local_rank}")
+
+if os.environ.get("PREPROCESS_DEVICE") == "cpu" or torch.cuda.is_available() is False:
     PREPROCESS_DEVICE = torch.device('cpu')
 else:
-    PREPROCESS_DEVICE = torch.device('cuda')
+    PREPROCESS_DEVICE = torch.device(f'cuda:{local_rank}')
+
 JIT = False
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
 TEST_CONFIG = 'tests/water/se_e2_a.json'
-WORLD_SIZE = 1
 ENERGY_BIAS_TRAINABLE = True

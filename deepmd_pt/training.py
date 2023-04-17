@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 import time
 
@@ -36,6 +37,9 @@ class Trainer(object):
         self.save_ckpt = training_params.get('save_ckpt', 'model.ckpt')
         self.save_freq = training_params.get('save_freq', 1000)
 
+
+
+
         # Data + Model
         my_random.seed(training_params['seed'])
         dataset_params = training_params.pop('training_data')
@@ -49,21 +53,19 @@ class Trainer(object):
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if JIT:
             self.model = torch.jit.script(self.model)
-        self.rank = 0
-        if dist.is_initialized() and dist.get_world_size()>1:
-            self.model = DDP(self.model)
+
+        # Initialize DDP
+        local_rank = os.environ.get('LOCAL_RANK')
+        if local_rank is not None:
+            local_rank=int(local_rank)
+
+            assert dist.is_nccl_available()
+            dist.init_process_group(backend='nccl')
+            self.model = DDP(self.model,
+                             device_ids=[local_rank],
+                             output_device=local_rank)
             self.rank = dist.get_rank()
-            module = self.model.module
-            logging.basicConfig()
-            if self.rank == 0:
-                logging.getLogger().setLevel(logging.INFO)
-                torch.save(module.state_dict(), self.save_ckpt)
-                dist.barrier()
-            else:
-                logging.getLogger().setLevel(logging.ERROR)
-                dist.barrier()
-                state_dict = torch.load(self.save_ckpt)
-                self.model.module.load_state_dict(state_dict)
+        # TODO: load state dict
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
