@@ -9,12 +9,15 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
+
 from env import DEVICE, JIT
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-      
+
 class Trainer(object):
 
     def __init__(self, config: Dict[str, Any], resume_from = None):
@@ -42,7 +45,7 @@ class Trainer(object):
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
-        )  
+        )
         self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
         if JIT:
             self.model = torch.jit.script(self.model)
@@ -83,7 +86,7 @@ class Trainer(object):
     def run(self):
         fout = open(self.disp_file, 'w')
         logging.info('Start to train %d steps.', self.num_steps)
-        
+
         def step(step_id):
             bdata = self.training_data.__getitem__()
             self.optimizer.zero_grad()
@@ -100,7 +103,7 @@ class Trainer(object):
             assert l_force.shape == p_force.shape
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
             loss_val = loss.cpu().detach().numpy().tolist()
-            logging.info('step=%d, lr=%f, loss=%f', step_id, cur_lr, loss_val)
+            logging.info(f'step={step_id}, lr={cur_lr:.4f}, loss={loss_val:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}\n')
 
             # Backpropagation
             loss.backward()
@@ -110,9 +113,7 @@ class Trainer(object):
             # Log and persist
             if step_id % self.disp_freq == 0:
                 train_time = time.time() - self.t0
-                rmse_e_val = rmse_e.cpu().detach().numpy().tolist()
-                rmse_f_val = rmse_f.cpu().detach().numpy().tolist()
-                record = 'step=%d, rmse_e=%f, rmse_f=%f, training time of %d steps=%fs\n' % (step_id, rmse_e_val, rmse_f_val,self. disp_freq, train_time)
+                record = f'step={step_id}, lr={cur_lr}, loss={loss_val}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
                 fout.write(record)
                 fout.flush()
                 self.t0 = time.time()
@@ -121,8 +122,9 @@ class Trainer(object):
                     torch.save(self.model.state_dict(), self.save_ckpt)
 
         self.t0 = time.time()
-        for step_id in range(self.num_steps):
-            step(step_id)
+        with logging_redirect_tqdm():
+            for step_id in tqdm(range(self.num_steps)):
+                step(step_id)
 
         if self.rank == 0:
             module = self.model
