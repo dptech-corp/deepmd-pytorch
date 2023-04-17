@@ -10,12 +10,26 @@ from deepmd_pt import training
 from deepmd_pt import inference
 import torch.multiprocessing as mp
 import torch.distributed as dist
+from deepmd_pt.dataset import DeepmdDataSet
+from torch.utils.data.distributed import DistributedSampler
+from deepmd_pt.stat import make_stat_input
 
 def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
-        config = json.load(fin)
-    trainer = training.Trainer(config, resume_from=FLAGS.CKPT)
+    training_params = config['training']
+    model_params = config['model']
+    dataset_params = training_params.pop('training_data')
+    training_data = DeepmdDataSet(
+            systems=dataset_params['systems'],
+            batch_size=dataset_params['batch_size'],
+            type_map=model_params['type_map'],
+            rcut=model_params['descriptor']['rcut'],
+            sel=model_params['descriptor']['sel']
+        )  
+    data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
+    sampled = make_stat_input(training_data, data_stat_nbatch)
+    trainer = training.Trainer(config, training_data,sampled,resume_from=FLAGS.CKPT)
     try:
         trainer.run()
     finally:

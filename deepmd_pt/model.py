@@ -9,7 +9,7 @@ from deepmd_pt import env
 
 class EnergyModel(torch.nn.Module):
 
-    def __init__(self, model_params, training_data):
+    def __init__(self, model_params, sampled):
         '''Based on components, construct a model for energy.
 
         Args:
@@ -23,8 +23,6 @@ class EnergyModel(torch.nn.Module):
         self.embedding_net = EmbeddingNet(**descriptor_param)
 
         # Statistics
-        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        sampled = make_stat_input(training_data, data_stat_nbatch)
         for sys in sampled:
             for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
