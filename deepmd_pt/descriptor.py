@@ -172,7 +172,7 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
             nnei = nnei - sec[i-1]
         mask = atype.unsqueeze(0)==i
         tmp = distance + (~mask) * DISTANCE_INF
-        sorted, indices = tmp.sort(dim=1)
+        sorted, indices = torch.topk(tmp, nnei, dim=1, largest=False)
         mask = (sorted < rcut).to(torch.long)
         indices = indices * mask + -(1)*(1-mask) # -1 for padding
         if i == 0:
