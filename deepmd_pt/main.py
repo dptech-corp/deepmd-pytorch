@@ -17,6 +17,7 @@ from deepmd_pt.stat import make_stat_input
 def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
+        config = json.load(fin)
     training_params = config['training']
     model_params = config['model']
     dataset_params = training_params.pop('training_data')
@@ -26,7 +27,7 @@ def train(FLAGS):
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
-        )  
+        )
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(training_data, data_stat_nbatch)
     trainer = training.Trainer(config, training_data,sampled,resume_from=FLAGS.CKPT)
