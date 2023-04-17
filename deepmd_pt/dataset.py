@@ -194,6 +194,8 @@ class DeepmdDataSystem(object):
                 return nframes
             for key in ['coord', 'energy', 'force', 'box']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
+                if self._data_dict[key]['atomic']:
+                    data[key] = data[key].reshape(nframes, self._natoms,-1)[:,self._idx_map,:]
             data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
             return data
 
