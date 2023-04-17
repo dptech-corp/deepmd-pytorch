@@ -317,7 +317,7 @@ class DeepmdDataSet(Dataset):
         if weight is None:
             weight = lambda name, sys: sys.nframes
         self.probs = [weight(item, self._data_systems[i]) for i, item in enumerate(systems)]
-        self.probs = torch.tensor(self.probs, dtype=torch.float)
+        self.probs = np.array(self.probs, dtype=float)
         self.probs /= self.probs.sum()
         self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
         self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
