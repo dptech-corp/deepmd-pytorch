@@ -84,21 +84,61 @@ class DeepmdDataSystem(object):
             'high_prec': high_prec
         }
 
-    def get_batch(self, batch_size: int):
+    def get_batch_for_train(self, batch_size: int):
         '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
 
         Args:
         - batch_size: Frame count.
         '''
         if not hasattr(self, '_frames'):
-            set_size = 0
+            self.set_size = 0
             self._set_count = 0
             self._iterator = 0
-        else:
-            set_size = self._frames['coord'].shape[0]
         if batch_size == 'auto':
             batch_size = -(-32//self._natoms)
-        if self._iterator + batch_size > set_size:
+        if self._iterator + batch_size > self.set_size:
+            set_idx = self._set_count % len(self._dirs)
+            if self.sets[set_idx] is None:
+                frames = self._load_set(self._dirs[set_idx])
+                frames = self.preprocess(frames)
+                cnt = 0
+                for item in self.sets:
+                    if item is not None:
+                        cnt += 1
+                if cnt < env.CACHE_PER_SYS:
+                    self.sets[set_idx] = frames
+            else:
+                frames = self.sets[set_idx]
+            self._frames = frames
+            self._shuffle_data()
+            if dist.is_initialized():
+                world_size = dist.get_world_size()
+                rank = dist.get_rank()
+                ssize = self._frames['coord'].shape[0]
+                subsize = ssize//world_size
+                self._iterator = rank * subsize
+                self.set_size = min((rank + 1) * subsize,ssize)
+            else:
+                self.set_size = self._frames['coord'].shape[0]
+                self._iterator = 0
+            self._set_count += 1
+        iterator = min(self._iterator + batch_size, self.set_size)
+        idx = np.arange(self._iterator, iterator)
+        self._iterator += batch_size
+        return self._get_subdata(idx)
+
+    def get_batch(self, batch_size: int):
+        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        Args:
+        - batch_size: Frame count.
+        '''
+        if not hasattr(self, '_frames'):
+            self.set_size = 0
+            self._set_count = 0
+            self._iterator = 0
+        if batch_size == 'auto':
+            batch_size = -(-32//self._natoms)
+        if self._iterator + batch_size > self.set_size:
             set_idx = self._set_count % len(self._dirs)
             if self.sets[set_idx] is None:
                 frames = self._load_set(self._dirs[set_idx])
@@ -113,10 +153,10 @@ class DeepmdDataSystem(object):
                 frames = self.sets[set_idx]
             self._frames = frames
             self._shuffle_data()
-            set_size = self._frames['coord'].shape[0]
+            self.set_size = self._frames['coord'].shape[0]
             self._iterator = 0
             self._set_count += 1
-        iterator = min(self._iterator + batch_size, set_size)
+        iterator = min(self._iterator + batch_size, self.set_size)
         idx = np.arange(self._iterator, iterator)
         self._iterator += batch_size
         return self._get_subdata(idx)
@@ -314,7 +354,6 @@ class DeepmdDataSet(Dataset):
         if dist.is_initialized():
             world_size = dist.get_world_size()
             rank = dist.get_rank()
-            systems = [item for i, item in enumerate(systems) if i%world_size == rank]
         self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
         if weight is None:
             weight = lambda name, sys: sys.nframes
@@ -342,6 +381,15 @@ class DeepmdDataSet(Dataset):
         b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(batch_size, -1)
         return b_data
 
+    def get_training_batch(self,index=None):
+        '''Get a batch of frames from the selected system.'''
+        if index is None:
+            index = my_random.choice(np.arange(self.nsystems), self.probs)
+        b_data = self._data_systems[index].get_batch_for_train(self._batch_size)
+        b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
+        batch_size = b_data['coord'].shape[0]
+        b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(batch_size, -1)
+        return b_data
     def get_batch(self, sys_idx=None):
         """
         TF-compatible batch for testing
