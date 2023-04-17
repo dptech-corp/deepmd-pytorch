@@ -3,7 +3,6 @@ import torch
 import time
 
 from typing import Any, Dict
-
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
@@ -20,7 +19,7 @@ import torch.distributed as dist
 
 class Trainer(object):
 
-    def __init__(self, config: Dict[str, Any], resume_from = None):
+    def __init__(self, config: Dict[str, Any], dataloader ,sampled ,resume_from = None):
         '''Construct a DeePMD trainer.
 
         Args:
@@ -38,15 +37,8 @@ class Trainer(object):
 
         # Data + Model
         my_random.seed(training_params['seed'])
-        dataset_params = training_params.pop('training_data')
-        self.training_data = DeepmdDataSet(
-            systems=dataset_params['systems'],
-            batch_size=dataset_params['batch_size'],
-            type_map=model_params['type_map'],
-            rcut=model_params['descriptor']['rcut'],
-            sel=model_params['descriptor']['sel']
-        )
-        self.model = EnergyModel(model_params, self.training_data).to(DEVICE)
+        self.training_data = dataloader
+        self.model = EnergyModel(model_params, sampled).to(DEVICE)
         if JIT:
             self.model = torch.jit.script(self.model)
         self.rank = 0
@@ -88,7 +80,7 @@ class Trainer(object):
         logging.info('Start to train %d steps.', self.num_steps)
 
         def step(step_id):
-            bdata = self.training_data.__getitem__()
+            bdata = self.training_data.get_training_batch()
             self.optimizer.zero_grad()
             cur_lr = self.lr_exp.value(step_id)
             l_energy = bdata['energy']
