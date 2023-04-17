@@ -24,6 +24,8 @@ from deepmd_pt.model import EnergyModel
 from deepmd_pt.env import *
 from deepmd_pt import my_random
 
+from deepmd_pt.stat import make_stat_input
+
 VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 
 
@@ -233,6 +235,7 @@ class TestEnergy(unittest.TestCase):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
         my_ds = DeepmdDataSet(self.systems, self.batch_size, self.type_map, self.rcut, self.sel)
+        sampled = make_stat_input(my_ds, self.data_stat_nbatch)
         my_model = EnergyModel(
             model_params={
                 'descriptor': {
@@ -248,7 +251,7 @@ class TestEnergy(unittest.TestCase):
                 },
                 'data_stat_nbatch': self.data_stat_nbatch
             },
-            training_data=my_ds
+            sampled=sampled
         )
         my_model.to(DEVICE)
         my_lr = MyLRExp(self.start_lr, self.stop_lr, self.decay_steps, self.stop_steps)
@@ -295,7 +298,7 @@ class TestEnergy(unittest.TestCase):
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
         def step(step_id):
-            bdata = self.training_data.get_batch()
+            bdata = self.training_data.get_trainning_batch()
             optimizer.zero_grad()
         # Compare gradient for consistency
         loss.backward()
