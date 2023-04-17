@@ -70,11 +70,14 @@ systems = [item for i, item in enumerate(systems) if i%world_size == rank]
 ```
 
 ## Run on local machine
+We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to start a training session.
+To launch a DDP task, one can set `nnodes` as the number of available nodes, and `nproc_per_node` as the number of available GPUs in one node. Please make sure that every node can access the rendezvous address and port.
 
 ```bash
-OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2 \
-    deepmd_pt/main.py train tests/water/se_e2_a.json
+OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2  deepmd_pt/main.py train tests/water/se_e2_a.json
 ```
+
+> **Note** for developers: `torchrun` by default passes settings as environment variables [(list here)](https://pytorch.org/docs/stable/elastic/run.html#environment-variables).
 
 ## Run on slurm system
 Use .sbatch file in slurm/, you may need to modify some config to run on your system
