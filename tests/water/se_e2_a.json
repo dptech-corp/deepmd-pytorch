@@ -71,7 +71,7 @@
         "numb_steps": 100000,
         "seed": 10,
         "disp_file": "lcurve.out",
-        "disp_freq": 2,
+        "disp_freq": 100,
         "save_freq": 10000,
         "_comment": "that's all"
     },

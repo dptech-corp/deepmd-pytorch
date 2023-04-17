@@ -102,9 +102,6 @@ class Trainer(object):
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
-            loss_val = loss.cpu().detach().numpy().tolist()
-            logging.info(f'step={step_id}, lr={cur_lr:.4f}, loss={loss_val:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}\n')
-
             # Backpropagation
             loss.backward()
             self.optimizer.step()
@@ -113,7 +110,8 @@ class Trainer(object):
             # Log and persist
             if step_id % self.disp_freq == 0:
                 train_time = time.time() - self.t0
-                record = f'step={step_id}, lr={cur_lr}, loss={loss_val}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
+                logging.info(f'step={step_id}, lr={cur_lr:.4f}, loss={loss:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}, speed={train_time:.2f} s/{self.disp_freq} batches')
+                record = f'step={step_id}, lr={cur_lr}, loss={loss}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
                 fout.write(record)
                 fout.flush()
                 self.t0 = time.time()
