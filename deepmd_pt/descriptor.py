@@ -157,6 +157,7 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     - atype: shape is [nloc]
     '''
     nall = coord.numel() // 3
+    coord = coord.float()
     nlist = [[] for _ in range(nloc)]
     coord_l = coord.view(-1, 1, 3)[:nloc]
     coord_r = coord.view(1, -1, 3)
