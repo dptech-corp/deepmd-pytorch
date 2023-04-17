@@ -72,7 +72,8 @@ systems = [item for i, item in enumerate(systems) if i%world_size == rank]
 ## Run on local machine
 
 ```bash
-torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2  deepmd_pt/main.py train tests/water/se_e2_a.json
+OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2 \
+    deepmd_pt/main.py train tests/water/se_e2_a.json
 ```
 
 ## Run on slurm system
