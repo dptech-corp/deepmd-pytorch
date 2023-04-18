@@ -12,6 +12,8 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 from deepmd_pt.dataset import DeepmdDataSet
 from torch.utils.data.distributed import DistributedSampler
+from torch.distributed.elastic.multiprocessing.errors import record
+
 from deepmd_pt.stat import make_stat_input
 
 def train(FLAGS):
@@ -43,7 +45,7 @@ def test(FLAGS):
     trainer = inference.Trainer(config, FLAGS.CKPT)
     trainer.run()
 
-
+@record
 def main(args=None):
     parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
