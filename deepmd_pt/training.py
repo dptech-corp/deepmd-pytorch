@@ -6,6 +6,7 @@ import time
 from typing import Any, Dict
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
+from deepmd_pt.env import DEVICE, JIT, LOCAL_RANK
 from deepmd_pt.optim.KFWrapper import KFOptimizerWrapper
 from deepmd_pt.optim.LKF import LKFOptimizer
 from deepmd_pt.learning_rate import LearningRateExp
@@ -14,7 +15,6 @@ from deepmd_pt.model import EnergyModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
