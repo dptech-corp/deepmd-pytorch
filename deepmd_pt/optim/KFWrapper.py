@@ -1,18 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
-import time
 import numpy as np
 import torch.distributed as dist
 import math
-from enum import Enum, auto
-import horovod as hvd
-
-
-class DistributedBackend(Enum):
-    Torch = auto()
-    Horovod = auto()
-
 
 class KFOptimizerWrapper:
     def __init__(
@@ -22,20 +13,18 @@ class KFOptimizerWrapper:
         atoms_selected: int,
         atoms_per_group: int,
         is_distributed: bool = False,
-        distributed_backend: DistributedBackend = DistributedBackend.Horovod,  # torch or horovod
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.atoms_selected = atoms_selected  # 24
         self.atoms_per_group = atoms_per_group  # 6
         self.is_distributed = is_distributed
-        self.distributed_backend = distributed_backend
 
     def update_energy(
         self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
         Etot_predict, _, _ = self.model(*inputs)
-        natoms_sum = inputs[2][0,0]
+        natoms_sum = inputs[2][0, 0]
         self.optimizer.set_grad_prefactor(natoms_sum)
 
         self.optimizer.zero_grad()
@@ -49,11 +38,8 @@ class KFOptimizerWrapper:
         error = error.mean()
 
         if self.is_distributed:
-            if self.distributed_backend == DistributedBackend.Horovod:
-                error = hvd.torch.allreduce(error)
-            elif self.distributed_backend == DistributedBackend.Torch:
-                dist.all_reduce(error)
-                error /= dist.get_world_size()
+            dist.all_reduce(error)
+            error /= dist.get_world_size()
 
         Etot_predict = update_prefactor * Etot_predict
         Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
@@ -66,7 +52,7 @@ class KFOptimizerWrapper:
     def update_force(
         self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
-        natoms_sum = inputs[2][0,0]
+        natoms_sum = inputs[2][0, 0]
         bs = Force_label.shape[0]
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
 
@@ -75,7 +61,7 @@ class KFOptimizerWrapper:
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
             Etot_predict, _, _ = self.model(*inputs)
-            natoms_sum = inputs[2][0,0]
+            natoms_sum = inputs[2][0, 0]
             Etot_predict, force_predict, _ = self.model(*inputs)
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
             error_tmp = update_prefactor * error_tmp
@@ -84,11 +70,8 @@ class KFOptimizerWrapper:
             error = error_tmp.mean() / natoms_sum
 
             if self.is_distributed:
-                if self.distributed_backend == DistributedBackend.Horovod:
-                    error = hvd.torch.allreduce(error)
-                elif self.distributed_backend == DistributedBackend.Torch:
-                    dist.all_reduce(error)
-                    error /= dist.get_world_size()
+                dist.all_reduce(error)
+                error /= dist.get_world_size()
 
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
             tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
