@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from deepmd.utils import env
-from deepmd.model.descriptor.descriptor import smoothDescriptor
+from deepmd_pt.utils import env
+from deepmd_pt.model.descriptor.descriptor import smoothDescriptor
 try:
     from typing import Final
 except:

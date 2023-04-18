@@ -42,7 +42,7 @@ DeepMD on PyTorch demo https://github.com/shishaochen/deepmd_on_pytorch
 # Structure
 
 ```
-# deepmd
+# deepmd_pt
 entrypoints
     main.py
 train

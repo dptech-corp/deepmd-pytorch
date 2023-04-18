@@ -1,10 +1,10 @@
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd.model.descriptor.embedding_net import EmbeddingNet
-from deepmd.model.task.fitting import EnergyFittingNet
-from deepmd.utils.stat import compute_output_stats, make_stat_input
-from deepmd.utils import env
+from deepmd_pt.model.descriptor.embedding_net import EmbeddingNet
+from deepmd_pt.model.task.fitting import EnergyFittingNet
+from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
+from deepmd_pt.utils import env
 
 
 class EnergyModel(torch.nn.Module):
