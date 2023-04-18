@@ -1,0 +1,2 @@
+[console_scripts]
+dp = deepmd_pt.main:main

@@ -41,7 +41,6 @@ class DeepmdDataSystem(object):
             "then all of the sets in this system should be of mixed_type format!"
         )
         self.mixed_type = self._check_mode(self._dirs[0])
-        print("mixed_type mode:",self.mixed_type)
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
         
