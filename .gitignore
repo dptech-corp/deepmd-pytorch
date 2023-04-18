@@ -3,3 +3,4 @@
 **/.ipynb_checkpoints
 deepmd_pt/_version.py
 build
+*.egg-info
