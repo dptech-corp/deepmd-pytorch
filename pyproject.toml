@@ -17,6 +17,7 @@ classifiers = [
 dependencies = [
      'torch >= 2',
      'tqdm',
+     'h5py',
 ]
 requires-python = ">=3.8"
 readme = "README.md"
