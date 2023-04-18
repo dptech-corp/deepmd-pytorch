@@ -68,7 +68,7 @@ def main(args=None):
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
         format='%(asctime)-15s [%(filename)s:%(lineno)d] %(levelname)s %(message)s'
     )
     main()
