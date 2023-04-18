@@ -5,8 +5,8 @@ import os
 import torch
 from typing import List
 from torch.utils.data import Dataset
-from deepmd_pt import env, my_random
-from deepmd_pt.descriptor import Region3D, normalize_coord, make_env_mat
+from deepmd.utils import env, my_random
+from deepmd.model.descriptor.descriptor import Region3D, normalize_coord, make_env_mat
 from tqdm import trange
 import h5py
 import torch.distributed as dist

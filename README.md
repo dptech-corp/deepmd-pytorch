@@ -42,25 +42,31 @@ DeepMD on PyTorch demo https://github.com/shishaochen/deepmd_on_pytorch
 # Structure
 
 ```
-# model
-model.py
-    emebdding_net.py
-        descriptor.py (differentiable part, se_a mat)
-    fitting.py
-    stat.py
-dataset.py
-    descriptor.py (non-differentiable part, env_mat)
-
-# training & inference
-main.py
+# deepmd
+entrypoints
+    main.py
+train
     train.py
-        loss.py
-        learning_rate.py
+infer
     inference.py
-
-# misc
-my_random.py
-env.py
+model
+    model.py
+    descriptor
+        descriptor.py
+        embedding_net.py
+    task
+        fitting.py
+loss
+    loss.py
+optimizer
+    LKF.py
+    KFWrapper.py
+utils
+    dataset.py
+    env.py
+    learning_rate.py
+    my_random.py
+    stat.py
 ```
 
 # Deploy

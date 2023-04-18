@@ -3,16 +3,16 @@ import argparse
 import json
 import logging
 import torch
-from deepmd_pt import env
-from deepmd_pt import training
-from deepmd_pt import inference
+from deepmd.utils import env
+from deepmd.train import training
+from deepmd.infer import inference
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from deepmd_pt.dataset import DeepmdDataSet
+from deepmd.utils.dataset import DeepmdDataSet
 from torch.utils.data.distributed import DistributedSampler
 from torch.distributed.elastic.multiprocessing.errors import record
 
-from deepmd_pt.stat import make_stat_input
+from deepmd.utils.stat import make_stat_input
 
 def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)

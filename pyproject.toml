@@ -27,13 +27,13 @@ keywords = ["deepmd"]
 repository = "https://github.com/dptech-corp/deepmd-pytorch"
 
 [project.scripts]
-dp = "deepmd_pt.main:main"
+dp = "deepmd.entrypoints.main:main"
 
 [tool.setuptools.packages.find]
-include = ["deepmd_pt*"]
+include = ["deepmd*"]
 
 [tool.setuptools_scm]
-write_to = "deepmd_pt/_version.py"
+write_to = "deepmd/_version.py"
 
 [tool.cibuildwheel]
 test-command = ["dp -h",]
