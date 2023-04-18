@@ -5,6 +5,8 @@ import time
 from typing import Any, Dict
 from deepmd_pt import my_random
 from deepmd_pt.dataset import DeepmdDataSet
+from deepmd_pt.optim.KFWrapper import KFOptimizerWrapper
+from deepmd_pt.optim.LKF import LKFOptimizer
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
@@ -34,6 +36,7 @@ class Trainer(object):
         self.disp_freq = training_params.get('disp_freq', 1000)
         self.save_ckpt = training_params.get('save_ckpt', 'model.ckpt')
         self.save_freq = training_params.get('save_freq', 1000)
+        self.opt_type = training_params.get('opt_type', 'Adam')
 
         # Data + Model
         my_random.seed(training_params['seed'])
@@ -61,8 +64,13 @@ class Trainer(object):
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
         lr_params['stop_steps'] = self.num_steps
         self.lr_exp = LearningRateExp(**lr_params)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lambda step: self.lr_exp.value(step)/self.lr_exp.start_lr)
+        if self.opt_type == 'Adam':
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lambda step: self.lr_exp.value(step)/self.lr_exp.start_lr)
+        elif self.opt_type == 'LKF':
+            self.optimizer = LKFOptimizer(self.model.parameters(), 0.98, 0.99870, 10240)
+        else:
+            raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
         # Loss
         loss_params = config.pop('loss')
@@ -89,15 +97,21 @@ class Trainer(object):
             # Compute prediction error
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
             mapping, shift, selected, box = bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box']
-            p_energy, p_force, p_virial = self.model(coord, atype, natoms, mapping, shift, selected, box)
+            if self.opt_type == 'Adam':
+                p_energy, p_force, p_virial = self.model(coord, atype, natoms, mapping, shift, selected, box)
+            elif self.opt_type == 'LKF':
+                KFOptWrapper = KFOptimizerWrapper(self.model, self.optimizer, 24, 6, False)
+                p_energy = KFOptWrapper.update_energy([coord, atype, natoms, mapping, shift, selected, box], l_energy)
+                p_energy, p_force = KFOptWrapper.update_force([coord, atype, natoms, mapping, shift, selected, box], l_force)
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape
             loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
-            # Backpropagation
-            loss.backward()
-            self.optimizer.step()
-            self.scheduler.step()
+            if self.opt_type == 'Adam':
+                # Backpropagation
+                loss.backward()
+                self.optimizer.step()
+                self.scheduler.step()
 
             # Log and persist
             if step_id % self.disp_freq == 0:
