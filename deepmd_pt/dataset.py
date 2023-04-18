@@ -35,14 +35,39 @@ class DeepmdDataSystem(object):
             self.file = None
             self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
             self._dirs.sort()
+        #check mixed type
+        error_format_msg = (
+            "if one of the set is of mixed_type format, "
+            "then all of the sets in this system should be of mixed_type format!"
+        )
+        self.mixed_type = self._check_mode(self._dirs[0])
+        print("mixed_type mode:",self.mixed_type)
+        for set_item in self._dirs[1:]:
+            assert self._check_mode(set_item) == self.mixed_type, error_format_msg
+        
         self._atom_type = self._load_type(sys_path)
         self._natoms = len(self._atom_type)
 
         self._type_map = self._load_type_map(sys_path)
+        self.enforce_type_map = False
         if type_map is not None and self._type_map is not None:
-            atom_type = [type_map.index(self._type_map[ii]) for ii in self._atom_type]
-            self._atom_type = np.array(atom_type, dtype=np.int32)
+            if not self.mixed_type:
+                atom_type = [type_map.index(self._type_map[ii]) for ii in self._atom_type]
+                self._atom_type = np.array(atom_type, dtype=np.int32)
+                
+            else:
+                self.enforce_type_map = True
+                sorter = np.argsort(type_map)
+                self.type_idx_map = np.array(
+                    sorter[np.searchsorted(type_map, self._type_map, sorter=sorter)]
+                )
+                # padding for virtual atom
+                self.type_idx_map = np.append(
+                    self.type_idx_map, np.array([-1], dtype=np.int32)
+                )
             self._type_map = type_map
+        if type_map is None and self.type_map is None and self.mixed_type:
+            raise RuntimeError("mixed_type format must have type_map!")
         self._idx_map = _make_idx_map(self._atom_type)
 
         self._data_dict = {}
@@ -201,7 +226,15 @@ class DeepmdDataSystem(object):
                 return content.split()                
             else:
                 return None
-
+            
+    def _check_mode(self, sys_path):
+        return os.path.isfile(sys_path + "/real_atom_types.npy")
+    
+    def _load_type_mix(self, set_name):
+        type_path = set_name + "/real_atom_types.npy"
+        real_type = np.load(type_path).astype(np.int32).reshape([-1, self._natoms])
+        return real_type
+    
     def _load_set(self, set_name, fast = False):
         if self.file is None:
             path = os.path.join(set_name, "coord.npy")
@@ -226,6 +259,44 @@ class DeepmdDataSystem(object):
                     high_prec = self._data_dict[kk]['high_prec'],
                     must = self._data_dict[kk]['must']
                 )
+            if self.mixed_type:
+                # nframes x natoms
+                atom_type_mix = self._load_type_mix(set_name)
+                if self.enforce_type_map:
+                    try:
+                        atom_type_mix_ = self.type_idx_map[atom_type_mix].astype(np.int32)
+                    except IndexError as e:
+                        raise IndexError(
+                            "some types in 'real_atom_types.npy' of set {} are not contained in {} types!".format(
+                                set_name, self.get_ntypes()
+                            )
+                        ) from e
+                    atom_type_mix = atom_type_mix_
+                real_type = atom_type_mix.reshape([nframes, self._natoms])
+                data["type"] = real_type
+                natoms = data["type"].shape[1]
+                # nframes x ntypes
+                atom_type_nums = np.array(
+                    [(real_type == i).sum(axis=-1) for i in range(self.get_ntypes())],
+                    dtype=np.int32,
+                ).T
+                ghost_nums = np.array(
+                    [(real_type == -1).sum(axis=-1)],
+                    dtype=np.int32,
+                ).T
+                assert (
+                    atom_type_nums.sum(axis=-1) + ghost_nums.sum(axis=-1) == natoms
+                ).all(), "some types in 'real_atom_types.npy' of set {} are not contained in {} types!".format(
+                    set_name, self.get_ntypes()
+                )
+                data["real_natoms_vec"] = np.concatenate(
+                    (
+                        np.tile(np.array([natoms, natoms], dtype=np.int32), (nframes, 1)),
+                        atom_type_nums,
+                    ),
+                    axis=-1,
+                )
+                
             return data
         else:
             data = {}
@@ -236,7 +307,45 @@ class DeepmdDataSystem(object):
                 data[key] = self.file[set_name][f"{key}.npy"][:]
                 if self._data_dict[key]['atomic']:
                     data[key] = data[key].reshape(nframes, self._natoms,-1)[:,self._idx_map,:]
-            data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
+            if self.mixed_type:
+                # nframes x natoms
+                atom_type_mix = self._load_type_mix(set_name)
+                if self.enforce_type_map:
+                    try:
+                        atom_type_mix_ = self.type_idx_map[atom_type_mix].astype(np.int32)
+                    except IndexError as e:
+                        raise IndexError(
+                            "some types in 'real_atom_types.npy' of set {} are not contained in {} types!".format(
+                                set_name, self.get_ntypes()
+                            )
+                        ) from e
+                    atom_type_mix = atom_type_mix_
+                real_type = atom_type_mix.reshape([nframes, self._natoms])
+                data["type"] = real_type
+                natoms = data["type"].shape[1]
+                # nframes x ntypes
+                atom_type_nums = np.array(
+                    [(real_type == i).sum(axis=-1) for i in range(self.get_ntypes())],
+                    dtype=np.int32,
+                ).T
+                ghost_nums = np.array(
+                    [(real_type == -1).sum(axis=-1)],
+                    dtype=np.int32,
+                ).T
+                assert (
+                    atom_type_nums.sum(axis=-1) + ghost_nums.sum(axis=-1) == natoms
+                ).all(), "some types in 'real_atom_types.npy' of set {} are not contained in {} types!".format(
+                    set_name, self.get_ntypes()
+                )
+                data["real_natoms_vec"] = np.concatenate(
+                    (
+                        np.tile(np.array([natoms, natoms], dtype=np.int32), (nframes, 1)),
+                        atom_type_nums,
+                    ),
+                    axis=-1,
+                )
+            else:
+                data['type'] = np.tile(self._atom_type[self._idx_map], (nframes, 1))
             return data
 
     def _load_data(self, set_name, key, nframes, ndof, atomic=False, must=True, high_prec=False):
@@ -351,9 +460,6 @@ class DeepmdDataSet(Dataset):
         if isinstance(systems, str):
             with h5py.File(systems) as file:
                 systems = [os.path.join(systems, item) for item in file.keys()]
-        if dist.is_initialized():
-            world_size = dist.get_world_size()
-            rank = dist.get_rank()
         self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
         if weight is None:
             weight = lambda name, sys: sys.nframes
