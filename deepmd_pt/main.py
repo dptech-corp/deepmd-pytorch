@@ -1,5 +1,3 @@
-
-
 import os
 import argparse
 import json
@@ -44,6 +42,10 @@ def test(FLAGS):
 
 @record
 def main(args=None):
+    logging.basicConfig(
+        level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
+        format='%(asctime)-15s [%(filename)s:%(lineno)d] %(levelname)s %(message)s'
+    )
     parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
     train_parser = subparsers.add_parser('train', help='Train a model.')
@@ -64,8 +66,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
-        format='%(asctime)-15s [%(filename)s:%(lineno)d] %(levelname)s %(message)s'
-    )
     main()

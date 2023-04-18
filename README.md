@@ -68,11 +68,10 @@ Tested with libtorch pre-CXX11 abi cu116, cuda 11.6, torch 1.13
 
 ```bash
 python test.py
-mkdir build
+export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/share/cmake:$CMAKE_PREFIX_PATH
+cmake -B build
 cd build
-cmake  -DCMAKE_PREFIX_PATH=/root/libtorch_cu116/libtorch/share/cmake/Torch -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc  ..
 cmake --build .
-make
 ```
 
 # Test

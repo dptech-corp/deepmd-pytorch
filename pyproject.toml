@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "deepmd-pytorch"
 dynamic = ["version"]
-description = "Implementation of DeepMD-kit using PyTorch"
+description = "Implementation of DeePMD-kit using PyTorch"
 authors = [
   {name = "DP Technology"},
 ]
@@ -17,13 +17,23 @@ classifiers = [
 dependencies = [
      'torch >= 2',
      'tqdm',
+     'h5py',
 ]
 requires-python = ">=3.8"
 readme = "README.md"
-keywords = ["DeepMD-kit", "pytorch"]
+keywords = ["deepmd"]
+
+[project.urls]
+repository = "https://github.com/dptech-corp/deepmd-pytorch"
+
+[project.scripts]
+dp = "deepmd_pt.main:main"
 
 [tool.setuptools.packages.find]
 include = ["deepmd_pt*"]
 
 [tool.setuptools_scm]
 write_to = "deepmd_pt/_version.py"
+
+[tool.cibuildwheel]
+test-command = ["dp -h",]

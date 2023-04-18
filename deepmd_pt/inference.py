@@ -8,7 +8,7 @@ from deepmd_pt.dataset import DeepmdDataSet
 from deepmd_pt.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model import EnergyModel
-from env import DEVICE, JIT
+from deepmd_pt.env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
 
@@ -38,7 +38,7 @@ class Trainer(object):
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
-        )   
+        )
         dataset_params = training_params.pop('training_data')
         training_data = DeepmdDataSet(
             systems=dataset_params['systems'],
@@ -46,7 +46,7 @@ class Trainer(object):
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
-        )   
+        )
         #self.test_data = training_data
         self.model = EnergyModel(model_params, self.test_data).to(DEVICE)
         state_dict = torch.load(ckpt)
