@@ -4,7 +4,7 @@ import torch
 
 from collections import namedtuple
 
-from deepmd_pt import env
+from deepmd_pt.utils import env
 
 class Region3D(object):
 

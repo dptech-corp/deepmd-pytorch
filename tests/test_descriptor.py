@@ -8,10 +8,10 @@ tf.disable_eager_execution()
 
 from deepmd.env import op_module
 
-from deepmd_pt import my_random
-from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.descriptor import smoothDescriptor
-from deepmd_pt.env import *
+from deepmd_pt.utils import my_random
+from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.model.descriptor.descriptor import smoothDescriptor
+from deepmd_pt.utils.env import *
 from deepmd.common import expand_sys_str
 import json
 

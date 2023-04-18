@@ -6,12 +6,12 @@ import unittest
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
-from deepmd_pt.dataset import DeepmdDataSet
+from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd.loss.ener import EnerStdLoss
 
-from deepmd_pt.loss import EnergyStdLoss
+from deepmd_pt.loss.loss import EnergyStdLoss
 import json
-from deepmd_pt.env import TEST_CONFIG
+from deepmd_pt.utils.env import TEST_CONFIG
 from deepmd.common import expand_sys_str
 
 

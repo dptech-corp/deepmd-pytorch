@@ -4,14 +4,14 @@ import torch
 import time
 
 from typing import Any, Dict
-from deepmd_pt import my_random
-from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.env import DEVICE, JIT, LOCAL_RANK
-from deepmd_pt.optim.KFWrapper import KFOptimizerWrapper
-from deepmd_pt.optim.LKF import LKFOptimizer
-from deepmd_pt.learning_rate import LearningRateExp
-from deepmd_pt.loss import EnergyStdLoss
-from deepmd_pt.model import EnergyModel
+from deepmd_pt.utils import my_random
+from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
+from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
+from deepmd_pt.optimizer.LKF import LKFOptimizer
+from deepmd_pt.utils.learning_rate import LearningRateExp
+from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.model.model import EnergyModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -38,9 +38,6 @@ class Trainer(object):
         self.save_ckpt = training_params.get('save_ckpt', 'model.pt')
         self.save_freq = training_params.get('save_freq', 1000)
         self.opt_type = training_params.get('opt_type', 'Adam')
-
-
-
 
         # Data + Model
         my_random.seed(training_params['seed'])

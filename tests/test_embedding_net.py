@@ -10,10 +10,10 @@ tf.disable_eager_execution()
 
 from deepmd.descriptor import DescrptSeA
 
-from deepmd_pt import my_random
-from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.embedding_net import EmbeddingNet
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
+from deepmd_pt.utils import my_random
+from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.model.descriptor.embedding_net import EmbeddingNet
+from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
 from deepmd.common import expand_sys_str
 
 

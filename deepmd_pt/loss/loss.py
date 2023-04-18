@@ -1,6 +1,6 @@
 import torch
 
-from deepmd_pt.env import GLOBAL_PT_FLOAT_PRECISION
+from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
 
 
 class EnergyStdLoss(torch.nn.Module):

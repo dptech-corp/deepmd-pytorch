@@ -27,7 +27,7 @@ keywords = ["deepmd"]
 repository = "https://github.com/dptech-corp/deepmd-pytorch"
 
 [project.scripts]
-dp = "deepmd_pt.main:main"
+dp = "deepmd_pt.entrypoints.main:main"
 
 [tool.setuptools.packages.find]
 include = ["deepmd_pt*"]

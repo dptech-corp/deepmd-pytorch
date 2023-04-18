@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import torch
 
-from deepmd_pt import env
+from deepmd_pt.utils import env
 try:
     from typing_extensions import Final
 except:

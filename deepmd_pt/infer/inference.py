@@ -3,12 +3,12 @@ import torch
 
 from typing import Any, Dict
 
-from deepmd_pt import my_random
-from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.learning_rate import LearningRateExp
-from deepmd_pt.loss import EnergyStdLoss
-from deepmd_pt.model import EnergyModel
-from deepmd_pt.env import DEVICE, JIT, LOCAL_RANK
+from deepmd_pt.utils import my_random
+from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.utils.learning_rate import LearningRateExp
+from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.model.model import EnergyModel
+from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
 
