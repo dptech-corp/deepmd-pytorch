@@ -57,7 +57,8 @@ class Trainer(object):
                              device_ids=[local_rank],
                              output_device=local_rank)
             self.rank = dist.get_rank()
-        # TODO: load state dict from checkpoint
+        else:
+            self.rank = 0
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -72,6 +73,7 @@ class Trainer(object):
         loss_params['starter_learning_rate'] = lr_params['start_lr']
         self.loss = EnergyStdLoss(**loss_params)
 
+        # TODO: load state dict from checkpoint
         if resume_from is not None:
             state_dict = torch.load(resume_from)
             self.model.load_state_dict(state_dict)
@@ -110,6 +112,7 @@ class Trainer(object):
                 if fout:
                     fout.write(record)
                 self.t0 = time.time()
+            # TODO: save state dict
             if step_id > 0:
                 if step_id % self.save_freq == 0:
                     torch.save(self.model.state_dict(), self.save_ckpt)
