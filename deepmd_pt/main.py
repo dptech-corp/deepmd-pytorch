@@ -33,10 +33,7 @@ def train(FLAGS):
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(training_data, data_stat_nbatch)
     trainer = training.Trainer(config, training_data,sampled,resume_from=FLAGS.CKPT)
-    try:
-        trainer.run()
-    finally:
-        dist.destroy_process_group()
+    trainer.run()
 
 def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
