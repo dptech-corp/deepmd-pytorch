@@ -79,6 +79,8 @@ OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_pe
 
 > **Note** for developers: `torchrun` by default passes settings as environment variables [(list here)](https://pytorch.org/docs/stable/elastic/run.html#environment-variables).
 
+> To check forward, backward, and communication time, please set env var `TORCH_CPP_LOG_LEVEL=INFO TORCH_DISTRIBUTED_DEBUG=DETAIL`. More details can be found [here](https://pytorch.org/docs/stable/distributed.html#logging).
+
 ## Run on slurm system
 Use .sbatch file in slurm/, you may need to modify some config to run on your system
 
