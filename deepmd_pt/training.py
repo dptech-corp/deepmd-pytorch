@@ -12,7 +12,7 @@ from deepmd_pt.model import EnergyModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from env import DEVICE, JIT
+from env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -57,7 +57,7 @@ class Trainer(object):
                              device_ids=[local_rank],
                              output_device=local_rank)
             self.rank = dist.get_rank()
-        # TODO: load state dict
+        # TODO: load state dict from checkpoint
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -78,7 +78,8 @@ class Trainer(object):
             logging.info(f"Resuming from {resume_from}.")
 
     def run(self):
-        fout = open(self.disp_file, 'w')
+        fout = open(self.disp_file, mode='w', buffering=1) if self.rank == 0 else None # line buffered
+
         logging.info('Start to train %d steps.', self.num_steps)
 
         def step(step_id):
@@ -106,8 +107,8 @@ class Trainer(object):
                 train_time = time.time() - self.t0
                 logging.info(f'step={step_id}, lr={cur_lr:.4f}, loss={loss:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}, speed={train_time:.2f} s/{self.disp_freq} batches')
                 record = f'step={step_id}, lr={cur_lr}, loss={loss}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
-                fout.write(record)
-                fout.flush()
+                if fout:
+                    fout.write(record)
                 self.t0 = time.time()
             if step_id > 0:
                 if step_id % self.save_freq == 0:
@@ -125,5 +126,6 @@ class Trainer(object):
             if JIT:
                 module.save("torchscript_model.pt")
             torch.save(module.state_dict(), self.save_ckpt)
-        fout.close()
+            fout.close()
+
         logging.info('Saving model after all steps...')
