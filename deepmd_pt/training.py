@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 import time
 
@@ -13,7 +14,7 @@ from deepmd_pt.model import EnergyModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from env import DEVICE, JIT
+from env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -34,9 +35,12 @@ class Trainer(object):
         self.num_steps = training_params['numb_steps']
         self.disp_file = training_params.get('disp_file', 'lcurve.out')
         self.disp_freq = training_params.get('disp_freq', 1000)
-        self.save_ckpt = training_params.get('save_ckpt', 'model.ckpt')
+        self.save_ckpt = training_params.get('save_ckpt', 'model.pt')
         self.save_freq = training_params.get('save_freq', 1000)
         self.opt_type = training_params.get('opt_type', 'Adam')
+
+
+
 
         # Data + Model
         my_random.seed(training_params['seed'])
@@ -44,21 +48,27 @@ class Trainer(object):
         self.model = EnergyModel(model_params, sampled).to(DEVICE)
         if JIT:
             self.model = torch.jit.script(self.model)
-        self.rank = 0
-        if dist.is_initialized() and dist.get_world_size()>1:
-            self.model = DDP(self.model)
+
+        # Initialize DDP
+        local_rank = os.environ.get('LOCAL_RANK')
+        if local_rank is not None:
+            local_rank=int(local_rank)
+            assert dist.is_nccl_available()
+            dist.init_process_group(backend='nccl')
             self.rank = dist.get_rank()
-            module = self.model.module
-            logging.basicConfig()
-            if self.rank == 0:
-                logging.getLogger().setLevel(logging.INFO)
-                torch.save(module.state_dict(), self.save_ckpt)
-                dist.barrier()
-            else:
-                logging.getLogger().setLevel(logging.ERROR)
-                dist.barrier()
-                state_dict = torch.load(self.save_ckpt)
-                self.model.module.load_state_dict(state_dict)
+        else:
+            self.rank = 0
+
+        if (resume_from is not None) and (self.rank == 0):
+            state_dict = torch.load(resume_from)
+            self.model.load_state_dict(state_dict)
+            logging.info(f"Resuming from {resume_from}.")
+
+        if dist.is_initialized():
+            # DDP will guarantee the model parameters are identical across all processes
+            self.model = DDP(self.model,
+                             device_ids=[local_rank],
+                             output_device=local_rank)
         # Learning rate
         lr_params = config.pop('learning_rate')
         assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
@@ -78,13 +88,9 @@ class Trainer(object):
         loss_params['starter_learning_rate'] = lr_params['start_lr']
         self.loss = EnergyStdLoss(**loss_params)
 
-        if resume_from is not None:
-            state_dict = torch.load(resume_from)
-            self.model.load_state_dict(state_dict)
-            logging.info(f"Resuming from {resume_from}.")
-
     def run(self):
-        fout = open(self.disp_file, 'w')
+        fout = open(self.disp_file, mode='w', buffering=1) if self.rank == 0 else None # line buffered
+
         logging.info('Start to train %d steps.', self.num_steps)
 
         def step(step_id):
@@ -118,24 +124,25 @@ class Trainer(object):
                 train_time = time.time() - self.t0
                 logging.info(f'step={step_id}, lr={cur_lr:.4f}, loss={loss:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}, speed={train_time:.2f} s/{self.disp_freq} batches')
                 record = f'step={step_id}, lr={cur_lr}, loss={loss}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
-                fout.write(record)
-                fout.flush()
+                if fout:
+                    fout.write(record)
                 self.t0 = time.time()
-            if step_id > 0:
-                if step_id % self.save_freq == 0:
-                    torch.save(self.model.state_dict(), self.save_ckpt)
+
+            if ((step_id % self.save_freq == 0 and step_id != 0) \
+                or step_id == self.num_steps - 1) \
+                and (self.rank == 0 or dist.get_rank() == 0 ):
+                # Handle the case if rank 0 aborted and re-assigned
+                logging.info(f"Saving model to {self.save_ckpt}")
+                module=self.model.module if dist.is_initialized() else self.model
+                torch.save(module.state_dict(), self.save_ckpt)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
-            for step_id in tqdm(range(self.num_steps)):
+            for step_id in tqdm(range(self.num_steps), disable=None): # set to None to disable on non-TTY
                 step(step_id)
 
-        if self.rank == 0:
-            module = self.model
-            if isinstance(module, DDP):
-                module = module.module
+        if self.rank == 0 or dist.get_rank() == 0: # Handle the case if rank 0 aborted and re-assigned
             if JIT:
-                module.save("torchscript_model.pt")
-            torch.save(module.state_dict(), self.save_ckpt)
-        fout.close()
-        logging.info('Saving model after all steps...')
+                self.model.save("torchscript_model.pt")
+        if fout:
+            fout.close()
