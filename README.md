@@ -23,7 +23,7 @@ pip install git+https://github.com/dptech-corp/deepmd-pytorch.git
 
 ```bash
 conda activate deepmd-pt
-python3 deepmd_pt/main.py train tests/water/se_e2_a.json
+python3 dp train tests/water/se_e2_a.json
 ```
 
 # Profiling
@@ -36,8 +36,8 @@ python -m pstats
 
 # References
 
-Original DeePMDKit on TensorFlow https://github.com/deepmodeling/deepmd-kit
-DeepMD on PyTorch demo https://github.com/shishaochen/deepmd_on_pytorch
+- Original DeePMD-kit on TensorFlow https://github.com/deepmodeling/deepmd-kit
+- DeePMD on PyTorch demo https://github.com/shishaochen/deepmd_on_pytorch
 
 # Structure
 
@@ -91,7 +91,7 @@ We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to s
 To launch a DDP task, one can set `nnodes` as the number of available nodes, and `nproc_per_node` as the number of available GPUs in one node. Please make sure that every node can access the rendezvous address and port.
 
 ```bash
-OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2  deepmd_pt/main.py train tests/water/se_e2_a.json
+OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2 --no-python dp train tests/water/se_e2_a.json
 ```
 
 > **Note** for developers: `torchrun` by default passes settings as environment variables [(list here)](https://pytorch.org/docs/stable/elastic/run.html#environment-variables).
