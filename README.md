@@ -1,11 +1,29 @@
-This repository is written by Hang'rui Bi based on Shaochen Shi's implementation of DeepMDKit using PyTorch.
+This repository is written by Hang'rui Bi based on Shaochen Shi's implementation of DeePMD-kit using PyTorch.
 It is supposed to offer comparable accuracy and performance to the TF implementation.
 
 # Quick Start
 
+## Install
+
+This package requires PyTorch 2.
 ```bash
-ln -s tests/water/data data
-PYTHONPATH=/root/deepmd_on_pytorch python3 -u deepmd_pt/main.py train tests/water/se_e2_a.json 2>&1
+# PyTorch 2 recommends Python >= 3.8 .
+conda create -n deepmd-pt python=3.10
+conda activate deepmd-pt
+# Following instructions on pytorch.org
+conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+git clone https://github.com/dptech-corp/deepmd-pytorch.git
+pip install deepmd-pytorch
+
+# ... or
+pip install git+https://github.com/dptech-corp/deepmd-pytorch.git
+```
+
+## Run
+
+```bash
+conda activate deepmd-pt
+python3 deepmd_pt/main.py train tests/water/se_e2_a.json
 ```
 
 # Profiling
