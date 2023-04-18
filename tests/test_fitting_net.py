@@ -9,8 +9,8 @@ tf.disable_eager_execution()
 
 from deepmd.fit.ener import EnerFitting
 
-from deepmd_pt.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
-from deepmd_pt.fitting import EnergyFittingNet
+from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
+from deepmd_pt.model.task.fitting import EnergyFittingNet
 
 class FakeDescriptor(object):
 

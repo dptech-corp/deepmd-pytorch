@@ -6,7 +6,7 @@ tf.disable_eager_execution()
 
 from deepmd.utils import learning_rate
 
-from deepmd_pt.learning_rate import LearningRateExp
+from deepmd_pt.utils.learning_rate import LearningRateExp
 
 
 class TestLearningRate(unittest.TestCase):

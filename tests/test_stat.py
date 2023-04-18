@@ -11,11 +11,11 @@ from deepmd.utils.data_system import DeepmdDataSystem
 from deepmd.utils import random as dp_random
 from deepmd.common import expand_sys_str
 
-from deepmd_pt import my_random
-from deepmd_pt.dataset import DeepmdDataSet
-from deepmd_pt.embedding_net import EmbeddingNet
-from deepmd_pt.stat import make_stat_input as my_make, compute_output_stats
-from deepmd_pt import env
+from deepmd_pt.utils import my_random
+from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.model.descriptor.embedding_net import EmbeddingNet
+from deepmd_pt.utils.stat import make_stat_input as my_make, compute_output_stats
+from deepmd_pt.utils import env
 
 
 CUR_DIR = os.path.dirname(__file__)
