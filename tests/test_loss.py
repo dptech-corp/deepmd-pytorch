@@ -9,7 +9,7 @@ tf.disable_eager_execution()
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd.loss.ener import EnerStdLoss
 
-from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.loss.ener import EnergyStdLoss
 import json
 from deepmd_pt.utils.env import TEST_CONFIG
 from deepmd.common import expand_sys_str
@@ -111,15 +111,19 @@ class TestLearningRate(unittest.TestCase):
                 t_latom_energy: atom_energy,
                 t_atom_pref: atom_pref
             })
-        my_loss = mine(
-            cur_lr,
+        model_pred = {'energy': torch.from_numpy(p_energy),
+                      'force': torch.from_numpy(p_force),
+                      }
+        label = {'energy': torch.from_numpy(l_energy),
+                 'force': torch.from_numpy(l_force),
+                 }
+        my_loss, _ = mine(
+            model_pred,
+            label,
             pt_batch['natoms'],
-            torch.from_numpy(p_energy),
-            torch.from_numpy(p_force),
-            torch.from_numpy(l_energy),
-            torch.from_numpy(l_force)
+            cur_lr,
         )
-        my_loss = my_loss[0].detach().cpu()
+        my_loss = my_loss.detach().cpu()
         self.assertTrue(np.allclose(base_loss, my_loss.numpy()))
 
 

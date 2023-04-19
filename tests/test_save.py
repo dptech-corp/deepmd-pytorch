@@ -1,5 +1,5 @@
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils import env
 from deepmd_pt.utils import dp_random
@@ -74,8 +74,8 @@ class TestEnergy(unittest.TestCase):
         state_dict = torch.load('tmp.ckpt')
         self.model2.load_state_dict(state_dict)
         result2 = self.model2(**batch)
-        for i in range(2):
-            assert torch.allclose(result1[i], result2[i])
+        for item in result1:
+            assert torch.allclose(result1[item], result2[item])
 
 if __name__ == '__main__':
     unittest.main()

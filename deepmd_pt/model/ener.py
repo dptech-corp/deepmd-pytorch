@@ -68,4 +68,8 @@ class EnergyModel(BaseModel):
         force = torch.zeros_like(coord)
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
-        return [energy, force, virial]
+        model_predict = {'energy': energy,
+                         'force': force,
+                         'virial': virial,
+                         }
+        return model_predict
