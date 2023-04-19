@@ -23,6 +23,7 @@ from deepmd_pt.loss.loss import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import *
 from deepmd_pt.utils import dp_random
+from IPython import embed
 
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -32,7 +33,7 @@ VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 def torch2tf(torch_name):
     fields = torch_name.split('.')
     element_id = int(fields[2])
-    if fields[0] == 'embedding_net':
+    if fields[0] == 'descriptor':
         layer_id = int(fields[4]) + 1
         weight_type = fields[5]
         return 'filter_type_all/%s_%d_%d:0' % (weight_type, layer_id, element_id)
