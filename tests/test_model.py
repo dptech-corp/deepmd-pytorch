@@ -10,7 +10,7 @@ tf.disable_eager_execution()
 
 from deepmd import op
 from deepmd.common import data_requirement, expand_sys_str
-from deepmd.descriptor import DescrptSeA
+from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 from deepmd.fit import EnerFitting
 from deepmd.loss import EnerStdLoss
 from deepmd.model import EnerModel
@@ -20,9 +20,9 @@ from deepmd.utils.learning_rate import LearningRateExp
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModel
+from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import *
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -32,7 +32,7 @@ VariableState = collections.namedtuple('VariableState', ['value', 'gradient'])
 def torch2tf(torch_name):
     fields = torch_name.split('.')
     element_id = int(fields[2])
-    if fields[0] == 'embedding_net':
+    if fields[0] == 'descriptor':
         layer_id = int(fields[4]) + 1
         weight_type = fields[5]
         return 'filter_type_all/%s_%d_%d:0' % (weight_type, layer_id, element_id)
@@ -155,7 +155,7 @@ class DpTrainer(object):
         return data
 
     def _get_dp_model(self):
-        dp_descrpt = DescrptSeA(
+        dp_descrpt = DescrptSeA_tf(
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
@@ -264,7 +264,7 @@ class TestEnergy(unittest.TestCase):
         )
 
         # Keep statistics consistency between 2 implentations
-        my_em = my_model.embedding_net
+        my_em = my_model.descriptor
         mean = stat_dict['descriptor.mean'].reshape([self.ntypes, my_em.nnei, 4])
         my_em.mean = torch.tensor(mean, device=DEVICE)
         stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.nnei, 4])

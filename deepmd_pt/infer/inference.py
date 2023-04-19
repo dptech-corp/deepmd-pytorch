@@ -3,11 +3,11 @@ import torch
 
 from typing import Any, Dict
 
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModel
+from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
 if torch.__version__.startswith("2"):
     import torch._dynamo
@@ -16,11 +16,11 @@ if torch.__version__.startswith("2"):
 class Trainer(object):
 
     def __init__(self, config: Dict[str, Any], ckpt):
-        '''Construct a DeePMD trainer.
+        """Construct a DeePMD trainer.
 
         Args:
         - config: The Dict-like configuration with training options.
-        '''
+        """
         model_params = config['model']
         training_params = config['training']
 
@@ -30,7 +30,7 @@ class Trainer(object):
         self.disp_freq = training_params.get('disp_freq', 1000)
 
         # Data + Model
-        my_random.seed(training_params['seed'])
+        dp_random.seed(training_params['seed'])
         dataset_params = training_params.pop('validation_data')
         self.test_data = DeepmdDataSet(
             systems=dataset_params['systems'],
@@ -70,7 +70,7 @@ class Trainer(object):
             l_force = bdata['force']
 
             # Compute prediction error
-            p_energy, p_force = self.model(coord, atype, natoms, bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box'])
+            p_energy, p_force, p_virial = self.model(coord, atype, natoms, bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box'])
             l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
             assert l_energy.shape == p_energy.shape
             assert l_force.shape == p_force.shape

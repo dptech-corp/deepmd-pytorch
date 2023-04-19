@@ -8,9 +8,9 @@ tf.disable_eager_execution()
 
 from deepmd.env import op_module
 
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.descriptor.descriptor import smoothDescriptor
+from deepmd_pt.model.descriptor.env_mat import prod_env_mat_se_a
 from deepmd_pt.utils.env import *
 from deepmd.common import expand_sys_str
 import json
@@ -61,7 +61,7 @@ def base_se_a(rcut, rcut_smth, sel, batch, mean, stddev):
 class TestSeA(unittest.TestCase):
 
     def setUp(self):
-        my_random.seed(20)
+        dp_random.seed(20)
         with open(TEST_CONFIG, 'r') as fin:
             content = fin.read()
         config = json.loads(content)
@@ -96,7 +96,7 @@ class TestSeA(unittest.TestCase):
         index = self.pt_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(pt_coord, dim=1, index=index)
         extended_coord = extended_coord - self.pt_batch['shift']
-        my_d = smoothDescriptor(
+        my_d = prod_env_mat_se_a(
             extended_coord.to(DEVICE),
             self.pt_batch['selected'],
             self.pt_batch['atype'],

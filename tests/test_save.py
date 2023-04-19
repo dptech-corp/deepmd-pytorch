@@ -1,8 +1,8 @@
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.loss.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModel
+from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils import env
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 import unittest
 import torch
 import os

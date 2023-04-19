@@ -5,8 +5,8 @@ import os
 import torch
 from typing import List
 from torch.utils.data import Dataset
-from deepmd_pt.utils import env, my_random
-from deepmd_pt.model.descriptor.descriptor import Region3D, normalize_coord, make_env_mat
+from deepmd_pt.utils import env, dp_random
+from deepmd_pt.utils.preprocess import Region3D, normalize_coord, make_env_mat
 from tqdm import trange
 import h5py
 import torch.distributed as dist
@@ -43,7 +43,7 @@ class DeepmdDataSystem(object):
         self.mixed_type = self._check_mode(self._dirs[0])
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
-        
+
         self._atom_type = self._load_type(sys_path)
         self._natoms = len(self._atom_type)
 
@@ -53,7 +53,7 @@ class DeepmdDataSystem(object):
             if not self.mixed_type:
                 atom_type = [type_map.index(self._type_map[ii]) for ii in self._atom_type]
                 self._atom_type = np.array(atom_type, dtype=np.int32)
-                
+
             else:
                 self.enforce_type_map = True
                 sorter = np.argsort(type_map)
@@ -85,11 +85,11 @@ class DeepmdDataSystem(object):
             frames = self._load_set(item, fast=True)
             self.nframes += frames
 
-    def add(self, 
-            key: str, 
-            ndof: int, 
-            atomic: bool = False, 
-            must: bool = False, 
+    def add(self,
+            key: str,
+            ndof: int,
+            atomic: bool = False,
+            must: bool = False,
             high_prec: bool = False
     ):
         '''Add a data item that to be loaded.
@@ -222,18 +222,18 @@ class DeepmdDataSystem(object):
             if os.path.isfile(fname):
                 with open(fname, 'r') as fin:
                     content = fin.read()
-                return content.split()                
+                return content.split()
             else:
                 return None
-            
+
     def _check_mode(self, sys_path):
         return os.path.isfile(sys_path + "/real_atom_types.npy")
-    
+
     def _load_type_mix(self, set_name):
         type_path = set_name + "/real_atom_types.npy"
         real_type = np.load(type_path).astype(np.int32).reshape([-1, self._natoms])
         return real_type
-    
+
     def _load_set(self, set_name, fast = False):
         if self.file is None:
             path = os.path.join(set_name, "coord.npy")
@@ -250,9 +250,9 @@ class DeepmdDataSystem(object):
             data = {'type': np.tile(self._atom_type[self._idx_map], (nframes, 1))}
             for kk in self._data_dict.keys():
                 data['find_'+kk], data[kk] = self._load_data(
-                    set_name, 
-                    kk, 
-                    nframes, 
+                    set_name,
+                    kk,
+                    nframes,
                     self._data_dict[kk]['ndof'],
                     atomic = self._data_dict[kk]['atomic'],
                     high_prec = self._data_dict[kk]['high_prec'],
@@ -295,7 +295,7 @@ class DeepmdDataSystem(object):
                     ),
                     axis=-1,
                 )
-                
+
             return data
         else:
             data = {}
@@ -367,7 +367,7 @@ class DeepmdDataSystem(object):
             raise RuntimeError("%s not found!" % path)
         else:
             if high_prec:
-                data = np.zeros([nframes,ndof]).astype(env.GLOBAL_ENER_FLOAT_PRECISION)                
+                data = np.zeros([nframes,ndof]).astype(env.GLOBAL_ENER_FLOAT_PRECISION)
             else :
                 data = np.zeros([nframes,ndof]).astype(env.GLOBAL_NP_FLOAT_PRECISION)
             return np.float32(0.0), data
@@ -391,7 +391,7 @@ class DeepmdDataSystem(object):
         box = batch['box']
         rcut = self.rcut
         sec = self.sec
-        assert batch['atype'].max() < self.sec.shape[0] 
+        assert batch['atype'].max() < self.sec.shape[0]
         selected, shift, mapping = [], [], []
         for sid in trange(n_frames):
             region = Region3D(box[sid])
@@ -412,11 +412,11 @@ class DeepmdDataSystem(object):
             batch['shift'][i, :natoms_tmp] = shift[i]
             batch['mapping'][i, :natoms_tmp] = mapping[i]
         return batch
-        
+
     def _shuffle_data(self):
         nframes = self._frames['coord'].shape[0]
         idx = np.arange(nframes)
-        my_random.shuffle(idx)
+        dp_random.shuffle(idx)
         self.idx_mapping = idx
 
     def _get_subdata(self, idx=None):
@@ -468,7 +468,7 @@ class DeepmdDataSet(Dataset):
         self._ntypes = max([ii.get_ntypes() for ii in self._data_systems])
         self._natoms_vec = [ii.get_natoms_vec(self._ntypes) for ii in self._data_systems]
         self.cache = [{} for sys in self._data_systems]
-        
+
     @property
     def nsystems(self):
         return len(self._data_systems)
@@ -479,7 +479,7 @@ class DeepmdDataSet(Dataset):
     def __getitem__(self, index=None):
         '''Get a batch of frames from the selected system.'''
         if index is None:
-            index = my_random.choice(np.arange(self.nsystems), self.probs)
+            index = dp_random.choice(np.arange(self.nsystems), self.probs)
         b_data = self._data_systems[index].get_batch(self._batch_size)
         b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
         batch_size = b_data['coord'].shape[0]
@@ -489,7 +489,7 @@ class DeepmdDataSet(Dataset):
     def get_training_batch(self,index=None):
         '''Get a batch of frames from the selected system.'''
         if index is None:
-            index = my_random.choice(np.arange(self.nsystems), self.probs)
+            index = dp_random.choice(np.arange(self.nsystems), self.probs)
         b_data = self._data_systems[index].get_batch_for_train(self._batch_size)
         b_data['natoms'] = torch.tensor(self._natoms_vec[index], device=env.PREPROCESS_DEVICE)
         batch_size = b_data['coord'].shape[0]

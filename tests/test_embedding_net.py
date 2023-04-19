@@ -8,11 +8,11 @@ import unittest
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
-from deepmd.descriptor import DescrptSeA
+from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.descriptor.embedding_net import EmbeddingNet
+from deepmd_pt.model.descriptor.se_a import DescrptSeA
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
 from deepmd.common import expand_sys_str
 
@@ -60,7 +60,7 @@ def base_se_a(descriptor, coord, atype, natoms, box):
 class TestSeA(unittest.TestCase):
 
     def setUp(self):
-        my_random.seed(0)
+        dp_random.seed(0)
         with open(TEST_CONFIG, 'r') as fin:
             content = fin.read()
         config = json.loads(content)
@@ -78,7 +78,7 @@ class TestSeA(unittest.TestCase):
         self.np_batch, self.torch_batch = ds.get_batch()
 
     def test_consistency(self):
-        dp_d = DescrptSeA(
+        dp_d = DescrptSeA_tf(
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
@@ -95,11 +95,11 @@ class TestSeA(unittest.TestCase):
         )
 
         # Reproduced
-        embedding_net = EmbeddingNet(
+        descriptor = DescrptSeA(
             self.rcut, self.rcut_smth, self.sel,
             self.filter_neuron, self.axis_neuron
         ).to(DEVICE)
-        for name, param in embedding_net.named_parameters():
+        for name, param in descriptor.named_parameters():
             ms = re.findall(r'(\d)\.deep_layers\.(\d)\.([a-z]+)', name)
             if len(ms) == 1:
                 m = ms[0]
@@ -114,13 +114,13 @@ class TestSeA(unittest.TestCase):
         index = self.torch_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(pt_coord, dim=1, index=index)
         extended_coord = extended_coord - self.torch_batch['shift']
-        env_embedding = embedding_net(
+        descriptor_out = descriptor(
             extended_coord,
             self.torch_batch['selected'],
             self.torch_batch['atype']
         )
-        my_embedding = env_embedding.cpu().detach().numpy()
-        fake_energy = torch.sum(env_embedding)
+        my_embedding = descriptor_out.cpu().detach().numpy()
+        fake_energy = torch.sum(descriptor_out)
         fake_energy.backward()
         my_force = -pt_coord.grad.cpu().numpy()
 
