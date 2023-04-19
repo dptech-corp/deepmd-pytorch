@@ -1,5 +1,5 @@
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils import env
 from deepmd_pt.utils import dp_random

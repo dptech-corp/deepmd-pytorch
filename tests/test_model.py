@@ -19,7 +19,7 @@ from deepmd.utils.learning_rate import LearningRateExp
 
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
-from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import *
 from deepmd_pt.utils import dp_random
@@ -286,10 +286,17 @@ class TestEnergy(unittest.TestCase):
         batch = my_ds._data_systems[0].preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
-        p_energy, p_force, p_virial = my_model(batch['coord'], batch['atype'], batch['natoms'],
+        model_predict = my_model(batch['coord'], batch['atype'], batch['natoms'],
         batch['mapping'], batch['shift'], batch['selected'], batch['box'])
+        p_energy, p_force, p_virial = model_predict['energy'], model_predict['force'], model_predict['virial']
         cur_lr = my_lr.value(self.wanted_step)
-        loss = my_loss(cur_lr, batch['natoms'], p_energy, p_force, batch['energy'], batch['force'])[0]
+        model_pred = {'energy': p_energy,
+                      'force': p_force,
+                      }
+        label = {'energy': batch['energy'],
+                 'force': batch['force'],
+                 }
+        loss, _ = my_loss(model_pred, label, batch['natoms'], cur_lr)
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
         rtol= 1e-5; atol=1e-8

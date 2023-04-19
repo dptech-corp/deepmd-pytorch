@@ -10,8 +10,9 @@ from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
 from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
 from deepmd_pt.optimizer.LKF import LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
-from deepmd_pt.loss.loss import EnergyStdLoss
+from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
+from deepmd_pt.train.wrapper import ModelWrapper
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -44,8 +45,23 @@ class Trainer(object):
         dp_random.seed(training_params['seed'])
         self.training_data = dataloader
         self.model = EnergyModel(model_params, sampled).to(DEVICE)
+
+        # Learning rate
+        lr_params = config.pop('learning_rate')
+        assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
+        lr_params['stop_steps'] = self.num_steps
+        self.lr_exp = LearningRateExp(**lr_params)
+
+        # Loss
+        loss_params = config.pop('loss')
+        assert loss_params.pop('type', 'ener'), 'Only loss `ener` is supported!'
+        loss_params['starter_learning_rate'] = lr_params['start_lr']
+        self.loss = EnergyStdLoss(**loss_params)
+
+        # Model Wrapper
+        self.wrapper = ModelWrapper(self.model, self.loss)
         if JIT:
-            self.model = torch.jit.script(self.model)
+            self.wrapper = torch.jit.script(self.wrapper)
 
         # Initialize DDP
         local_rank = os.environ.get('LOCAL_RANK')
@@ -59,71 +75,78 @@ class Trainer(object):
 
         if (resume_from is not None) and (self.rank == 0):
             state_dict = torch.load(resume_from)
-            self.model.load_state_dict(state_dict)
+            self.wrapper.load_state_dict(state_dict)
             logging.info(f"Resuming from {resume_from}.")
 
         if dist.is_initialized():
             # DDP will guarantee the model parameters are identical across all processes
-            self.model = DDP(self.model,
-                             device_ids=[local_rank],
-                             output_device=local_rank)
-        # Learning rate
-        lr_params = config.pop('learning_rate')
-        assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
-        lr_params['stop_steps'] = self.num_steps
-        self.lr_exp = LearningRateExp(**lr_params)
+            self.wrapper = DDP(self.wrapper,
+                               device_ids=[local_rank],
+                               output_device=local_rank)
+
         if self.opt_type == 'Adam':
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_exp.start_lr)
+            self.optimizer = torch.optim.Adam(self.wrapper.parameters(), lr=self.lr_exp.start_lr)
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer, lambda step: self.lr_exp.value(step)/self.lr_exp.start_lr
             )
         elif self.opt_type == 'LKF':
-            self.optimizer = LKFOptimizer(self.model.parameters(), 0.98, 0.99870, 10240)
+            self.optimizer = LKFOptimizer(self.wrapper.parameters(), 0.98, 0.99870, 10240)
         else:
             raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
-
-        # Loss
-        loss_params = config.pop('loss')
-        assert loss_params.pop('type', 'ener'), 'Only loss `ener` is supported!'
-        loss_params['starter_learning_rate'] = lr_params['start_lr']
-        self.loss = EnergyStdLoss(**loss_params)
 
     def run(self):
         fout = open(self.disp_file, mode='w', buffering=1) if self.rank == 0 else None  # line buffered
 
         logging.info('Start to train %d steps.', self.num_steps)
 
-        def step(_step_id):
+        def step(_step_id, task_key="Default"):
             bdata = self.training_data.get_training_batch()
             self.optimizer.zero_grad()
             cur_lr = self.lr_exp.value(_step_id)
-            l_energy = bdata['energy']
-            l_force = bdata['force']
+            label_dict = {}
+            for item in ['energy', 'force', 'virial']:
+                if item in bdata:
+                    label_dict[item] = bdata[item]
 
             # Compute prediction error
             coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
             mapping, shift, selected, box = bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box']
             if self.opt_type == 'Adam':
-                p_energy, p_force, p_virial = self.model(coord, atype, natoms, mapping, shift, selected, box)
-            elif self.opt_type == 'LKF':
-                KFOptWrapper = KFOptimizerWrapper(self.model, self.optimizer, 24, 6, False)
-                p_energy = KFOptWrapper.update_energy([coord, atype, natoms, mapping, shift, selected, box], l_energy)
-                p_energy, p_force = KFOptWrapper.update_force([coord, atype, natoms, mapping, shift, selected, box], l_force)
-            l_force = l_force.view(-1, bdata['natoms'][0,0], 3)
-            assert l_energy.shape == p_energy.shape
-            assert l_force.shape == p_force.shape
-            loss, rmse_e, rmse_f = self.loss(cur_lr, natoms, p_energy, p_force, l_energy, l_force)
-            if self.opt_type == 'Adam':
-                # Backpropagation
+                model_pred, loss, more_loss = self.wrapper(coord, atype, natoms, mapping, shift, selected, box,
+                                                           cur_lr=cur_lr, label=label_dict, task_key=task_key)
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
+            elif self.opt_type == 'LKF':
+                KFOptWrapper = KFOptimizerWrapper(self.wrapper, self.optimizer, 24, 6, False)
+                _ = KFOptWrapper.update_energy([coord, atype, natoms, mapping, shift, selected, box], label_dict['energy'])
+                p_energy, p_force = KFOptWrapper.update_force([coord, atype, natoms, mapping, shift, selected, box], label_dict['force'])
+                model_pred = {'energy': p_energy,
+                              'force': p_force}
+                loss, more_loss = self.loss[task_key](model_pred, label_dict, natoms, learning_rate=cur_lr)
+            else:
+                raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
             # Log and persist
             if _step_id % self.disp_freq == 0:
                 train_time = time.time() - self.t0
-                logging.info(f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}, rmse_e={rmse_e:.4f}, rmse_f={rmse_f:.4f}, speed={train_time:.2f} s/{self.disp_freq} batches')
-                record = f'step={_step_id}, lr={cur_lr}, loss={loss}, rmse_e={rmse_e}, rmse_f={rmse_f}, speed={train_time} s/{self.disp_freq} batches\n'
+                msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
+                record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
+                rmse_val = {item: more_loss[item] for item in more_loss if 'rmse' in item}
+                for item in ['rmse_e', 'rmse_f', 'rmse_v']:
+                    if item in rmse_val:
+                        msg += f', {item}={rmse_val[item]:.4f}'
+                        record += f', {item}={rmse_val[item]}'
+                        rmse_val.pop(item)
+                for rest_item in sorted(list(rmse_val.keys())):
+                    if rest_item in rmse_val:
+                        msg += f', {rest_item}={rmse_val[rest_item]:.4f}'
+                        record += f', {rest_item}={rmse_val[rest_item]}'
+                        rmse_val.pop(rest_item)
+                msg += f', speed={train_time:.2f} s/{self.disp_freq} batches'
+                record += f', speed={train_time} s/{self.disp_freq} batches\n'
+                logging.info(msg)
+
                 if fout:
                     fout.write(record)
                 self.t0 = time.time()
@@ -133,7 +156,7 @@ class Trainer(object):
                 and (self.rank == 0 or dist.get_rank() == 0 ):
                 # Handle the case if rank 0 aborted and re-assigned
                 logging.info(f"Saving model to {self.save_ckpt}")
-                module=self.model.module if dist.is_initialized() else self.model
+                module = self.wrapper.module if dist.is_initialized() else self.wrapper
                 torch.save(module.state_dict(), self.save_ckpt)
 
         self.t0 = time.time()
@@ -143,6 +166,6 @@ class Trainer(object):
 
         if self.rank == 0 or dist.get_rank() == 0: # Handle the case if rank 0 aborted and re-assigned
             if JIT:
-                self.model.save("torchscript_model.pt")
+                self.wrapper.save("torchscript_model.pt")
         if fout:
             fout.close()
