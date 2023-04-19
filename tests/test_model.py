@@ -23,7 +23,6 @@ from deepmd_pt.loss.loss import EnergyStdLoss
 from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import *
 from deepmd_pt.utils import dp_random
-from IPython import embed
 
 from deepmd_pt.utils.stat import make_stat_input
 
