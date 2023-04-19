@@ -4,16 +4,16 @@ import torch
 import unittest
 import json
 
-from deepmd.descriptor.se_a import DescrptSeA
+from deepmd.descriptor.se_a import DescrptSeA as DescrptSeA_tf
 from deepmd.fit.ener import EnerFitting
 from deepmd.model.model_stat import make_stat_input as dp_make, merge_sys_stat as dp_merge
 from deepmd.utils.data_system import DeepmdDataSystem
-from deepmd.utils import random as dp_random
+from deepmd.utils import random as tf_random
 from deepmd.common import expand_sys_str
 
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.descriptor.embedding_net import EmbeddingNet
+from deepmd_pt.model.descriptor.se_a import DescrptSeA
 from deepmd_pt.utils.stat import make_stat_input as my_make, compute_output_stats
 from deepmd_pt.utils import env
 
@@ -53,14 +53,14 @@ class TestDataset(unittest.TestCase):
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
 
-        dp_random.seed(10)
+        tf_random.seed(10)
         dp_dataset = DeepmdDataSystem(self.systems, self.batch_size, 1, self.rcut)
         dp_dataset.add('energy', 1, atomic=False, must=False, high_prec=True)
         dp_dataset.add('force',  3, atomic=True,  must=False, high_prec=False)
         self.dp_sampled = dp_make(dp_dataset, self.data_stat_nbatch, False)
         self.dp_merged = dp_merge(self.dp_sampled)
         self.dp_mesh = self.dp_merged.pop('default_mesh')
-        self.dp_d = DescrptSeA(
+        self.dp_d = DescrptSeA_tf(
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
@@ -86,7 +86,7 @@ class TestDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dp_fn.bias_atom_e, bias_atom_e[:,0]))
 
     def test_stat_input(self):
-        my_random.seed(10)
+        dp_random.seed(10)
         my_dataset = self.my_dataset
         my_sampled = my_make(my_dataset, self.data_stat_nbatch) # list of dicts, each dict contains samples from a system
         dp_keys = set(self.dp_merged.keys()) # dict of list of batches
@@ -109,9 +109,9 @@ class TestDataset(unittest.TestCase):
         box = self.dp_merged['box']
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
-        my_random.seed(10)
+        dp_random.seed(10)
         my_dataset = self.my_dataset
-        my_en = EmbeddingNet(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
+        my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = my_make(my_dataset, self.data_stat_nbatch)
         for sys in sampled:
             for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:

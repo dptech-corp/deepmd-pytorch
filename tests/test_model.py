@@ -10,7 +10,7 @@ tf.disable_eager_execution()
 
 from deepmd import op
 from deepmd.common import data_requirement, expand_sys_str
-from deepmd.descriptor import DescrptSeA
+from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 from deepmd.fit import EnerFitting
 from deepmd.loss import EnerStdLoss
 from deepmd.model import EnerModel
@@ -20,9 +20,9 @@ from deepmd.utils.learning_rate import LearningRateExp
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModel
+from deepmd_pt.model.ener import EnergyModel
 from deepmd_pt.utils.env import *
-from deepmd_pt.utils import my_random
+from deepmd_pt.utils import dp_random
 
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -155,7 +155,7 @@ class DpTrainer(object):
         return data
 
     def _get_dp_model(self):
-        dp_descrpt = DescrptSeA(
+        dp_descrpt = DescrptSeA_tf(
             rcut=self.rcut,
             rcut_smth=self.rcut_smth,
             sel=self.sel,
