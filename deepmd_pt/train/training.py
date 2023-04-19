@@ -24,7 +24,7 @@ import torch.distributed as dist
 
 class Trainer(object):
 
-    def __init__(self, config: Dict[str, Any], dataloader, sampled, resume_from=None):
+    def __init__(self, config: Dict[str, Any], training_data, sampled, validation_data=None, resume_from=None):
         """Construct a DeePMD trainer.
 
         Args:
@@ -43,7 +43,12 @@ class Trainer(object):
 
         # Data + Model
         dp_random.seed(training_params['seed'])
-        self.training_data = dataloader
+        self.training_data = training_data
+        self.validation_data = validation_data
+        if training_params.get("validation_data", None) is not None:
+            self.valid_numb_batch = training_params["validation_data"].get("numb_btch", 1)
+        else:
+            self.valid_numb_batch = 1
         self.model = EnergyModel(model_params, sampled).to(DEVICE)
 
         # Learning rate
@@ -87,62 +92,83 @@ class Trainer(object):
         if self.opt_type == 'Adam':
             self.optimizer = torch.optim.Adam(self.wrapper.parameters(), lr=self.lr_exp.start_lr)
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-                self.optimizer, lambda step: self.lr_exp.value(step)/self.lr_exp.start_lr
+                self.optimizer, lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr
             )
         elif self.opt_type == 'LKF':
             self.optimizer = LKFOptimizer(self.wrapper.parameters(), 0.98, 0.99870, 10240)
+            self.wrapper.inference_only = True
         else:
             raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
-    def run(self):
-        fout = open(self.disp_file, mode='w', buffering=1) if self.rank == 0 else None  # line buffered
+        self.multi_task_mode = False
+        self.task_keys = ['Default']
 
+    def run(self):
+        fout = open(self.disp_file, mode='a', buffering=1) if self.rank == 0 else None  # line buffered
         logging.info('Start to train %d steps.', self.num_steps)
 
         def step(_step_id, task_key="Default"):
-            bdata = self.training_data.get_training_batch()
-            self.optimizer.zero_grad()
             cur_lr = self.lr_exp.value(_step_id)
-            label_dict = {}
-            for item in ['energy', 'force', 'virial']:
-                if item in bdata:
-                    label_dict[item] = bdata[item]
+            self.optimizer.zero_grad()
+            input_dict, label_dict = self.get_data(is_train=True)
 
-            # Compute prediction error
-            coord, atype, natoms = bdata['coord'], bdata['atype'], bdata['natoms']
-            mapping, shift, selected, box = bdata['mapping'], bdata['shift'], bdata['selected'], bdata['box']
             if self.opt_type == 'Adam':
-                model_pred, loss, more_loss = self.wrapper(coord, atype, natoms, mapping, shift, selected, box,
+                model_pred, loss, more_loss = self.wrapper(**input_dict,
                                                            cur_lr=cur_lr, label=label_dict, task_key=task_key)
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == 'LKF':
                 KFOptWrapper = KFOptimizerWrapper(self.wrapper, self.optimizer, 24, 6, False)
-                _ = KFOptWrapper.update_energy([coord, atype, natoms, mapping, shift, selected, box], label_dict['energy'])
-                p_energy, p_force = KFOptWrapper.update_force([coord, atype, natoms, mapping, shift, selected, box], label_dict['force'])
+                _ = KFOptWrapper.update_energy(input_dict, label_dict['energy'])
+                p_energy, p_force = KFOptWrapper.update_force(input_dict, label_dict['force'])
+                # [coord, atype, natoms, mapping, shift, selected, box]
                 model_pred = {'energy': p_energy,
                               'force': p_force}
-                loss, more_loss = self.loss[task_key](model_pred, label_dict, natoms, learning_rate=cur_lr)
+                loss, more_loss = self.wrapper.loss[task_key](model_pred, label_dict, input_dict['natoms'], learning_rate=cur_lr)
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
             # Log and persist
             if _step_id % self.disp_freq == 0:
+                # training
                 train_time = time.time() - self.t0
                 msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
                 record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
                 rmse_val = {item: more_loss[item] for item in more_loss if 'rmse' in item}
                 for item in ['rmse_e', 'rmse_f', 'rmse_v']:
                     if item in rmse_val:
-                        msg += f', {item}={rmse_val[item]:.4f}'
-                        record += f', {item}={rmse_val[item]}'
+                        msg += f', {item}_train={rmse_val[item]:.4f}'
+                        record += f', {item}_train={rmse_val[item]}'
                         rmse_val.pop(item)
                 for rest_item in sorted(list(rmse_val.keys())):
                     if rest_item in rmse_val:
                         msg += f', {rest_item}={rmse_val[rest_item]:.4f}'
                         record += f', {rest_item}={rmse_val[rest_item]}'
                         rmse_val.pop(rest_item)
+
+                # validation
+                if self.validation_data is not None:
+                    single_results = {}
+                    sum_natoms = 0
+                    for ii in range(self.valid_numb_batch):
+                        self.optimizer.zero_grad()
+                        input_dict, label_dict = self.get_data(is_train=False)
+                        model_pred, loss, more_loss = self.wrapper(**input_dict,
+                                                                   cur_lr=cur_lr, label=label_dict, task_key=task_key)
+                        natoms = input_dict['natoms'][0, 0]
+                        sum_natoms += natoms
+                        for k, v in more_loss.items():
+                            if 'rmse' in k:
+                                single_results[k] = single_results.get(k, 0.0) + v * natoms
+                    valid_results = {
+                        k: v / sum_natoms
+                        for k, v in single_results.items()
+                    }
+                    for item in sorted(list(valid_results.keys())):
+                        msg += f', {item}_valid={valid_results[item]:.4f}'
+                        record += f', {item}_valid={valid_results[item]}'
+
                 msg += f', speed={train_time:.2f} s/{self.disp_freq} batches'
                 record += f', speed={train_time} s/{self.disp_freq} batches\n'
                 logging.info(msg)
@@ -153,7 +179,7 @@ class Trainer(object):
 
             if ((_step_id % self.save_freq == 0 and _step_id != 0) \
                 or _step_id == self.num_steps - 1) \
-                and (self.rank == 0 or dist.get_rank() == 0 ):
+                    and (self.rank == 0 or dist.get_rank() == 0):
                 # Handle the case if rank 0 aborted and re-assigned
                 logging.info(f"Saving model to {self.save_ckpt}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
@@ -161,11 +187,28 @@ class Trainer(object):
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
-            for step_id in tqdm(range(self.num_steps), disable=None): # set to None to disable on non-TTY
+            for step_id in tqdm(range(self.num_steps), disable=None):  # set to None to disable on non-TTY
                 step(step_id)
 
-        if self.rank == 0 or dist.get_rank() == 0: # Handle the case if rank 0 aborted and re-assigned
+        if self.rank == 0 or dist.get_rank() == 0:  # Handle the case if rank 0 aborted and re-assigned
             if JIT:
                 self.wrapper.save("torchscript_model.pt")
         if fout:
             fout.close()
+
+    def get_data(self, is_train=True):
+        if is_train:
+            batch_data = self.training_data.get_training_batch()
+        else:
+            batch_data = self.validation_data.get_training_batch()
+        input_dict = {}
+        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'box']:
+            if item in batch_data:
+                input_dict[item] = batch_data[item]
+            else:
+                input_dict[item] = None
+        label_dict = {}
+        for item in ['energy', 'force', 'virial']:
+            if item in batch_data:
+                label_dict[item] = batch_data[item]
+        return input_dict, label_dict

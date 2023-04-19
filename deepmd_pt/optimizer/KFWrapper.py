@@ -21,11 +21,11 @@ class KFOptimizerWrapper:
         self.is_distributed = is_distributed
 
     def update_energy(
-        self, inputs: list, Etot_label: torch.Tensor, update_prefactor: float = 1
+        self, inputs: dict, Etot_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
-        model_pred, _, _ = self.model(*inputs)
+        model_pred, _, _ = self.model(**inputs)
         Etot_predict = model_pred['energy']
-        natoms_sum = inputs[2][0, 0]
+        natoms_sum = inputs['natoms'][0, 0]
         self.optimizer.set_grad_prefactor(natoms_sum)
 
         self.optimizer.zero_grad()
@@ -51,9 +51,9 @@ class KFOptimizerWrapper:
         return Etot_predict
 
     def update_force(
-        self, inputs: list, Force_label: torch.Tensor, update_prefactor: float = 1
+        self, inputs: dict, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
-        natoms_sum = inputs[2][0, 0]
+        natoms_sum = inputs['natoms'][0, 0]
         bs = Force_label.shape[0]
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
 
@@ -61,10 +61,10 @@ class KFOptimizerWrapper:
 
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
-            model_pred, _, _ = self.model(*inputs)
+            model_pred, _, _ = self.model(**inputs)
             Etot_predict = model_pred['energy']
-            natoms_sum = inputs[2][0, 0]
-            model_pred, _, _ = self.model(*inputs)
+            natoms_sum = inputs['natoms'][0, 0]
+            model_pred, _, _ = self.model(**inputs)
             Etot_predict = model_pred['energy']
             force_predict = model_pred['force']
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]

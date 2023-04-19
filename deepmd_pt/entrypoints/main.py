@@ -21,17 +21,25 @@ def train(FLAGS):
         config = json.load(fin)
     training_params = config['training']
     model_params = config['model']
-    dataset_params = training_params.pop('training_data')
+    training_dataset_params = training_params.pop('training_data')
     training_data = DeepmdDataSet(
-            systems=dataset_params['systems'],
-            batch_size=dataset_params['batch_size'],
+            systems=training_dataset_params['systems'],
+            batch_size=training_dataset_params['batch_size'],
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel']
         )
+    validation_dataset_params = training_params.pop('validation_data')
+    validation_data = DeepmdDataSet(
+        systems=validation_dataset_params['systems'],
+        batch_size=validation_dataset_params['batch_size'],
+        type_map=model_params['type_map'],
+        rcut=model_params['descriptor']['rcut'],
+        sel=model_params['descriptor']['sel']
+    )
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(training_data, data_stat_nbatch)
-    trainer = training.Trainer(config, training_data, sampled, resume_from=FLAGS.CKPT)
+    trainer = training.Trainer(config, training_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
 
