@@ -16,11 +16,11 @@ if torch.__version__.startswith("2"):
 class Trainer(object):
 
     def __init__(self, config: Dict[str, Any], ckpt):
-        '''Construct a DeePMD trainer.
+        """Construct a DeePMD trainer.
 
         Args:
         - config: The Dict-like configuration with training options.
-        '''
+        """
         model_params = config['model']
         training_params = config['training']
 
