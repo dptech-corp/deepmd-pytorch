@@ -28,7 +28,7 @@ class Descriptor(torch.nn.Module):
         """
         raise NotImplementedError
 
-    def forward(self, extended_coord, selected, atype):
+    def forward(self, **kwargs):
         """Calculate descriptor.
         """
         raise NotImplementedError

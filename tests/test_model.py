@@ -1,14 +1,10 @@
 import collections
-import numpy as np
-import os
-import torch
 import unittest
 import json
 
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
-from deepmd import op
 from deepmd.common import data_requirement, expand_sys_str
 from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 from deepmd.fit import EnerFitting
@@ -20,9 +16,8 @@ from deepmd.utils.learning_rate import LearningRateExp
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.ener import EnergyModel
+from deepmd_pt.model.model import EnergyModelSeA
 from deepmd_pt.utils.env import *
-from deepmd_pt.utils import dp_random
 
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -236,7 +231,7 @@ class TestEnergy(unittest.TestCase):
         # Build DeePMD graph
         my_ds = DeepmdDataSet(self.systems, self.batch_size, self.type_map, self.rcut, self.sel)
         sampled = make_stat_input(my_ds, self.data_stat_nbatch)
-        my_model = EnergyModel(
+        my_model = EnergyModelSeA(
             model_params={
                 'descriptor': {
                     'type': 'se_e2_a',

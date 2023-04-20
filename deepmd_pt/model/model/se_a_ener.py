@@ -1,14 +1,14 @@
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd_pt.model.descriptor.se_a import DescrptSeA
+from deepmd_pt.model.descriptor import DescrptSeA, DescrptSeAtten
 from deepmd_pt.model.task.ener import EnergyFittingNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
 
-class EnergyModel(BaseModel):
+class EnergyModelSeA(BaseModel):
 
     def __init__(self, model_params, sampled):
         """Based on components, construct a model for energy.
@@ -17,11 +17,15 @@ class EnergyModel(BaseModel):
         - model_params: The Dict-like configuration with model options.
         - training_data: The training dataset.
         """
-        super(EnergyModel, self).__init__()
+        super(EnergyModelSeA, self).__init__()
         # Descriptor + Embedding Net
         descriptor_param = model_params.pop('descriptor')
-        assert descriptor_param['type'] == 'se_e2_a', 'Only descriptor `se_e2_a` is supported!'
-        self.descriptor = DescrptSeA(**descriptor_param)
+        self.descriptor_type = descriptor_param['type']
+
+        if self.descriptor_type == 'se_e2_a':
+            self.descriptor = DescrptSeA(**descriptor_param)
+        else:
+            NotImplementedError('Only descriptor `se_e2_a` is supported for se_a model!')
 
         # Statistics
         for sys in sampled:
@@ -41,7 +45,7 @@ class EnergyModel(BaseModel):
         fitting_param['bias_atom_e'] = tmp[:, 0]
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, box):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, box=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -53,6 +57,8 @@ class EnergyModel(BaseModel):
         - force: XYZ force per atom.
         """
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
+        # index nframes x nall x 3
+        # coord nframes x nloc x 3
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)

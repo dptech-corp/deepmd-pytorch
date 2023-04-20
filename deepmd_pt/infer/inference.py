@@ -1,14 +1,13 @@
-import logging
 import torch
 
 from typing import Any, Dict
 
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.ener import EnergyModel
-from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
+from deepmd_pt.model.model.se_a_ener import EnergyModelSeA
+from deepmd_pt.utils.env import DEVICE
+
 if torch.__version__.startswith("2"):
     import torch._dynamo
 
@@ -48,7 +47,7 @@ class Trainer(object):
             sel=model_params['descriptor']['sel']
         )
         #self.test_data = training_data
-        self.model = EnergyModel(model_params, self.test_data).to(DEVICE)
+        self.model = EnergyModelSeA(model_params, self.test_data).to(DEVICE)
         state_dict = torch.load(ckpt)
         self.model.load_state_dict(state_dict)
 

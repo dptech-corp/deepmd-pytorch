@@ -15,6 +15,7 @@ def _make_env_mat_se_a(selected, coord, rcut: float, ruct_smth: float):
     coord_r = coord_r.view(bsz, natoms, nnei, 3)
     diff = coord_r - coord_l
     length = torch.linalg.norm(diff, dim=-1, keepdim=True)
+    # for index 0 nloc atom
     length = length + ~mask.unsqueeze(-1)
     t0 = 1 / length
     t1 = diff / length ** 2
