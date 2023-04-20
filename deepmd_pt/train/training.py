@@ -5,13 +5,12 @@ import time
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
-from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
+from deepmd_pt.utils.env import DEVICE, JIT
 from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
 from deepmd_pt.optimizer.LKF import LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.ener import EnergyModel
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -49,7 +48,12 @@ class Trainer(object):
             self.valid_numb_batch = training_params["validation_data"].get("numb_btch", 1)
         else:
             self.valid_numb_batch = 1
-        self.model = EnergyModel(model_params, sampled).to(DEVICE)
+        if model_params['descriptor']['type'] == 'se_e2_a':
+            self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
+        elif model_params['descriptor']['type'] == 'se_atten':
+            self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+        else:
+            raise NotImplementedError
 
         # Learning rate
         lr_params = config.pop('learning_rate')
@@ -204,7 +208,7 @@ class Trainer(object):
         else:
             batch_data = self.validation_data.get_training_batch()
         input_dict = {}
-        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'box']:
+        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
             if item in batch_data:
                 input_dict[item] = batch_data[item]
             else:

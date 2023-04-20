@@ -148,12 +148,12 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     return merged_coord_shift, merged_atype, merged_mapping
 
 
-def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
+def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, type_split=True):
     """For each atom inside region, build its neighbor list.
 
     Args:
     - coord: shape is [nall*3]
-    - atype: shape is [nloc]
+    - atype: shape is [nall]
     """
     nall = coord.numel() // 3
     coord = coord.float()
@@ -164,15 +164,23 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
     distance = torch.linalg.norm(distance, dim=-1)
     DISTANCE_INF = distance.max().detach() + rcut
     distance[:nloc, :nloc] += torch.eye(nloc, dtype=torch.bool, device=env.PREPROCESS_DEVICE) * DISTANCE_INF
+    if not type_split:
+        sec = sec[-1:]
 
     lst = []
     selected = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    selected_type = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
     for i, nnei in enumerate(sec):
         if i > 0:
             nnei = nnei - sec[i - 1]
-        mask = atype.unsqueeze(0) == i
-        tmp = distance + (~mask) * DISTANCE_INF
+        if not type_split:
+            tmp = distance
+        else:
+            mask = atype.unsqueeze(0) == i
+            tmp = distance + (~mask) * DISTANCE_INF
         _sorted, indices = torch.topk(tmp, nnei, dim=1, largest=False)
+
+        ###TODO ZD: when nnei > nall
         mask = (_sorted < rcut).to(torch.long)
         indices = indices * mask + -1 * (1 - mask)  # -1 for padding
         if i == 0:
@@ -181,7 +189,8 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec):
             start = sec[i - 1]
         end = min(sec[i], start + indices.shape[1])
         selected[:, start:end] = indices[:, :nnei]
-    return selected
+        selected_type[:, start:end] = atype[indices[:, :nnei]] * mask + -1 * (1 - mask)
+    return selected, selected_type
 
 
 def compute_smooth_weight(distance, rmin: float, rmax: float):
@@ -194,16 +203,18 @@ def compute_smooth_weight(distance, rmin: float, rmax: float):
     return vv * mid_mask + min_mask
 
 
-def make_env_mat(coord, atype,  # 原子坐标和相应类型
-                 region, rcut: float,  # 截断半径
-                 sec):  # 邻居中某元素的最大数量
+def make_env_mat(coord,
+                 atype,
+                 region,
+                 rcut: float,
+                 sec,
+                 type_split=True):
     """Based on atom coordinates, return environment matrix.
 
-    Args:
-    - coord: shape is [nloc*3]
-    - atype: shape is [nloc]
-    - box: shape is [9]
-    - sec: shape is [max(atype)+1]
+    Returns
+        selected: nlist, [nloc, nnei]
+        merged_coord_shift: shift on nall atoms, [nall, 3]
+        merged_mapping: mapping from nall index to nloc index, [nall]
     """
     # 将盒子外的原子，通过镜像挪入盒子内
     merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
@@ -211,5 +222,6 @@ def make_env_mat(coord, atype,  # 原子坐标和相应类型
     assert merged_coord.shape[0] > coord.shape[0], 'No ghost atom is added!'
 
     # 构建邻居列表，并按 sel_a 筛选
-    selected = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec)
-    return selected, merged_coord_shift, merged_mapping
+    selected, selected_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
+                                                  type_split=type_split)
+    return selected, selected_type, merged_coord_shift, merged_mapping
