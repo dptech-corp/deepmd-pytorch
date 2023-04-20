@@ -159,7 +159,7 @@ class Trainer(object):
                 train_time = time.time() - self.t0
 
                 train_results = {'rmse': math.sqrt(loss)}
-                valid_results = {}
+                valid_results = None
 
                 msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
                 record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
