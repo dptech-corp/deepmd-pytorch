@@ -1,3 +1,6 @@
+import numpy as np
+import os
+import torch
 import collections
 import unittest
 import json
@@ -5,6 +8,7 @@ import json
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
+from deepmd import op
 from deepmd.common import data_requirement, expand_sys_str
 from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 from deepmd.fit import EnerFitting
