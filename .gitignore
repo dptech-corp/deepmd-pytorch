@@ -8,7 +8,7 @@ build
 *.out
 *.json
 .vscode
-job_submit.py
+*.py
 model.pt
 run_tests.sh
 tmp.ckpt

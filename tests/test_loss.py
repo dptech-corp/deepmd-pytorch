@@ -14,9 +14,24 @@ import json
 from deepmd_pt.utils.env import TEST_CONFIG
 from deepmd.common import expand_sys_str
 
-
 CUR_DIR = os.path.dirname(__file__)
 
+def get_batch():
+    with open(TEST_CONFIG, 'r') as fin:
+            content = fin.read()
+    config = json.loads(content)
+    model_config = config['model']
+    rcut = model_config['descriptor']['rcut']
+    # self.rcut_smth = model_config['descriptor']['rcut_smth']
+    sel = model_config['descriptor']['sel']
+    batch_size = config['training']['training_data']['batch_size']
+    systems = config['training']['validation_data']['systems']
+    if isinstance(systems, str):
+        systems = expand_sys_str(systems)
+    dataset = DeepmdDataSet(systems,
+        batch_size, model_config['type_map'], rcut, sel)
+    np_batch, pt_batch = dataset.get_batch()
+    return np_batch, pt_batch
 
 class TestLearningRate(unittest.TestCase):
 
@@ -26,27 +41,22 @@ class TestLearningRate(unittest.TestCase):
         self.limit_pref_e = 1.
         self.start_pref_f = 1000.
         self.limit_pref_f = 1.
-
-        with open(TEST_CONFIG, 'r') as fin:
-            content = fin.read()
-        config = json.loads(content)
-        model_config = config['model']
-        self.rcut = model_config['descriptor']['rcut']
-        self.rcut_smth = model_config['descriptor']['rcut_smth']
-        self.sel = model_config['descriptor']['sel']
-        self.batch_size = config['training']['training_data']['batch_size']
-        self.systems = config['training']['validation_data']['systems']
-        if isinstance(self.systems, str):
-            self.systems = expand_sys_str(self.systems)
-        self.dataset = DeepmdDataSet(self.systems,
-         self.batch_size, model_config['type_map'], self.rcut, self.sel)
-        self.filter_neuron = model_config['descriptor']['neuron']
-        self.axis_neuron = model_config['descriptor']['axis_neuron']
-
-    def test_consistency(self):
-        base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f)
-        g = tf.Graph()
-        with g.as_default():
+        self.start_pref_v = 0.02
+        self.limit_pref_v = 1.
+        self.cur_lr = 1.2
+        # data
+        np_batch, pt_batch = get_batch()
+        natoms = np_batch['natoms']
+        l_energy, l_force, l_virial = np_batch['energy'], np_batch['force'], np_batch['virial']
+        p_energy, p_force, p_virial = np.ones_like(l_energy), np.ones_like(l_force), np.ones_like(l_virial)
+        nloc = natoms[0]
+        batch_size = pt_batch['coord'].shape[0]
+        atom_energy = np.zeros(shape=[batch_size, nloc])
+        atom_pref = np.zeros(shape=[batch_size, nloc*3])
+        # tf
+        base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f, self.start_pref_v, self.limit_pref_v)
+        self.g = tf.Graph()
+        with self.g.as_default():
             t_cur_lr = tf.placeholder(shape=[], dtype=tf.float64)
             t_natoms = tf.placeholder(shape=[None], dtype=tf.int32)
             t_penergy = tf.placeholder(shape=[None, 1], dtype=tf.float64)
@@ -60,7 +70,7 @@ class TestLearningRate(unittest.TestCase):
             t_atom_pref = tf.placeholder(shape=[None, None], dtype=tf.float64)
             find_energy = tf.constant(1., dtype=tf.float64)
             find_force = tf.constant(1., dtype=tf.float64)
-            find_virial = tf.constant(0., dtype=tf.float64)
+            find_virial = tf.constant(1., dtype=tf.float64)
             find_atom_energy = tf.constant(0., dtype=tf.float64)
             find_atom_pref = tf.constant(0., dtype=tf.float64)
             model_dict = {
@@ -81,50 +91,45 @@ class TestLearningRate(unittest.TestCase):
                 'find_atom_ener': find_atom_energy,
                 'find_atom_pref': find_atom_pref
             }
-            t_loss = base.build(t_cur_lr, t_natoms, model_dict, label_dict, '')
-
-        np_batch, pt_batch = self.dataset.get_batch()
-        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f)
-        cur_lr = 1.2
-        natoms = np_batch['natoms']
-        l_energy = np_batch['energy']
-        l_force = np_batch['force']
-        p_energy = np.ones_like(l_energy)
-        p_force = np.ones_like(l_force)
-        nloc = natoms[0]
-        batch_size = pt_batch['coord'].shape[0]
-        virial = np.zeros(shape=[batch_size, 9])
-        atom_energy = np.zeros(shape=[batch_size, nloc])
-        atom_pref = np.zeros(shape=[batch_size, nloc*3])
-
-        with tf.Session(graph=g) as sess:
-            base_loss, _ = sess.run(t_loss, feed_dict={
-                t_cur_lr: cur_lr,
-                t_natoms: natoms,
-                t_penergy: p_energy,
-                t_pforce: p_force,
-                t_pvirial: virial,
-                t_patom_energy: atom_energy,
-                t_lenergy: l_energy,
-                t_lforce: l_force,
-                t_lvirial: virial,
-                t_latom_energy: atom_energy,
-                t_atom_pref: atom_pref
-            })
-        model_pred = {'energy': torch.from_numpy(p_energy),
+            self.base_loss_sess = base.build(t_cur_lr, t_natoms, model_dict, label_dict, '')
+        # torch
+        self.feed_dict = {
+            t_cur_lr: self.cur_lr,
+            t_natoms: natoms,
+            t_penergy: p_energy,
+            t_pforce: p_force,
+            t_pvirial: p_virial.reshape(-1,9),
+            t_patom_energy: atom_energy,
+            t_lenergy: l_energy,
+            t_lforce: l_force,
+            t_lvirial: l_virial.reshape(-1,9),
+            t_latom_energy: atom_energy,
+            t_atom_pref: atom_pref
+        }
+        self.model_pred = {'energy': torch.from_numpy(p_energy),
                       'force': torch.from_numpy(p_force),
+                      'virial': torch.from_numpy(p_virial),
                       }
-        label = {'energy': torch.from_numpy(l_energy),
+        self.label = {'energy': torch.from_numpy(l_energy),
                  'force': torch.from_numpy(l_force),
+                 'virial': torch.from_numpy(l_virial),
                  }
-        my_loss, _ = mine(
-            model_pred,
-            label,
-            pt_batch['natoms'],
-            cur_lr,
+        self.natoms = pt_batch['natoms']
+        
+    def test_consistency(self):
+        with tf.Session(graph=self.g) as sess:
+            base_loss, base_more_loss = sess.run(self.base_loss_sess, feed_dict=self.feed_dict)
+        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f, self.start_pref_v, self.limit_pref_v)
+        my_loss, my_more_loss = mine(
+            self.label,
+            self.model_pred,
+            self.natoms,
+            self.cur_lr,
         )
         my_loss = my_loss.detach().cpu()
         self.assertTrue(np.allclose(base_loss, my_loss.numpy()))
+        for key in ['ener', 'force', 'virial']:
+            self.assertTrue(np.allclose(base_more_loss['l2_%s_loss'%key], my_more_loss['l2_%s_loss'%key]))
 
 
 if __name__ == '__main__':

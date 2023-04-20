@@ -25,7 +25,7 @@ class EnergyModel(BaseModel):
 
         # Statistics
         for sys in sampled:
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
+            for key in ['coord', 'force', 'energy', 'virial', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
         self.descriptor.compute_input_stats(sampled)
