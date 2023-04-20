@@ -128,6 +128,8 @@ class Trainer(object):
     def run(self):
         fout = open(self.disp_file, mode='a', buffering=1) if self.rank == 0 else None  # line buffered
         logging.info('Start to train %d steps.', self.num_steps)
+        if dist.is_initialized():
+            logging.info(f'Rank: {dist.get_rank()}/{dist.get_world_size()}')
 
         def step(_step_id, task_key="Default"):
             cur_lr = self.lr_exp.value(_step_id)
