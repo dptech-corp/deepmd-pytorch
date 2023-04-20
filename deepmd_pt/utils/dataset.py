@@ -426,7 +426,7 @@ class DeepmdDataSystem(object):
     def _shuffle_data(self):
         nframes = self._frames['coord'].shape[0]
         idx = np.arange(nframes)
-        # dp_random.shuffle(idx)
+        dp_random.shuffle(idx)
         self.idx_mapping = idx
 
     def _get_subdata(self, idx=None):
