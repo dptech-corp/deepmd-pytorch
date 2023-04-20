@@ -398,7 +398,8 @@ class DeepmdDataSystem(object):
         sec = self.sec
         assert batch['atype'].max() < len(self._type_map)
         selected, selected_type, shift, mapping = [], [], [], []
-        for sid in trange(n_frames):
+
+        for sid in trange(n_frames, disable=None):
             region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
             _coord = normalize_coord(coord[sid], region, nloc)
