@@ -42,6 +42,7 @@ class Trainer(object):
         self.save_ckpt = training_params.get('save_ckpt', 'model.pt')
         self.save_freq = training_params.get('save_freq', 1000)
         self.opt_type = training_params.get('opt_type', 'Adam')
+        self.kf_blocksize = training_params.get('kf_blocksize', 5120)
         self.wandb_config = training_params.get('wandb_config', {})
         self.wandb_enabled = self.wandb_config.get('wandb_enabled', False)
         if self.wandb_enabled:
@@ -112,8 +113,7 @@ class Trainer(object):
                 self.optimizer, lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr
             )
         elif self.opt_type == 'LKF':
-            self.optimizer = LKFOptimizer(self.wrapper.parameters(), 0.98, 0.99870, 10240)
-            self.wrapper.inference_only = True
+            self.optimizer = LKFOptimizer(self.wrapper.parameters(), 0.98, 0.99870, self.kf_blocksize)
         else:
             raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
