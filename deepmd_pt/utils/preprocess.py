@@ -84,6 +84,9 @@ def build_inside_clist(coord, region: Region3D, ncell):
 
     inter_cood = region.phys2inter(coord.view(-1, 3))
     cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
+    # numerical error brought by conversion from phys to inter back and force
+    # may lead to negative value
+    cell_offset[cell_offset < 0] = 0
     delta = cell_offset - ncell
     a2c = compute_serial_cid(cell_offset, ncell)  # cell id of atoms
     arange = torch.arange(0, loc_ncell, 1, device=env.PREPROCESS_DEVICE)
