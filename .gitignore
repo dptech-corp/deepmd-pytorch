@@ -10,3 +10,5 @@ build
 .vscode
 job_submit.py
 model.pt
+run_tests.sh
+tmp.ckpt
