@@ -15,6 +15,8 @@ from deepmd_pt.train.wrapper import ModelWrapper
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
+import wandb as wb
+
 if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -39,6 +41,16 @@ class Trainer(object):
         self.save_ckpt = training_params.get('save_ckpt', 'model.pt')
         self.save_freq = training_params.get('save_freq', 1000)
         self.opt_type = training_params.get('opt_type', 'Adam')
+        self.wandb_config = training_params.get('wandb_config', {})
+        self.wandb_enabled = self.wandb_config.get('wandb_enabled', False)
+        if self.wandb_enabled:
+            entity = self.wandb_config.get('entity', None)
+            assert entity is not None, "The parameter 'entity' of wandb must be specified."
+
+            project = self.wandb_config.get('project', '')
+            job_name = self.wandb_config.get('job_name', '')
+            wb.init(project=project, entity=entity, config=training_params,
+                    name=job_name, settings=wb.Settings(start_method="fork"))
 
         # Data + Model
         dp_random.seed(training_params['seed'])
@@ -146,6 +158,7 @@ class Trainer(object):
                     if item in rmse_val:
                         msg += f', {item}_train={rmse_val[item]:.4f}'
                         record += f', {item}_train={rmse_val[item]}'
+                        self.wandb_log({item: rmse_val[item]}, _step_id, '_train')
                         rmse_val.pop(item)
                 for rest_item in sorted(list(rmse_val.keys())):
                     if rest_item in rmse_val:
@@ -174,10 +187,12 @@ class Trainer(object):
                     for item in sorted(list(valid_results.keys())):
                         msg += f', {item}_valid={valid_results[item]:.4f}'
                         record += f', {item}_valid={valid_results[item]}'
+                        self.wandb_log({item: valid_results[item]}, _step_id, '_valid')
 
                 msg += f', speed={train_time:.2f} s/{self.disp_freq} batches'
                 record += f', speed={train_time} s/{self.disp_freq} batches\n'
                 logging.info(msg)
+                self.wandb_log({'lr': cur_lr}, step_id)
 
                 if fout:
                     fout.write(record)
@@ -218,3 +233,9 @@ class Trainer(object):
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict
+
+    def wandb_log(self, data: dict, step, type_suffix=''):
+        if not self.wandb_enabled:
+            return
+        for k, v in data.items():
+            wb.log({k + type_suffix: v}, step=step)
