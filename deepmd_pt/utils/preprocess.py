@@ -181,9 +181,15 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, type_split=Tr
         else:
             mask = atype.unsqueeze(0) == i
             tmp = distance + (~mask) * DISTANCE_INF
-        _sorted, indices = torch.topk(tmp, nnei, dim=1, largest=False)
-
-        ###TODO ZD: when nnei > nall
+        if tmp.shape[1] >= nnei:
+            _sorted, indices = torch.topk(tmp, nnei, dim=1, largest=False)
+        else:
+            # when nnei > nall
+            indices = torch.zeros((nloc, nnei), device=env.PREPROCESS_DEVICE).long() - 1
+            _sorted = torch.ones((nloc, nnei), device=env.PREPROCESS_DEVICE).long() * DISTANCE_INF
+            _sorted_nnei, indices_nnei = torch.topk(tmp, tmp.shape[1], dim=1, largest=False)
+            _sorted[:, :tmp.shape[1]] = _sorted_nnei
+            indices[:, :tmp.shape[1]] = indices_nnei
         mask = (_sorted < rcut).to(torch.long)
         indices = indices * mask + -1 * (1 - mask)  # -1 for padding
         if i == 0:

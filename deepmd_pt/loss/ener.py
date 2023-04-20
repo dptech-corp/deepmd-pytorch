@@ -18,6 +18,9 @@ class EnergyStdLoss(TaskLoss):
         """Construct a layer to compute loss on energy, force and virial."""
         super(EnergyStdLoss, self).__init__()
         self.starter_learning_rate = starter_learning_rate
+        self.has_e = start_pref_e != 0.0 and limit_pref_e != 0.0
+        self.has_f = start_pref_f != 0.0 and limit_pref_f != 0.0
+        self.has_v = start_pref_v != 0.0 and limit_pref_v != 0.0
         self.start_pref_e = start_pref_e
         self.limit_pref_e = limit_pref_e
         self.start_pref_f = start_pref_f
@@ -45,14 +48,14 @@ class EnergyStdLoss(TaskLoss):
         loss = 0.
         more_loss = {}
         atom_norm = 1. / natoms[0, 0]
-        if 'energy' in model_pred and 'energy' in label:
+        if self.has_e and 'energy' in model_pred and 'energy' in label:
             l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
             more_loss['l2_ener_loss'] = l2_ener_loss.detach()
             loss += atom_norm * (pref_e * l2_ener_loss)
             rmse_e = l2_ener_loss.sqrt() * atom_norm
             more_loss['rmse_e'] = rmse_e.detach()
 
-        if 'force' in model_pred and 'force' in label:
+        if self.has_f and 'force' in model_pred and 'force' in label:
             diff_f = label['force'] - model_pred['force']
             l2_force_loss = torch.mean(torch.square(diff_f))
             more_loss['l2_force_loss'] = l2_force_loss.detach()
@@ -60,7 +63,7 @@ class EnergyStdLoss(TaskLoss):
             rmse_f = l2_force_loss.sqrt()
             more_loss['rmse_f'] = rmse_f.detach()
 
-        if 'virial' in model_pred and 'virial' in label:
+        if self.has_v and 'virial' in model_pred and 'virial' in label:
             diff_v = label['virial'] - model_pred['virial'].reshape(-1, 9)
             l2_virial_loss = torch.mean(torch.square(diff_v))
             more_loss['l2_virial_loss'] = l2_virial_loss.detach()
