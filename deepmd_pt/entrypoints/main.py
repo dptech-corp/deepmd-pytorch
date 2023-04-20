@@ -22,12 +22,14 @@ def train(FLAGS):
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params.pop('training_data')
+    config_path = os.path.abspath(os.path.dirname(FLAGS.INPUT))
     training_data = DeepmdDataSet(
             systems=training_dataset_params['systems'],
             batch_size=training_dataset_params['batch_size'],
             type_map=model_params['type_map'],
             rcut=model_params['descriptor']['rcut'],
-            sel=model_params['descriptor']['sel']
+            sel=model_params['descriptor']['sel'],
+            config_path = config_path
         )
     validation_dataset_params = training_params.pop('validation_data')
     validation_data = DeepmdDataSet(
@@ -35,7 +37,8 @@ def train(FLAGS):
         batch_size=validation_dataset_params['batch_size'],
         type_map=model_params['type_map'],
         rcut=model_params['descriptor']['rcut'],
-        sel=model_params['descriptor']['sel']
+        sel=model_params['descriptor']['sel'],
+        config_path = config_path
     )
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(training_data, data_stat_nbatch)

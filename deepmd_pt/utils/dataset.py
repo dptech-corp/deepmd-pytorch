@@ -13,27 +13,31 @@ import torch.distributed as dist
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None):
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, config_path='.'):
         '''Construct DeePMD-style frame collection of one system.
 
         Args:
         - sys_path: Paths to the system.
         - type_map: Atom types.
+        - config_path: The input.json file path.
         '''
+        self.config_path = config_path
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
-            path = "/".join(tmp[:-1])
+            real_path = self.get_real_path("/".join(tmp[:-1]))
             sys = tmp[-1]
-            self.file = h5py.File(path)[sys]
+            self.file = h5py.File(real_path)[sys]
             self._dirs = []
             for item in self.file.keys():
                 if 'set.' in item:
                     self._dirs.append(item)
             self._dirs.sort()
+            real_path = real_path + '/%s'%sys
         else:
+            real_path = self.get_real_path(sys_path)
             self.file = None
-            self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
+            self._dirs = glob.glob(os.path.join(real_path, 'set.*'))
             self._dirs.sort()
         #check mixed type
         error_format_msg = (
@@ -44,10 +48,10 @@ class DeepmdDataSystem(object):
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
 
-        self._atom_type = self._load_type(sys_path)
+        self._atom_type = self._load_type(real_path)
         self._natoms = len(self._atom_type)
 
-        self._type_map = self._load_type_map(sys_path)
+        self._type_map = self._load_type_map(real_path)
         self.enforce_type_map = False
         if type_map is not None and self._type_map is not None:
             if not self.mixed_type:
@@ -74,8 +78,9 @@ class DeepmdDataSystem(object):
         self.add('coord', 3, atomic=True, must=True)
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force',  3, atomic=True,  must=False, high_prec=False)
+        self.add('virial',  9, atomic=False,  must=False, high_prec=True)
 
-        self._sys_path = sys_path
+        self._sys_path = real_path
         self.rcut = rcut
         self.sec = sec
         self.sets = [None for i in range(len(self._sys_path))]
@@ -85,6 +90,13 @@ class DeepmdDataSystem(object):
             frames = self._load_set(item, fast=True)
             self.nframes += frames
 
+    def get_real_path(self, sys_path):
+        if not os.path.exists(sys_path) and self.config_path != '.':
+            real_path = os.path.abspath(os.path.join(self.config_path, sys_path))
+        else:
+            real_path = sys_path
+        return real_path
+    
     def add(self,
             key: str,
             ndof: int,
@@ -302,7 +314,7 @@ class DeepmdDataSystem(object):
             nframes = self.file[set_name][f"coord.npy"].shape[0]
             if fast:
                 return nframes
-            for key in ['coord', 'energy', 'force', 'box']:
+            for key in ['coord', 'energy', 'force', 'virial', 'box']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
                 if self._data_dict[key]['atomic']:
                     data[key] = data[key].reshape(nframes, self._natoms,-1)[:,self._idx_map,:]
@@ -374,7 +386,7 @@ class DeepmdDataSystem(object):
 
     def preprocess(self, batch):
         n_frames = batch['coord'].shape[0]
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in batch.keys():
                 batch[key] = torch.tensor(batch[key], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
         for key in ['type']:
@@ -384,6 +396,7 @@ class DeepmdDataSystem(object):
         batch['force'] = batch['force'].view(n_frames, -1, 3)
         batch['atype'] = batch.pop('type')
         batch['energy'] = batch['energy'].view(-1, 1)
+        batch['virial'] = batch['virial'].view(n_frames, 3, 3)
 
         keys = ['selected', 'shift', 'mapping']
         coord = batch['coord']
@@ -444,13 +457,14 @@ def _make_idx_map(atom_type):
 
 class DeepmdDataSet(Dataset):
 
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None, weight=None):
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str], rcut=None, sel=None, weight=None, config_path='.'):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
         - systems: Paths to systems.
         - batch_size: Max frame count in a batch.
         - type_map: Atom types.
+        - config_path: The input.json file path.
         '''
         self._batch_size = batch_size
         self._type_map = type_map
@@ -459,7 +473,7 @@ class DeepmdDataSet(Dataset):
         if isinstance(systems, str):
             with h5py.File(systems) as file:
                 systems = [os.path.join(systems, item) for item in file.keys()]
-        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map) for ii in systems]
+        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map, config_path=config_path) for ii in systems]
         if weight is None:
             weight = lambda name, sys: sys.nframes
         self.probs = [weight(item, self._data_systems[i]) for i, item in enumerate(systems)]
@@ -501,7 +515,7 @@ class DeepmdDataSet(Dataset):
         """
         pt_batch = self[sys_idx]
         np_batch = {}
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in pt_batch.keys():
                 np_batch[key] = pt_batch[key].cpu().numpy()
         for key in ['atype', 'natoms']:
