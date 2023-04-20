@@ -47,9 +47,12 @@ class Trainer(object):
         if self.wandb_enabled:
             entity = self.wandb_config.get('entity', None)
             assert entity is not None, "The parameter 'entity' of wandb must be specified."
-
-            project = self.wandb_config.get('project', '')
-            job_name = self.wandb_config.get('job_name', '')
+            project = self.wandb_config.get('project', None)
+            assert project is not None, "The parameter 'project' of wandb must be specified."
+            job_name = self.wandb_config.get('job_name', None)
+            if job_name is None:
+                name_path = os.path.abspath('.').split('/')
+                job_name = name_path[-2] + '/' + name_path[-1]
             wb.init(project=project, entity=entity, config=training_params,
                     name=job_name, settings=wb.Settings(start_method="fork"))
 
