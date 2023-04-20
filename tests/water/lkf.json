@@ -14,8 +14,8 @@
             "rcut": 6.00,
             "neuron": [
                 25,
-                50,
-                100
+                25,
+                25
             ],
             "resnet_dt": false,
             "axis_neuron": 16,
@@ -24,9 +24,9 @@
         },
         "fitting_net": {
             "neuron": [
-                240,
-                240,
-                240
+                100,
+                100,
+                100
             ],
             "resnet_dt": true,
             "seed": 1,
