@@ -165,19 +165,16 @@ class Trainer(object):
                 valid_results = {}
 
                 msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
-                record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
                 rmse_val = {item: more_loss[item] for item in more_loss if 'rmse' in item}
                 for item in ['rmse_e', 'rmse_f', 'rmse_v']:
                     if item in rmse_val:
                         msg += f', {item}_train={rmse_val[item]:.4f}'
-                        record += f', {item}_train={rmse_val[item]}'
                         train_results[item] = rmse_val[item]
                         self.wandb_log({item: rmse_val[item]}, _step_id, '_train')
                         rmse_val.pop(item)
                 for rest_item in sorted(list(rmse_val.keys())):
                     if rest_item in rmse_val:
                         msg += f', {rest_item}={rmse_val[rest_item]:.4f}'
-                        record += f', {rest_item}={rmse_val[rest_item]}'
                         rmse_val.pop(rest_item)
 
                 # validation
@@ -201,11 +198,9 @@ class Trainer(object):
                     }
                     for item in sorted(list(valid_results.keys())):
                         msg += f', {item}_valid={valid_results[item]:.4f}'
-                        record += f', {item}_valid={valid_results[item]}'
                         self.wandb_log({item: valid_results[item]}, _step_id, '_valid')
 
                 msg += f', speed={train_time:.2f} s/{self.disp_freq} batches'
-                record += f', speed={train_time} s/{self.disp_freq} batches\n'
                 logging.info(msg)
                 self.wandb_log({'lr': cur_lr}, step_id)
 
