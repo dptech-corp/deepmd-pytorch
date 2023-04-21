@@ -79,7 +79,7 @@ class Trainer(object):
             training_data,
             sampler=torch.utils.data.RandomSampler(training_data),
             batch_size=None,
-            num_workers=4,  # setting to 0 diverges the behavior of its iterator; should be >=1
+            num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
             drop_last=False,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
@@ -136,7 +136,7 @@ class Trainer(object):
                 self.wrapper,
                 device_ids=[self.rank],
                 output_device=self.rank,
-                find_unused_parameters=True,
+                find_unused_parameters=True, # TODO: otherwise the model might throw an error for attention layers
             )
 
         if self.opt_type == "Adam":
