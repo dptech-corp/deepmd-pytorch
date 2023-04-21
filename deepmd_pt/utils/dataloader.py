@@ -1,55 +1,63 @@
-from torch.utils.data import Dataset
-from deepmd_pt.utils import env
 import logging
 import os
+import queue
+import time
+from threading import Thread
+from typing import List
+
 import h5py
 import torch
-from threading import Thread
-from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import DataLoader
+from deepmd_pt.utils import env
+from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataloader import default_collate
+from torch.utils.data.distributed import DistributedSampler
 
-import time
-import queue
+
 class DpLoaderSet(Dataset):
+    """A dataset for storing DataLoaders to multiple Systems."""
+
     def __init__(self, systems, batch_size, model_params):
         if isinstance(systems, str):
-                with h5py.File(systems) as file:
-                    systems = [os.path.join(systems, item) for item in file.keys()]
-        self.test_data = []
-        self.index = []
-        for item in systems:
+            with h5py.File(systems) as file:
+                systems = [os.path.join(systems, item) for item in file.keys()]
+
+        self.systems: List[DeepmdDataSetForLoader] = []
+        for system in systems:
             ds = DeepmdDataSetForLoader(
-                    system=item,
-                    type_map=model_params['type_map'],
-                    rcut=model_params['descriptor']['rcut'],
-                    sel=model_params['descriptor']['sel']
-                )
-            self.test_data.append(ds)
-        self.sampler_list = []
-        for item in self.test_data:
+                system=system,
+                type_map=model_params["type_map"],
+                rcut=model_params["descriptor"]["rcut"],
+                sel=model_params["descriptor"]["sel"],
+            )
+            self.systems.append(ds)
+        self.sampler_list: List[DistributedSampler] = []
+        self.index = []
+
+        self.dataloaders = []
+        for system in self.systems:
             if dist.is_initialized():
-                self.sampler_list.append(DistributedSampler(item))
+                system_sampler = DistributedSampler(system)
+                self.sampler_list.append(system_sampler)
             else:
-                self.sampler_list.append(None)
-        self.data = []
-        for i in range(len(self.test_data)):
-            dl = DataLoader(
-                dataset=self.test_data[i],
+                system_sampler = None
+            system_dataloader = DataLoader(
+                dataset=system,
                 batch_size=batch_size,
-                num_workers=0,
-                sampler=self.sampler_list[i],
+                num_workers=0,  # Should be 0 to avoid too many threads forked
+                sampler=system_sampler,
                 collate_fn=collate_batch,
                 shuffle=(not dist.is_initialized()),
             )
-            self.data.append(dl)
-            for i in range(len(dl)):
-                self.index.append(len(self.data)-1)
+            self.dataloaders.append(system_dataloader)
+            for _ in range(len(system_dataloader)):
+                self.index.append(len(self.dataloaders) - 1)
+
+        # Initialize iterator instances for DataLoader
         self.iters = []
-        for item in self.data:
-           self.iters.append(iter(item))
+        for item in self.dataloaders:
+            self.iters.append(iter(item))
 
     def __len__(self):
         return len(self.index)
@@ -58,6 +66,7 @@ class DpLoaderSet(Dataset):
         # logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
         return next(self.iters[self.index[idx]])
 
+<<<<<<< HEAD
 _sentinel = object()
 
 QUEUESIZE = 32
@@ -85,6 +94,25 @@ class BackgroundConsumer(Thread):
         except StopIteration as e:
             self._queue.put(e)
 
+=======
+
+_sentinel = object()
+QUEUESIZE = 32
+
+class BackgroundConsumer(Thread):
+    def __init__(self, queue, source, max_len):
+        Thread.__init__(self)
+        self._queue = queue
+        self._source = source  # Main DL iterator
+        self._max_len = max_len  #
+
+    def run(self):
+        for item in self._source:
+            self._queue.put(item) # Blocking if the queue is full
+
+        # Signal the consumer we are done.
+        self._queue.put(_sentinel)
+>>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
 
 class BufferedIterator(object):
     def __init__(self, iterable):
@@ -97,11 +125,15 @@ class BufferedIterator(object):
         self.total = len(iterable)
 
     def _create_consumer(self):
+<<<<<<< HEAD
         self._consumer = BackgroundConsumer(
             self._queue,
             self._iterable,
             self.total
         )
+=======
+        self._consumer = BackgroundConsumer(self._queue, self._iterable, self.total)
+>>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
         self._consumer.daemon = True
         self._consumer.start()
 
@@ -122,7 +154,11 @@ class BufferedIterator(object):
                     self.warning_time is None
                     or time.time() - self.warning_time > 15 * 60
                 ):
+<<<<<<< HEAD
                     logger.debug(
+=======
+                    logging.debug(
+>>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
                         "Data loading buffer is empty or nearly empty. This may "
                         "indicate a data loading bottleneck, and increasing the "
                         "number of workers (--num-workers) may help."
@@ -130,13 +166,18 @@ class BufferedIterator(object):
                     self.warning_time = time.time()
 
         # Get next example
+<<<<<<< HEAD
         item = self._queue.get(True)
+=======
+        item = self._queue.get()
+>>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
         if isinstance(item, Exception):
             raise item
         if item is _sentinel:
             raise StopIteration
         return item
 
+<<<<<<< HEAD
 def collate_batch(batch):
     batch = default_collate(batch)
     shift = batch['shift']
@@ -150,3 +191,25 @@ def collate_batch(batch):
         batch['shift'][i, :natoms_tmp] = shift[i]
         batch['mapping'][i, :natoms_tmp] = mapping[i]    
     return batch
+=======
+
+def collate_batch(batch):
+    batch = default_collate(batch)
+    shift = batch["shift"]
+    mapping = batch["mapping"]
+    natoms_extended = max([item.shape[0] for item in shift])
+    n_frames = len(shift)
+    batch["shift"] = torch.zeros(
+        (n_frames, natoms_extended, 3),
+        dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+        device=env.PREPROCESS_DEVICE,
+    )
+    batch["mapping"] = torch.zeros(
+        (n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE
+    )
+    for i in range(len(shift)):
+        natoms_tmp = shift[i].shape[0]
+        batch["shift"][i, :natoms_tmp] = shift[i]
+        batch["mapping"][i, :natoms_tmp] = mapping[i]
+    return batch
+>>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
