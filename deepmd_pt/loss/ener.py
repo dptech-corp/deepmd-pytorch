@@ -8,12 +8,12 @@ class EnergyStdLoss(TaskLoss):
 
     def __init__(self,
                  starter_learning_rate,
-                 start_pref_e=0.02,
-                 limit_pref_e=1.,
-                 start_pref_f=1000.,
-                 limit_pref_f=1.,
-                 start_pref_v=1000.,
-                 limit_pref_v=1.,
+                 start_pref_e=0.0,
+                 limit_pref_e=0.0,
+                 start_pref_f=0.0,
+                 limit_pref_f=0.0,
+                 start_pref_v=0.0,
+                 limit_pref_v=0.0,
                  **kwargs):
         """Construct a layer to compute loss on energy, force and virial."""
         super(EnergyStdLoss, self).__init__()
