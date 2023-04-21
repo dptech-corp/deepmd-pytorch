@@ -262,8 +262,8 @@ class Trainer(object):
         self.t0 = time.time()
         with logging_redirect_tqdm():
             for step_id in tqdm(
-                range(self.num_steps), disable=None
-            ):  # set to None to disable on non-TTY
+                range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
+            ):  # set to None to disable on non-TTY; disable on not rank 0
                 step(step_id)
 
         if (
