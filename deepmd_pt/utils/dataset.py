@@ -26,19 +26,17 @@ class DeepmdDataSystem(object):
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
-            real_path = self.get_real_path("/".join(tmp[:-1]))
+            path = "/".join(tmp[:-1])
             sys = tmp[-1]
-            self.file = h5py.File(real_path)[sys]
+            self.file = h5py.File(path)[sys]
             self._dirs = []
             for item in self.file.keys():
                 if 'set.' in item:
                     self._dirs.append(item)
             self._dirs.sort()
-            real_path = real_path + '/%s'%sys
         else:
-            real_path = self.get_real_path(sys_path)
             self.file = None
-            self._dirs = glob.glob(os.path.join(real_path, 'set.*'))
+            self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
             self._dirs.sort()
         self.type_split = type_split
         # check mixed type
@@ -50,10 +48,10 @@ class DeepmdDataSystem(object):
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
 
-        self._atom_type = self._load_type(real_path)
+        self._atom_type = self._load_type(sys_path)
         self._natoms = len(self._atom_type)
 
-        self._type_map = self._load_type_map(real_path)
+        self._type_map = self._load_type_map(sys_path)
         self.enforce_type_map = False
         if type_map is not None and self._type_map is not None:
             if not self.mixed_type:
@@ -82,7 +80,7 @@ class DeepmdDataSystem(object):
         self.add('force', 3, atomic=True, must=False, high_prec=False)
         self.add('virial', 9, atomic=False, must=False, high_prec=False)
 
-        self._sys_path = real_path
+        self._sys_path = sys_path
         self.rcut = rcut
         self.sec = sec
         self.sets = [None for i in range(len(self._sys_path))]
