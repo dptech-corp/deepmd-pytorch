@@ -61,17 +61,16 @@ class Trainer(object):
         # Data + Model
         dp_random.seed(training_params['seed'])
         self.training_dataloader = DataLoader(
-            training_data, 
-            sampler=torch.utils.data.RandomSampler(training_data), 
+            training_data,
+            sampler=torch.utils.data.RandomSampler(training_data),
             batch_size=None,
-            num_workers=0,
-            #persistent_workers=True,
+            num_workers=4, # setting to 0 diverges the behavior of its iterator; should be >=1
             drop_last=False)
         self.training_data = BufferedIterator(iter(self.training_dataloader))
         self.training_data = iter(self.training_dataloader)
         self.validation_dataloader = DataLoader(
-            validation_data, 
-            sampler=torch.utils.data.RandomSampler(validation_data), 
+            validation_data,
+            sampler=torch.utils.data.RandomSampler(validation_data),
             batch_size=None,
             num_workers=0,
             #persistent_workers=True,

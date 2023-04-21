@@ -1,3 +1,4 @@
+from typing import List
 from torch.utils.data import Dataset
 from deepmd_pt.utils import env
 import logging
@@ -14,42 +15,46 @@ from torch.utils.data.dataloader import default_collate
 import time
 import queue
 class DpLoaderSet(Dataset):
+    """A dataset for storing DataLoaders to multiple Systems."""
     def __init__(self, systems, batch_size, model_params):
         if isinstance(systems, str):
                 with h5py.File(systems) as file:
                     systems = [os.path.join(systems, item) for item in file.keys()]
-        self.test_data = []
-        self.index = []
-        for item in systems:
+
+        self.systems: List[DeepmdDataSetForLoader] = []
+        for system in systems:
             ds = DeepmdDataSetForLoader(
-                    system=item,
+                    system=system,
                     type_map=model_params['type_map'],
                     rcut=model_params['descriptor']['rcut'],
                     sel=model_params['descriptor']['sel']
                 )
-            self.test_data.append(ds)
-        self.sampler_list = []
-        for item in self.test_data:
+            self.systems.append(ds)
+        self.sampler_list: List[DistributedSampler] = []
+        self.index = []
+
+        self.dataloaders = []
+        for system in self.systems:
             if dist.is_initialized():
-                self.sampler_list.append(DistributedSampler(item))
+                system_sampler = DistributedSampler(system)
+                self.sampler_list.append(system_sampler)
             else:
-                self.sampler_list.append(None)
-        self.data = []
-        for i in range(len(self.test_data)):
-            dl = DataLoader(
-                dataset=self.test_data[i],
+                system_sampler=None
+            system_dataloader = DataLoader(
+                dataset=system,
                 batch_size=batch_size,
-                num_workers=0,
-                sampler=self.sampler_list[i],
+                num_workers=0, # Should be 0 to avoid too many threads forked
+                sampler=system_sampler,
                 collate_fn=collate_batch,
                 shuffle=(not dist.is_initialized()),
             )
-            self.data.append(dl)
-            for i in range(len(dl)):
-                self.index.append(len(self.data)-1)
-            
+            self.dataloaders.append(system_dataloader)
+            for _ in range(len(system_dataloader)):
+                self.index.append(len(self.dataloaders)-1)
+
+        # Initialize iterator instances for DataLoader
         self.iters = []
-        for item in self.data:
+        for item in self.dataloaders:
            self.iters.append(iter(item))
 
     def __len__(self):
@@ -65,27 +70,18 @@ QUEUESIZE = 32
 class BackgroundConsumer(Thread):
     def __init__(self, queue, source, max_len):
         Thread.__init__(self)
-
         self._queue = queue
         self._source = source # Main DL iterator
-        self._max_len = max_len # 
-        self.count = 0 # items retrieved from DL
+        self._max_len = max_len #
 
     def run(self):
-        try:
-            while True:
-                item = next(self._source) # Might raise StopIter
-                self._queue.put(item) # an epoch has not ended yet
-                # Blocking if we reached the maximum length
-                self.count += 1
-                if self._max_len is not None and self.count >= self._max_len:
-                    break
+        for _ in range(self._max_len):
+            item = next(self._source) # Might raise StopIter
+            self._queue.put(item) # an epoch has not ended yet
+            # Blocking if the queue is full
 
-            # Signal the consumer we are done.
-            self._queue.put(_sentinel)
-        except StopIteration as e:
-            self._queue.put(e)
-
+        # Signal the consumer we are done.
+        self._queue.put(_sentinel)
 
 class BufferedIterator(object):
     def __init__(self, iterable):
@@ -123,7 +119,7 @@ class BufferedIterator(object):
                     self.warning_time is None
                     or time.time() - self.warning_time > 15 * 60
                 ):
-                    logger.debug(
+                    logging.debug(
                         "Data loading buffer is empty or nearly empty. This may "
                         "indicate a data loading bottleneck, and increasing the "
                         "number of workers (--num-workers) may help."
@@ -149,5 +145,5 @@ def collate_batch(batch):
     for i in range(len(shift)):
         natoms_tmp = shift[i].shape[0]
         batch['shift'][i, :natoms_tmp] = shift[i]
-        batch['mapping'][i, :natoms_tmp] = mapping[i]    
+        batch['mapping'][i, :natoms_tmp] = mapping[i]
     return batch
