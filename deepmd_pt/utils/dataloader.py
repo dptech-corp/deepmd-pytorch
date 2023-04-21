@@ -66,35 +66,6 @@ class DpLoaderSet(Dataset):
         # logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
         return next(self.iters[self.index[idx]])
 
-<<<<<<< HEAD
-_sentinel = object()
-
-QUEUESIZE = 32
-class BackgroundConsumer(Thread):
-    def __init__(self, queue, source, max_len):
-        Thread.__init__(self)
-
-        self._queue = queue
-        self._source = source # Main DL iterator
-        self._max_len = max_len # 
-        self.count = 0 # items retrieved from DL
-
-    def run(self):
-        try:
-            while True:
-                item = next(self._source) # Might raise StopIter
-                self._queue.put(item) # an epoch has not ended yet
-                # Blocking if we reached the maximum length
-                self.count += 1
-                if self._max_len is not None and self.count >= self._max_len:
-                    break
-
-            # Signal the consumer we are done.
-            self._queue.put(_sentinel)
-        except StopIteration as e:
-            self._queue.put(e)
-
-=======
 
 _sentinel = object()
 QUEUESIZE = 32
@@ -112,7 +83,6 @@ class BackgroundConsumer(Thread):
 
         # Signal the consumer we are done.
         self._queue.put(_sentinel)
->>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
 
 class BufferedIterator(object):
     def __init__(self, iterable):
@@ -125,15 +95,7 @@ class BufferedIterator(object):
         self.total = len(iterable)
 
     def _create_consumer(self):
-<<<<<<< HEAD
-        self._consumer = BackgroundConsumer(
-            self._queue,
-            self._iterable,
-            self.total
-        )
-=======
         self._consumer = BackgroundConsumer(self._queue, self._iterable, self.total)
->>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
         self._consumer.daemon = True
         self._consumer.start()
 
@@ -154,11 +116,7 @@ class BufferedIterator(object):
                     self.warning_time is None
                     or time.time() - self.warning_time > 15 * 60
                 ):
-<<<<<<< HEAD
-                    logger.debug(
-=======
                     logging.debug(
->>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
                         "Data loading buffer is empty or nearly empty. This may "
                         "indicate a data loading bottleneck, and increasing the "
                         "number of workers (--num-workers) may help."
@@ -166,32 +124,13 @@ class BufferedIterator(object):
                     self.warning_time = time.time()
 
         # Get next example
-<<<<<<< HEAD
-        item = self._queue.get(True)
-=======
         item = self._queue.get()
->>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
         if isinstance(item, Exception):
             raise item
         if item is _sentinel:
             raise StopIteration
         return item
 
-<<<<<<< HEAD
-def collate_batch(batch):
-    batch = default_collate(batch)
-    shift = batch['shift']
-    mapping = batch['mapping']
-    natoms_extended = max([item.shape[0] for item in shift])
-    n_frames = len(shift)
-    batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
-    batch['mapping'] = torch.zeros((n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE)
-    for i in range(len(shift)):
-        natoms_tmp = shift[i].shape[0]
-        batch['shift'][i, :natoms_tmp] = shift[i]
-        batch['mapping'][i, :natoms_tmp] = mapping[i]    
-    return batch
-=======
 
 def collate_batch(batch):
     batch = default_collate(batch)
@@ -212,4 +151,3 @@ def collate_batch(batch):
         batch["shift"][i, :natoms_tmp] = shift[i]
         batch["mapping"][i, :natoms_tmp] = mapping[i]
     return batch
->>>>>>> 910bc0bb1de54f9d5d89e7a244cb7bd4aeeb0697
