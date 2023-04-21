@@ -2,6 +2,7 @@ import logging
 import os
 import torch
 import time
+import math
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
@@ -122,6 +123,11 @@ class Trainer(object):
         self.multi_task_mode = False
         self.task_keys = ['Default']
 
+        if os.path.exists(self.disp_file):
+            self.lcurve_should_print_header = False
+        else:
+            self.lcurve_should_print_header = True
+
     def run(self):
         fout = open(self.disp_file, mode='a', buffering=1) if self.rank == 0 else None  # line buffered
         logging.info('Start to train %d steps.', self.num_steps)
@@ -154,6 +160,10 @@ class Trainer(object):
             if _step_id % self.disp_freq == 0:
                 # training
                 train_time = time.time() - self.t0
+
+                train_results = {'rmse': math.sqrt(loss)}
+                valid_results = {}
+
                 msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
                 record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
                 rmse_val = {item: more_loss[item] for item in more_loss if 'rmse' in item}
@@ -161,6 +171,7 @@ class Trainer(object):
                     if item in rmse_val:
                         msg += f', {item}_train={rmse_val[item]:.4f}'
                         record += f', {item}_train={rmse_val[item]}'
+                        train_results[item] = rmse_val[item]
                         self.wandb_log({item: rmse_val[item]}, _step_id, '_train')
                         rmse_val.pop(item)
                 for rest_item in sorted(list(rmse_val.keys())):
@@ -176,8 +187,9 @@ class Trainer(object):
                     for ii in range(self.valid_numb_batch):
                         self.optimizer.zero_grad()
                         input_dict, label_dict = self.get_data(is_train=False)
-                        model_pred, loss, more_loss = self.wrapper(**input_dict,
+                        _, loss, more_loss = self.wrapper(**input_dict,
                                                                    cur_lr=cur_lr, label=label_dict, task_key=task_key)
+                        more_loss.update({'rmse': math.sqrt(loss)})
                         natoms = input_dict['natoms'][0, 0]
                         sum_natoms += natoms
                         for k, v in more_loss.items():
@@ -198,7 +210,10 @@ class Trainer(object):
                 self.wandb_log({'lr': cur_lr}, step_id)
 
                 if fout:
-                    fout.write(record)
+                    if self.lcurve_should_print_header:
+                        self.print_header(fout, train_results, valid_results)
+                        self.lcurve_should_print_header = False
+                    self.print_on_training(fout, _step_id, cur_lr, train_results, valid_results)
                 self.t0 = time.time()
 
             if ((_step_id % self.save_freq == 0 and _step_id != 0) \
@@ -242,3 +257,61 @@ class Trainer(object):
             return
         for k, v in data.items():
             wb.log({k + type_suffix: v}, step=step)
+
+    def print_header(self, fout, train_results, valid_results):
+        train_keys = sorted(list(train_results.keys()))
+        print_str = ""
+        print_str += "# %5s" % "step"
+        if not self.multi_task_mode:
+            if valid_results is not None:
+                prop_fmt = "   %11s %11s"
+                for k in train_keys:
+                    print_str += prop_fmt % (k + "_val", k + "_trn")
+            else:
+                prop_fmt = "   %11s"
+                for k in train_keys:
+                    print_str += prop_fmt % (k + "_trn")
+        else:
+            for fitting_key in train_keys:
+                if valid_results[fitting_key] is not None:
+                    prop_fmt = "   %11s %11s"
+                    for k in train_results[fitting_key].keys():
+                        print_str += prop_fmt % (k + "_val", k + "_trn")
+                else:
+                    prop_fmt = "   %11s"
+                    for k in train_results[fitting_key].keys():
+                        print_str += prop_fmt % (k + "_trn")
+        print_str += "   %8s\n" % "lr"
+        fout.write(print_str)
+        fout.flush()
+
+    def print_on_training(self, fout, step_id, cur_lr, train_results, valid_results):
+        train_keys = sorted(list(train_results.keys()))
+        print_str = ""
+        print_str += "%7d" % step_id
+        if not self.multi_task_mode:
+            if valid_results is not None:
+                prop_fmt = "   %11.2e %11.2e"
+                for k in train_keys:
+                    print_str += prop_fmt % (valid_results[k], train_results[k])
+            else:
+                prop_fmt = "   %11.2e"
+                for k in train_keys:
+                    print_str += prop_fmt % (train_results[k])
+        else:
+            for fitting_key in train_keys:
+                if valid_results[fitting_key] is not None:
+                    prop_fmt = "   %11.2e %11.2e"
+                    for k in valid_results[fitting_key].keys():
+                        print_str += prop_fmt % (
+                            valid_results[fitting_key][k],
+                            train_results[fitting_key][k],
+                        )
+                else:
+                    prop_fmt = "   %11.2e"
+                    for k in train_results[fitting_key].keys():
+                        print_str += prop_fmt % (train_results[fitting_key][k])
+        print_str += "   %8.1e\n" % cur_lr
+        fout.write(print_str)
+        fout.flush()
+
