@@ -116,7 +116,7 @@ class BufferedIterator(object):
                     self.warning_time is None
                     or time.time() - self.warning_time > 15 * 60
                 ):
-                    logging.debug(
+                    logging.warning(
                         "Data loading buffer is empty or nearly empty. This may "
                         "indicate a data loading bottleneck, and increasing the "
                         "number of workers (--num-workers) may help."
