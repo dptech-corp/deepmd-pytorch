@@ -206,7 +206,8 @@ class TypeEmbedNet(torch.nn.Module):
         """Construct a type embedding net.
         """
         super(TypeEmbedNet, self).__init__()
-        self.embedding = torch.nn.Embedding(type_nums + 1, embed_dim, padding_idx=type_nums)
+        self.embedding = torch.nn.Embedding(type_nums + 1, embed_dim, padding_idx=type_nums,
+                                            dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         torch.nn.init.normal_(self.embedding.weight[:-1], mean=bavg, std=stddev)
 
     def forward(self, atype):
