@@ -14,13 +14,15 @@ import torch.distributed as dist
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True):
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True, config_path='.'):
         '''Construct DeePMD-style frame collection of one system.
 
         Args:
         - sys_path: Paths to the system.
         - type_map: Atom types.
+        - config_path: The input.json file path.
         '''
+        sys_path = self.get_real_path(sys_path)
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
@@ -88,6 +90,14 @@ class DeepmdDataSystem(object):
             frames = self._load_set(item, fast=True)
             self.nframes += frames
 
+    def get_real_path(self, sys_path):
+        tmp = sys_path.split('#')[0] if '#' in sys_path else sys_path
+        if not os.path.exists(tmp) and self.config_path != '.':
+            real_path = os.path.abspath(os.path.join(self.config_path, sys_path))
+        else:
+            real_path = sys_path
+        return real_path
+    
     def add(self,
             key: str,
             ndof: int,
@@ -305,7 +315,7 @@ class DeepmdDataSystem(object):
             nframes = self.file[set_name][f"coord.npy"].shape[0]
             if fast:
                 return nframes
-            for key in ['coord', 'energy', 'force', 'box']:
+            for key in ['coord', 'energy', 'force', 'virial', 'box']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
                 if self._data_dict[key]['atomic']:
                     data[key] = data[key].reshape(nframes, self._natoms, -1)[:, self._idx_map, :]
@@ -455,13 +465,14 @@ def _make_idx_map(atom_type):
 class DeepmdDataSet(Dataset):
 
     def __init__(self, systems: List[str], batch_size: int, type_map: List[str],
-                 rcut=None, sel=None, weight=None, type_split=True):
+                 rcut=None, sel=None, weight=None, type_split=True, config_path='.'):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
         - systems: Paths to systems.
         - batch_size: Max frame count in a batch.
         - type_map: Atom types.
+        - config_path: The input.json file path.
         '''
         self._batch_size = batch_size
         self._type_map = type_map
@@ -524,7 +535,7 @@ class DeepmdDataSet(Dataset):
         """
         pt_batch = self[sys_idx]
         np_batch = {}
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in pt_batch.keys():
                 np_batch[key] = pt_batch[key].cpu().numpy()
         for key in ['atype', 'natoms']:

@@ -22,6 +22,7 @@ def train(FLAGS):
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params.pop('training_data')
+    config_path = os.path.abspath(os.path.dirname(FLAGS.INPUT))
     type_split = True
     if model_params['descriptor']['type'] in ['se_atten']:
         type_split = False
@@ -32,6 +33,7 @@ def train(FLAGS):
             rcut=model_params['descriptor']['rcut'],
             sel=model_params['descriptor']['sel'],
             type_split=type_split,
+            config_path = config_path,
         )
     validation_dataset_params = training_params.pop('validation_data')
     validation_data = DeepmdDataSet(
@@ -41,6 +43,7 @@ def train(FLAGS):
         rcut=model_params['descriptor']['rcut'],
         sel=model_params['descriptor']['sel'],
         type_split=type_split,
+        config_path = config_path,
     )
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(training_data, data_stat_nbatch)

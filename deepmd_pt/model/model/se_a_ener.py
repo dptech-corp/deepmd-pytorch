@@ -29,7 +29,7 @@ class EnergyModelSeA(BaseModel):
 
         # Statistics
         for sys in sampled:
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
+            for key in ['coord', 'force', 'energy', 'virial', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
         self.descriptor.compute_input_stats(sampled)
@@ -46,7 +46,7 @@ class EnergyModelSeA(BaseModel):
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, box=None):
-        """Return total energy of the system.
+        """Return energy/force/virial of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
         - atype: Atom types with shape [nframes, natoms[1]].
@@ -55,6 +55,7 @@ class EnergyModelSeA(BaseModel):
         Returns:
         - energy: Energy per atom.
         - force: XYZ force per atom.
+        - virial: Virial of the system.
         """
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         # index nframes x nall x 3

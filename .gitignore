@@ -4,3 +4,8 @@
 deepmd_pt/_version.py
 build
 *.egg-info
+
+*.out
+model.pt
+job_submit.py
+run_tests.sh

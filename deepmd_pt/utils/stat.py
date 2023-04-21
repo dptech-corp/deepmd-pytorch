@@ -13,7 +13,7 @@ def make_stat_input(dataset, nbatches):
     - a list of dicts, each of which contains data from a system
     '''
     lst = []
-    keys = ['coord', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'selected_type', 'shift']
+    keys = ['coord', 'force', 'virial', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'selected_type', 'shift']
     if dataset.mixed_type:
         keys += ['real_natoms_vec']
     for ii in range(dataset.nsystems):

@@ -61,17 +61,18 @@ def base_fitting_net(dp_fn, embedding, natoms):
 class TestFittingNet(unittest.TestCase):
 
     def setUp(self):
-        nloc = 7
-        self.embedding_width = 30
-        self.natoms = np.array([nloc, nloc, 2, 5], dtype=np.int32)
+        np.random.seed(20)
+        atom_nums = np.random.randint(1,10,size=np.random.randint(2,5))
+        nloc = atom_nums.sum()
+        self.natoms = np.concatenate(([nloc, nloc], atom_nums))
+        self.embedding_width = np.random.randint(10, 50)
         self.embedding = np.random.uniform(size=[4, nloc*self.embedding_width])
         self.ntypes = self.natoms.size - 2
-        self.n_neuron = [32, 32, 32]
+        self.n_neuron = np.random.randint(10, 50, size=3).tolist()
 
-        fake_d = FakeDescriptor(2, 30)
+        fake_d = FakeDescriptor(self.ntypes, self.embedding_width)
         self.dp_fn = EnerFitting(fake_d, self.n_neuron)
         self.dp_fn.bias_atom_e = np.random.uniform(size=[self.ntypes])
-        self.dp_fn.bias_atom_e = [1e8, 0]
 
     def test_consistency(self):
         dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms)
