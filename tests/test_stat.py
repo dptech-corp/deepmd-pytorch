@@ -49,8 +49,6 @@ class TestDataset(unittest.TestCase):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.data_stat_nbatch = 2
-        self.filter_neuron = model_config['descriptor']['neuron']
-        self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
 
         tf_random.seed(10)
@@ -114,7 +112,7 @@ class TestDataset(unittest.TestCase):
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = my_make(my_dataset, self.data_stat_nbatch)
         for sys in sampled:
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
+            for key in ['coord', 'force', 'energy', 'virial', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
         my_en.compute_input_stats(sampled)

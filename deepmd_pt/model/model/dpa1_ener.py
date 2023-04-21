@@ -44,8 +44,9 @@ class EnergyModelDPA1(BaseModel):
 
         # Statistics
         for sys in sampled:
-            for key in sys:
-                sys[key] = sys[key].to(env.DEVICE)
+            for key in ['coord', 'force', 'energy', 'virial', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
+                if key in sys:
+                    sys[key] = sys[key].to(env.DEVICE)
         self.descriptor.compute_input_stats(sampled)
 
         # Fitting
