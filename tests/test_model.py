@@ -17,7 +17,7 @@ from deepmd.model import EnerModel
 from deepmd.utils.data_system import DeepmdDataSystem
 from deepmd.utils.learning_rate import LearningRateExp
 
-from deepmd_pt.utils.dataset import DeepmdDataSet
+from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.model import EnergyModelSeA
@@ -233,8 +233,15 @@ class TestEnergy(unittest.TestCase):
     def test_consistency(self):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
-        my_ds = DeepmdDataSet(self.systems, self.batch_size, self.type_map, self.rcut, self.sel)
-        sampled = make_stat_input(my_ds, self.data_stat_nbatch)
+        my_ds = DpLoaderSet(self.systems,self.batch_size,
+        model_params={
+                'descriptor': {
+                    'sel': self.sel,
+                    'rcut': self.rcut,
+                },
+                'type_map': self.type_map
+            })
+        sampled = make_stat_input(my_ds.systems, my_ds.dataloaders, self.data_stat_nbatch)
         my_model = EnergyModelSeA(
             model_params={
                 'descriptor': {
@@ -282,7 +289,7 @@ class TestEnergy(unittest.TestCase):
                 print(dst.mean(), dst.std())
                 dst.copy_(src)
         # Start forward computing
-        batch = my_ds._data_systems[0].preprocess(batch)
+        batch = my_ds.systems[0]._data_system.preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         model_predict = my_model(batch['coord'], batch['atype'], batch['natoms'],
