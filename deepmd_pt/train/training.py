@@ -26,46 +26,62 @@ from torch.utils.data import DataLoader
 
 
 class Trainer(object):
-
-    def __init__(self, config: Dict[str, Any], training_data, sampled, validation_data=None, resume_from=None):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        training_data,
+        sampled,
+        validation_data=None,
+        resume_from=None,
+    ):
         """Construct a DeePMD trainer.
 
         Args:
         - config: The Dict-like configuration with training options.
         """
-        model_params = config['model']
-        training_params = config['training']
+        model_params = config["model"]
+        training_params = config["training"]
 
         # Iteration config
-        self.num_steps = training_params['numb_steps']
-        self.disp_file = training_params.get('disp_file', 'lcurve.out')
-        self.disp_freq = training_params.get('disp_freq', 1000)
-        self.save_ckpt = training_params.get('save_ckpt', 'model.pt')
-        self.save_freq = training_params.get('save_freq', 1000)
-        self.opt_type = training_params.get('opt_type', 'Adam')
-        self.kf_blocksize = training_params.get('kf_blocksize', 5120)
-        self.wandb_config = training_params.get('wandb_config', {})
-        self.wandb_enabled = self.wandb_config.get('wandb_enabled', False)
+        self.num_steps = training_params["numb_steps"]
+        self.disp_file = training_params.get("disp_file", "lcurve.out")
+        self.disp_freq = training_params.get("disp_freq", 1000)
+        self.save_ckpt = training_params.get("save_ckpt", "model.pt")
+        self.save_freq = training_params.get("save_freq", 1000)
+        self.opt_type = training_params.get("opt_type", "Adam")
+        self.kf_blocksize = training_params.get("kf_blocksize", 5120)
+        self.wandb_config = training_params.get("wandb_config", {})
+        self.wandb_enabled = self.wandb_config.get("wandb_enabled", False)
         if self.wandb_enabled:
-            entity = self.wandb_config.get('entity', None)
-            assert entity is not None, "The parameter 'entity' of wandb must be specified."
-            project = self.wandb_config.get('project', None)
-            assert project is not None, "The parameter 'project' of wandb must be specified."
-            job_name = self.wandb_config.get('job_name', None)
+            entity = self.wandb_config.get("entity", None)
+            assert (
+                entity is not None
+            ), "The parameter 'entity' of wandb must be specified."
+            project = self.wandb_config.get("project", None)
+            assert (
+                project is not None
+            ), "The parameter 'project' of wandb must be specified."
+            job_name = self.wandb_config.get("job_name", None)
             if job_name is None:
-                name_path = os.path.abspath('.').split('/')
-                job_name = name_path[-2] + '/' + name_path[-1]
-            wb.init(project=project, entity=entity, config=training_params,
-                    name=job_name, settings=wb.Settings(start_method="fork"))
+                name_path = os.path.abspath(".").split("/")
+                job_name = name_path[-2] + "/" + name_path[-1]
+            wb.init(
+                project=project,
+                entity=entity,
+                config=training_params,
+                name=job_name,
+                settings=wb.Settings(start_method="fork"),
+            )
 
         # Data + Model
-        dp_random.seed(training_params['seed'])
+        dp_random.seed(training_params["seed"])
         self.training_dataloader = DataLoader(
             training_data,
             sampler=torch.utils.data.RandomSampler(training_data),
             batch_size=None,
-            num_workers=4, # setting to 0 diverges the behavior of its iterator; should be >=1
-            drop_last=False)
+            num_workers=4,  # setting to 0 diverges the behavior of its iterator; should be >=1
+            drop_last=False,
+        )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
         self.training_data = iter(self.training_dataloader)
         self.validation_dataloader = DataLoader(
@@ -73,30 +89,32 @@ class Trainer(object):
             sampler=torch.utils.data.RandomSampler(validation_data),
             batch_size=None,
             num_workers=0,
-            #persistent_workers=True,
-            drop_last=False)
+            drop_last=False,
+        )
         self.validation_data = BufferedIterator(iter(self.validation_dataloader))
         if training_params.get("validation_data", None) is not None:
-            self.valid_numb_batch = training_params["validation_data"].get("numb_btch", 1)
+            self.valid_numb_batch = training_params["validation_data"].get(
+                "numb_btch", 1
+            )
         else:
             self.valid_numb_batch = 1
-        if model_params['descriptor']['type'] == 'se_e2_a':
+        if model_params["descriptor"]["type"] == "se_e2_a":
             self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
-        elif model_params['descriptor']['type'] == 'se_atten':
+        elif model_params["descriptor"]["type"] == "se_atten":
             self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
         else:
             raise NotImplementedError
 
         # Learning rate
-        lr_params = config.pop('learning_rate')
-        assert lr_params.pop('type', 'exp'), 'Only learning rate `exp` is supported!'
-        lr_params['stop_steps'] = self.num_steps
+        lr_params = config.pop("learning_rate")
+        assert lr_params.pop("type", "exp"), "Only learning rate `exp` is supported!"
+        lr_params["stop_steps"] = self.num_steps
         self.lr_exp = LearningRateExp(**lr_params)
 
         # Loss
-        loss_params = config.pop('loss')
-        assert loss_params.pop('type', 'ener'), 'Only loss `ener` is supported!'
-        loss_params['starter_learning_rate'] = lr_params['start_lr']
+        loss_params = config.pop("loss")
+        assert loss_params.pop("type", "ener"), "Only loss `ener` is supported!"
+        loss_params["starter_learning_rate"] = lr_params["start_lr"]
         self.loss = EnergyStdLoss(**loss_params)
 
         # Model Wrapper
@@ -104,10 +122,10 @@ class Trainer(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-       # Get Rank
+        # Get Rank
         if dist.is_initialized():
-            local_rank = int(os.environ.get('LOCAL_RANK'))
             self.rank = dist.get_rank()
+            local_rank = self.rank
         else:
             self.rank = 0
 
@@ -118,48 +136,63 @@ class Trainer(object):
 
         if dist.is_initialized():
             # DDP will guarantee the model parameters are identical across all processes
-            self.wrapper = DDP(self.wrapper,
-                               device_ids=[local_rank],
-                               output_device=local_rank,
-                               find_unused_parameters=True)
-
-        if self.opt_type == 'Adam':
-            self.optimizer = torch.optim.Adam(self.wrapper.parameters(), lr=self.lr_exp.start_lr)
-            self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-                self.optimizer, lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr
+            self.wrapper = DDP(
+                self.wrapper,
+                device_ids=[self.rank],
+                output_device=self.rank,
+                find_unused_parameters=True,
             )
-        elif self.opt_type == 'LKF':
-            self.optimizer = LKFOptimizer(self.wrapper.parameters(), 0.98, 0.99870, self.kf_blocksize)
+
+        if self.opt_type == "Adam":
+            self.optimizer = torch.optim.Adam(
+                self.wrapper.parameters(), lr=self.lr_exp.start_lr
+            )
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+                self.optimizer,
+                lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr,
+            )
+        elif self.opt_type == "LKF":
+            self.optimizer = LKFOptimizer(
+                self.wrapper.parameters(), 0.98, 0.99870, self.kf_blocksize
+            )
         else:
             raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
         self.multi_task_mode = False
-        self.task_keys = ['Default']
+        self.task_keys = ["Default"]
 
     def run(self):
-        fout = open(self.disp_file, mode='a', buffering=1) if self.rank == 0 else None  # line buffered
-        logging.info('Start to train %d steps.', self.num_steps)
+        fout = (
+            open(self.disp_file, mode="a", buffering=1) if self.rank == 0 else None
+        )  # line buffered
+        logging.info("Start to train %d steps.", self.num_steps)
         if dist.is_initialized():
-            logging.info(f'Rank: {dist.get_rank()}/{dist.get_world_size()}')
+            logging.info(f"Rank: {dist.get_rank()}/{dist.get_world_size()}")
 
         def step(_step_id, task_key="Default"):
             cur_lr = self.lr_exp.value(_step_id)
             self.optimizer.zero_grad()
             input_dict, label_dict = self.get_data(is_train=True)
-            if self.opt_type == 'Adam':
-                model_pred, loss, more_loss = self.wrapper(**input_dict,
-                                                           cur_lr=cur_lr, label=label_dict, task_key=task_key)
+            if self.opt_type == "Adam":
+                model_pred, loss, more_loss = self.wrapper(
+                    **input_dict, cur_lr=cur_lr, label=label_dict, task_key=task_key
+                )
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
-            elif self.opt_type == 'LKF':
-                KFOptWrapper = KFOptimizerWrapper(self.wrapper, self.optimizer, 24, 6, False)
-                _ = KFOptWrapper.update_energy(input_dict, label_dict['energy'])
-                p_energy, p_force = KFOptWrapper.update_force(input_dict, label_dict['force'])
+            elif self.opt_type == "LKF":
+                KFOptWrapper = KFOptimizerWrapper(
+                    self.wrapper, self.optimizer, 24, 6, False
+                )
+                _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
+                p_energy, p_force = KFOptWrapper.update_force(
+                    input_dict, label_dict["force"]
+                )
                 # [coord, atype, natoms, mapping, shift, selected, box]
-                model_pred = {'energy': p_energy,
-                              'force': p_force}
-                loss, more_loss = self.wrapper.loss[task_key](model_pred, label_dict, input_dict['natoms'], learning_rate=cur_lr)
+                model_pred = {"energy": p_energy, "force": p_force}
+                loss, more_loss = self.wrapper.loss[task_key](
+                    model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                )
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
@@ -167,19 +200,21 @@ class Trainer(object):
             if _step_id % self.disp_freq == 0:
                 # training
                 train_time = time.time() - self.t0
-                msg = f'step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}'
-                record = f'step={_step_id}, lr={cur_lr}, loss={loss}'
-                rmse_val = {item: more_loss[item] for item in more_loss if 'rmse' in item}
-                for item in ['rmse_e', 'rmse_f', 'rmse_v']:
+                msg = f"step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}"
+                record = f"step={_step_id}, lr={cur_lr}, loss={loss}"
+                rmse_val = {
+                    item: more_loss[item] for item in more_loss if "rmse" in item
+                }
+                for item in ["rmse_e", "rmse_f", "rmse_v"]:
                     if item in rmse_val:
-                        msg += f', {item}_train={rmse_val[item]:.4f}'
-                        record += f', {item}_train={rmse_val[item]}'
-                        self.wandb_log({item: rmse_val[item]}, _step_id, '_train')
+                        msg += f", {item}_train={rmse_val[item]:.4f}"
+                        record += f", {item}_train={rmse_val[item]}"
+                        self.wandb_log({item: rmse_val[item]}, _step_id, "_train")
                         rmse_val.pop(item)
                 for rest_item in sorted(list(rmse_val.keys())):
                     if rest_item in rmse_val:
-                        msg += f', {rest_item}={rmse_val[rest_item]:.4f}'
-                        record += f', {rest_item}={rmse_val[rest_item]}'
+                        msg += f", {rest_item}={rmse_val[rest_item]:.4f}"
+                        record += f", {rest_item}={rmse_val[rest_item]}"
                         rmse_val.pop(rest_item)
 
                 # validation
@@ -189,34 +224,40 @@ class Trainer(object):
                     for ii in range(self.valid_numb_batch):
                         self.optimizer.zero_grad()
                         input_dict, label_dict = self.get_data(is_train=False)
-                        model_pred, loss, more_loss = self.wrapper(**input_dict,
-                                                                   cur_lr=cur_lr, label=label_dict, task_key=task_key)
-                        natoms = input_dict['natoms'][0, 0]
+                        model_pred, loss, more_loss = self.wrapper(
+                            **input_dict,
+                            cur_lr=cur_lr,
+                            label=label_dict,
+                            task_key=task_key,
+                        )
+                        natoms = input_dict["natoms"][0, 0]
                         sum_natoms += natoms
                         for k, v in more_loss.items():
-                            if 'rmse' in k:
-                                single_results[k] = single_results.get(k, 0.0) + v * natoms
+                            if "rmse" in k:
+                                single_results[k] = (
+                                    single_results.get(k, 0.0) + v * natoms
+                                )
                     valid_results = {
-                        k: v / sum_natoms
-                        for k, v in single_results.items()
+                        k: v / sum_natoms for k, v in single_results.items()
                     }
                     for item in sorted(list(valid_results.keys())):
-                        msg += f', {item}_valid={valid_results[item]:.4f}'
-                        record += f', {item}_valid={valid_results[item]}'
-                        self.wandb_log({item: valid_results[item]}, _step_id, '_valid')
+                        msg += f", {item}_valid={valid_results[item]:.4f}"
+                        record += f", {item}_valid={valid_results[item]}"
+                        self.wandb_log({item: valid_results[item]}, _step_id, "_valid")
 
-                msg += f', speed={train_time:.2f} s/{self.disp_freq} batches'
-                record += f', speed={train_time} s/{self.disp_freq} batches\n'
+                msg += f", speed={train_time:.2f} s/{self.disp_freq} batches"
+                record += f", speed={train_time} s/{self.disp_freq} batches\n"
                 logging.info(msg)
-                self.wandb_log({'lr': cur_lr}, step_id)
+                self.wandb_log({"lr": cur_lr}, step_id)
 
                 if fout:
                     fout.write(record)
                 self.t0 = time.time()
 
-            if ((_step_id % self.save_freq == 0 and _step_id != 0) \
-                or _step_id == self.num_steps - 1) \
-                    and (self.rank == 0 or dist.get_rank() == 0):
+            if (
+                (_step_id % self.save_freq == 0 and _step_id != 0)
+                or _step_id == self.num_steps - 1
+            ) and (self.rank == 0 or dist.get_rank() == 0):
                 # Handle the case if rank 0 aborted and re-assigned
                 logging.info(f"Saving model to {self.save_ckpt}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
@@ -224,10 +265,14 @@ class Trainer(object):
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
-            for step_id in tqdm(range(self.num_steps), disable=None):  # set to None to disable on non-TTY
+            for step_id in tqdm(
+                range(self.num_steps), disable=None
+            ):  # set to None to disable on non-TTY
                 step(step_id)
 
-        if self.rank == 0 or dist.get_rank() == 0:  # Handle the case if rank 0 aborted and re-assigned
+        if (
+            self.rank == 0 or dist.get_rank() == 0
+        ):  # Handle the case if rank 0 aborted and re-assigned
             if JIT:
                 self.wrapper.save("torchscript_model.pt")
         if fout:
@@ -237,30 +282,41 @@ class Trainer(object):
         if is_train:
             try:
                 batch_data = next(iter(self.training_data))
-            except :
+            except:
                 self.training_data = BufferedIterator(iter(self.training_dataloader))
                 batch_data = next(iter(self.training_data))
         else:
             try:
                 batch_data = next(iter(self.validation_data))
-            except :
-                self.validation_data = BufferedIterator(iter(self.validation_dataloader))
+            except:
+                self.validation_data = BufferedIterator(
+                    iter(self.validation_dataloader)
+                )
                 batch_data = next(iter(self.validation_data))
         for key in batch_data.keys():
             batch_data[key] = batch_data[key].to(DEVICE)
         input_dict = {}
-        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
+        for item in [
+            "coord",
+            "atype",
+            "natoms",
+            "mapping",
+            "shift",
+            "selected",
+            "selected_type",
+            "box",
+        ]:
             if item in batch_data:
                 input_dict[item] = batch_data[item]
             else:
                 input_dict[item] = None
         label_dict = {}
-        for item in ['energy', 'force', 'virial']:
+        for item in ["energy", "force", "virial"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict
 
-    def wandb_log(self, data: dict, step, type_suffix=''):
+    def wandb_log(self, data: dict, step, type_suffix=""):
         if not self.wandb_enabled:
             return
         for k, v in data.items():
