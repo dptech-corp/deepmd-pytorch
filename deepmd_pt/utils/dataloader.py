@@ -78,14 +78,11 @@ class BackgroundConsumer(Thread):
         self._max_len = max_len  #
 
     def run(self):
-        for _ in range(self._max_len):
-            item = next(self._source)  # Might raise StopIter
-            self._queue.put(item)  # an epoch has not ended yet
-            # Blocking if the queue is full
+        for item in self._source:
+            self._queue.put(item) # Blocking if the queue is full
 
         # Signal the consumer we are done.
         self._queue.put(_sentinel)
-
 
 class BufferedIterator(object):
     def __init__(self, iterable):
@@ -127,7 +124,7 @@ class BufferedIterator(object):
                     self.warning_time = time.time()
 
         # Get next example
-        item = self._queue.get(True)
+        item = self._queue.get()
         if isinstance(item, Exception):
             raise item
         if item is _sentinel:

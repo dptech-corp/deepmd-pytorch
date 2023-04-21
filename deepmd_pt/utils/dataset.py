@@ -477,11 +477,11 @@ class DeepmdDataSystem(object):
         selected, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec, type_split=self.type_split)
         batch['selected'] = selected
         batch['selected_type'] = selected_type
-        
+
         batch['shift'] = shift
         batch['mapping'] = mapping
         return batch
-    
+
     def _get_item(self, index):
         for i in range(0,len(self._dirs) + 1):#note: if different sets can be merged, prefix sum is unused to calculate
             if index < self.prefix_sum[i]:
@@ -591,17 +591,17 @@ class DeepmdDataSetForLoader(Dataset):
         - systems: Paths to systems.
         - batch_size: Max frame count in a batch.
         - type_map: Atom types.
-        ''' 
+        '''
         self._type_map = type_map
         if sel is not None:
             if isinstance(sel, int):
                 sel = [sel]
             sec = torch.cumsum(torch.tensor(sel), dim=0)
-        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map) 
+        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map)
         self.mixed_type = self._data_system.mixed_type
         self._ntypes = self._data_system.get_ntypes()
-        self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes) 
-        
+        self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
+
 
     def __len__(self):
         return self._data_system.nframes
