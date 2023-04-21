@@ -12,6 +12,7 @@ from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss.ener import EnergyStdLoss
 from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
+from deepmd_pt.utils.dataloader import BufferedIterator
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -21,6 +22,7 @@ if torch.__version__.startswith("2"):
     import torch._dynamo
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
+from torch.utils.data import DataLoader
 
 
 class Trainer(object):
@@ -58,8 +60,23 @@ class Trainer(object):
 
         # Data + Model
         dp_random.seed(training_params['seed'])
-        self.training_data = training_data
-        self.validation_data = validation_data
+        self.training_dataloader = DataLoader(
+            training_data, 
+            sampler=torch.utils.data.RandomSampler(training_data), 
+            batch_size=None,
+            num_workers=4,
+            #persistent_workers=True,
+            drop_last=False)
+        self.training_data = BufferedIterator(iter(self.training_dataloader))
+        self.training_data = iter(self.training_dataloader)
+        self.validation_dataloader = DataLoader(
+            validation_data, 
+            sampler=torch.utils.data.RandomSampler(validation_data), 
+            batch_size=None,
+            num_workers=4,
+            #persistent_workers=True,
+            drop_last=False)
+        self.validation_data = BufferedIterator(iter(self.validation_dataloader))
         if training_params.get("validation_data", None) is not None:
             self.valid_numb_batch = training_params["validation_data"].get("numb_btch", 1)
         else:
@@ -88,12 +105,9 @@ class Trainer(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-        # Initialize DDP
-        local_rank = os.environ.get('LOCAL_RANK')
-        if local_rank is not None:
-            local_rank = int(local_rank)
-            assert dist.is_nccl_available()
-            dist.init_process_group(backend='nccl')
+       # Get Rank
+        if dist.is_initialized():
+            local_rank = int(os.environ.get('LOCAL_RANK'))
             self.rank = dist.get_rank()
         else:
             self.rank = 0
@@ -107,7 +121,8 @@ class Trainer(object):
             # DDP will guarantee the model parameters are identical across all processes
             self.wrapper = DDP(self.wrapper,
                                device_ids=[local_rank],
-                               output_device=local_rank)
+                               output_device=local_rank,
+                               find_unused_parameters=True)
 
         if self.opt_type == 'Adam':
             self.optimizer = torch.optim.Adam(self.wrapper.parameters(), lr=self.lr_exp.start_lr)
@@ -132,7 +147,6 @@ class Trainer(object):
             cur_lr = self.lr_exp.value(_step_id)
             self.optimizer.zero_grad()
             input_dict, label_dict = self.get_data(is_train=True)
-
             if self.opt_type == 'Adam':
                 model_pred, loss, more_loss = self.wrapper(**input_dict,
                                                            cur_lr=cur_lr, label=label_dict, task_key=task_key)
@@ -222,9 +236,19 @@ class Trainer(object):
 
     def get_data(self, is_train=True):
         if is_train:
-            batch_data = self.training_data.get_training_batch()
+            try:
+                batch_data = next(iter(self.training_data))
+            except :
+                self.training_data = BufferedIterator(iter(self.training_dataloader))
+                batch_data = next(iter(self.training_data))
         else:
-            batch_data = self.validation_data.get_training_batch()
+            try:
+                batch_data = next(iter(self.validation_data))
+            except :
+                self.validation_data = BufferedIterator(iter(self.validation_dataloader))
+                batch_data = next(iter(self.validation_data))
+        for key in batch_data.keys():
+            batch_data[key] = batch_data[key].to(DEVICE)
         input_dict = {}
         for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
             if item in batch_data:

@@ -1,12 +1,13 @@
 import numpy as np
 import torch
 from collections import defaultdict
+from deepmd_pt.utils.dataloader import BufferedIterator
 
-def make_stat_input(dataset, nbatches):
+def make_stat_input(datasets, dataloaders, nbatches):
     '''Pack data for statistics.
 
     Args:
-    - dataset: The dataset to analyze.
+    - dataset: A list of dataset to analyze.
     - nbatches: Batch count for collecting stats.
 
     Returns:
@@ -14,12 +15,17 @@ def make_stat_input(dataset, nbatches):
     '''
     lst = []
     keys = ['coord', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'selected_type', 'shift']
-    if dataset.mixed_type:
+    if datasets[0].mixed_type:
         keys += ['real_natoms_vec']
-    for ii in range(dataset.nsystems):
+    for i in range(len(datasets)):
         sys_stat = {key: [] for key in keys}
+        iterator = iter(dataloaders[i])
         for _ in range(nbatches):
-            stat_data = dataset[ii]
+            try:
+                stat_data = next(iterator)
+            except:
+                iterator = iter(dataloaders[i])
+                stat_data = next(iterator)
             for dd in stat_data:
                 if dd in keys:
                     sys_stat[dd].append(stat_data[dd])
