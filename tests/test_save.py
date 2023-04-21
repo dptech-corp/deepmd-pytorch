@@ -1,11 +1,8 @@
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.ener import EnergyModel
+from deepmd_pt.model.model import EnergyModelSeA
 from deepmd_pt.utils import env
-from deepmd_pt.utils import dp_random
 import unittest
 import torch
-import os
 import json
 from deepmd.common import expand_sys_str
 
@@ -61,8 +58,8 @@ class TestEnergy(unittest.TestCase):
             'data_stat_nbatch': self.data_stat_nbatch
         }
         model_params2 = model_params.copy()
-        self.model = EnergyModel(model_params, self.dataset).to(env.DEVICE)
-        self.model2 = EnergyModel(model_params2, self.dataset).to(env.DEVICE)
+        self.model = EnergyModelSeA(model_params, self.dataset).to(env.DEVICE)
+        self.model2 = EnergyModelSeA(model_params2, self.dataset).to(env.DEVICE)
 
     def test_saveload(self):
         batch = self.dataset.__getitem__()

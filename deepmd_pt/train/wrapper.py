@@ -45,13 +45,13 @@ class ModelWrapper(torch.nn.Module):
     def shared_params(self):  # TODO ZD:multitask share params
         pass
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, box=None, cur_lr=None, label=None, task_key=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, box=None, cur_lr=None, label=None, task_key=None):
         if not self.multi_task:
             task_key = "Default"
         else:
             assert task_key is not None, \
                 f"Multitask model must specify the inference task! Supported tasks are {list(self.model.keys())}."
-        model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, selected, box=box)
+        model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, selected, selected_type, box=box)
         if not self.inference_only:
             loss, more_loss = self.loss[task_key](model_pred, label, natoms=natoms, learning_rate=cur_lr)
             return model_pred, loss, more_loss

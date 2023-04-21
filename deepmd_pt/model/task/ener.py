@@ -14,7 +14,7 @@ from deepmd_pt.model.task.task import TaskBaseMethod
 
 class EnergyFittingNet(TaskBaseMethod):
 
-    def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, resnet_dt=True, **kwargs):
+    def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, resnet_dt=True, use_tebd=False, **kwargs):
         """Construct a fitting net for energy.
 
         Args:
@@ -27,7 +27,9 @@ class EnergyFittingNet(TaskBaseMethod):
         super(EnergyFittingNet, self).__init__()
         self.ntypes = ntypes
         self.embedding_width = embedding_width
-        assert self.ntypes == len(bias_atom_e), 'Element count mismatches!'
+        self.use_tebd = use_tebd
+        if not use_tebd:
+            assert self.ntypes == len(bias_atom_e), 'Element count mismatches!'
         bias_atom_e = torch.tensor(bias_atom_e)
         self.register_buffer('bias_atom_e', bias_atom_e)
 
@@ -59,4 +61,48 @@ class EnergyFittingNet(TaskBaseMethod):
                 atom_energy = atom_energy + self.bias_atom_e[type_i]
             atom_energy = atom_energy * mask.unsqueeze(-1)
             outs = outs + atom_energy # Shape is [nframes, natoms[0], 1]
+        return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
+
+
+class EnergyFittingNetType(TaskBaseMethod):
+
+    def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, resnet_dt=True, **kwargs):
+        """Construct a fitting net for energy.
+
+        Args:
+        - ntypes: Element count.
+        - embedding_width: Embedding width per atom.
+        - neuron: Number of neurons in each hidden layers of the fitting net.
+        - bias_atom_e: Average enery per atom for each element.
+        - resnet_dt: Using time-step in the ResNet construction.
+        """
+        super(EnergyFittingNetType, self).__init__()
+        self.ntypes = ntypes
+        self.embedding_width = embedding_width
+        bias_atom_e = torch.tensor(bias_atom_e)
+        self.register_buffer('bias_atom_e', bias_atom_e)
+
+        filter_layers = []
+        one = ResidualDeep(0, embedding_width, neuron, 0.0, resnet_dt)
+        filter_layers.append(one)
+        self.filter_layers = torch.nn.ModuleList(filter_layers)
+
+        if 'seed' in kwargs:
+            logging.info('Set seed to %d in fitting net.', kwargs['seed'])
+            torch.manual_seed(kwargs['seed'])
+
+    def forward(self, inputs, atype, atype_tebd):
+        """Based on embedding net output, alculate total energy.
+
+        Args:
+        - inputs: Embedding matrix. Its shape is [nframes, natoms[0], self.embedding_width].
+        - natoms: Tell atom count and element count. Its shape is [2+self.ntypes].
+
+        Returns:
+        - `torch.Tensor`: Total energy with shape [nframes, natoms[0]].
+        """
+        outs = 0
+        inputs = torch.concat([inputs, atype_tebd], dim=-1)
+        atom_energy = self.filter_layers[0](inputs) + self.bias_atom_e[atype].unsqueeze(-1)
+        outs = outs + atom_energy  # Shape is [nframes, natoms[0], 1]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)

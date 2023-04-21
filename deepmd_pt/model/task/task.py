@@ -10,7 +10,7 @@ class TaskBaseMethod(torch.nn.Module):
         """
         super(TaskBaseMethod, self).__init__()
 
-    def forward(self, inputs, atype):
+    def forward(self, **kwargs):
         """Task Output.
         """
         raise NotImplementedError

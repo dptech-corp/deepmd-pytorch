@@ -42,7 +42,7 @@ class EnergyStdLoss(TaskLoss):
         pref_e = self.limit_pref_e + (self.start_pref_e - self.limit_pref_e) * coef
         pref_f = self.limit_pref_f + (self.start_pref_f - self.limit_pref_f) * coef
         pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
-        loss = 0
+        loss = 0.
         more_loss = {}
         atom_norm = 1. / natoms[0, 0]
         if 'energy' in model_pred and 'energy' in label:
@@ -61,7 +61,7 @@ class EnergyStdLoss(TaskLoss):
             more_loss['rmse_f'] = rmse_f.detach()
 
         if 'virial' in model_pred and 'virial' in label:
-            diff_v = label['virial'] - model_pred['virial']
+            diff_v = label['virial'] - model_pred['virial'].reshape(-1, 9)
             l2_virial_loss = torch.mean(torch.square(diff_v))
             more_loss['l2_virial_loss'] = l2_virial_loss.detach()
             loss += atom_norm * (pref_v * l2_virial_loss)
