@@ -64,8 +64,6 @@ class TestEnergy(unittest.TestCase):
             result2 = self.models_load[i](**batch)
             for item in result1:
                 assert torch.allclose(result1[item], result2[item])
-            if os.path.exists(model_file_name):
-                os.remove(model_file_name)
 
 if __name__ == '__main__':
     unittest.main()
