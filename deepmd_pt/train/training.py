@@ -88,9 +88,10 @@ class Trainer(object):
             validation_data,
             sampler=torch.utils.data.RandomSampler(validation_data),
             batch_size=None,
-            num_workers=0,
+            num_workers=1,
             drop_last=False,
         )
+
         self.validation_data = BufferedIterator(iter(self.validation_dataloader))
         if training_params.get("validation_data", None) is not None:
             self.valid_numb_batch = training_params["validation_data"].get(
@@ -122,12 +123,7 @@ class Trainer(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-        # Get Rank
-        if dist.is_initialized():
-            self.rank = dist.get_rank()
-            local_rank = self.rank
-        else:
-            self.rank = 0
+        self.rank = dist.get_rank() if dist.is_initialized() else 0
 
         if (resume_from is not None) and (self.rank == 0):
             state_dict = torch.load(resume_from)
@@ -282,13 +278,14 @@ class Trainer(object):
         if is_train:
             try:
                 batch_data = next(iter(self.training_data))
-            except:
+            except StopIteration:
+                # Refresh the status of the dataloader to start from a new epoch
                 self.training_data = BufferedIterator(iter(self.training_dataloader))
                 batch_data = next(iter(self.training_data))
         else:
             try:
                 batch_data = next(iter(self.validation_data))
-            except:
+            except StopIteration:
                 self.validation_data = BufferedIterator(
                     iter(self.validation_dataloader)
                 )
