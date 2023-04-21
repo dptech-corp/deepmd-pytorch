@@ -233,8 +233,15 @@ class TestEnergy(unittest.TestCase):
     def test_consistency(self):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
-        my_ds = DeepmdDataSet(self.systems, self.batch_size, self.type_map, self.rcut, self.sel)
-        sampled = make_stat_input(my_ds, self.data_stat_nbatch)
+        my_ds = DpLoaderSet(self.systems,self.batch_size,
+        model_params={
+                'descriptor': {
+                    'sel': self.sel,
+                    'rcut': self.rcut,
+                },
+                'type_map': self.type_map
+            })
+        sampled = make_stat_input(my_ds.test_data, my_ds.data, self.data_stat_nbatch)
         my_model = EnergyModelSeA(
             model_params={
                 'descriptor': {
