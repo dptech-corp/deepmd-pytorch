@@ -6,10 +6,9 @@ import torch
 from deepmd_pt.utils import env
 from deepmd_pt.train import training
 from deepmd_pt.infer import inference
-import torch.multiprocessing as mp
 import torch.distributed as dist
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from torch.utils.data.distributed import DistributedSampler
+from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
 
 from deepmd_pt.utils.stat import make_stat_input
@@ -25,26 +24,21 @@ def train(FLAGS):
     type_split = True
     if model_params['descriptor']['type'] in ['se_atten']:
         type_split = False
-    training_data = DeepmdDataSet(
-            systems=training_dataset_params['systems'],
-            batch_size=training_dataset_params['batch_size'],
-            type_map=model_params['type_map'],
-            rcut=model_params['descriptor']['rcut'],
-            sel=model_params['descriptor']['sel'],
-            type_split=type_split,
-        )
     validation_dataset_params = training_params.pop('validation_data')
-    validation_data = DeepmdDataSet(
-        systems=validation_dataset_params['systems'],
-        batch_size=validation_dataset_params['batch_size'],
-        type_map=model_params['type_map'],
-        rcut=model_params['descriptor']['rcut'],
-        sel=model_params['descriptor']['sel'],
-        type_split=type_split,
-    )
+    # Initialize DDP
+    local_rank = os.environ.get('LOCAL_RANK')
+    if local_rank is not None:
+        local_rank = int(local_rank)
+        assert dist.is_nccl_available()
+        dist.init_process_group(backend='nccl')   
+    
+    training_systems=training_dataset_params['systems']
+    validation_systems=validation_dataset_params['systems']
+    train_data = DpLoaderSet(training_systems,training_dataset_params['batch_size'],model_params)
+    validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params)
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(training_data, data_stat_nbatch)
-    trainer = training.Trainer(config, training_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
+    sampled = make_stat_input(train_data.test_data, train_data.data, data_stat_nbatch)
+    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
 

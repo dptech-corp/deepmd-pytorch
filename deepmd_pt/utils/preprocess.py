@@ -169,7 +169,6 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, type_split=Tr
     distance[:nloc, :nloc] += torch.eye(nloc, dtype=torch.bool, device=env.PREPROCESS_DEVICE) * DISTANCE_INF
     if not type_split:
         sec = sec[-1:]
-
     lst = []
     selected = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
     selected_type = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
