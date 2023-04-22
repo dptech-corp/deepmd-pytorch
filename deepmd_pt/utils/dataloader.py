@@ -13,11 +13,16 @@ from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
+def setup_seed(seed):
+   torch.manual_seed(seed)
+   torch.cuda.manual_seed_all(seed)
+   torch.backends.cudnn.deterministic = True
 
 class DpLoaderSet(Dataset):
     """A dataset for storing DataLoaders to multiple Systems."""
 
-    def __init__(self, systems, batch_size, model_params):
+    def __init__(self, systems, batch_size, model_params,seed):
+        setup_seed(seed)
         if isinstance(systems, str):
             with h5py.File(systems) as file:
                 systems = [os.path.join(systems, item) for item in file.keys()]
