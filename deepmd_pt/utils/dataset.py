@@ -10,6 +10,7 @@ from deepmd_pt.utils.preprocess import Region3D, normalize_coord, make_env_mat
 from tqdm import trange
 import h5py
 import torch.distributed as dist
+from deepmd_pt.utils.cache import lru_cache
 
 
 class DeepmdDataSystem(object):
@@ -84,8 +85,12 @@ class DeepmdDataSystem(object):
         self.sets = [None for i in range(len(self._sys_path))]
 
         self.nframes = 0
+        i = 1
+        self.prefix_sum = [0] * (len(self._dirs) +1)
         for item in self._dirs:
             frames = self._load_set(item, fast=True)
+            self.prefix_sum[i] += frames
+            i += 1
             self.nframes += frames
 
     def add(self,
@@ -236,7 +241,7 @@ class DeepmdDataSystem(object):
         type_path = set_name + "/real_atom_types.npy"
         real_type = np.load(type_path).astype(np.int32).reshape([-1, self._natoms])
         return real_type
-
+    @lru_cache(maxsize=16, copy=True)
     def _load_set(self, set_name, fast=False):
         if self.file is None:
             path = os.path.join(set_name, "coord.npy")
@@ -354,7 +359,7 @@ class DeepmdDataSystem(object):
         if atomic:
             ndof *= self._natoms
         path = os.path.join(set_name, key + '.npy')
-        logging.info('Loading data from: %s', path)
+        #logging.info('Loading data from: %s', path)
         if os.path.isfile(path):
             if high_prec:
                 data = np.load(path).astype(env.GLOBAL_ENER_FLOAT_PRECISION)
@@ -443,6 +448,47 @@ class DeepmdDataSystem(object):
                 else:
                     new_data[ii] = dd
         return new_data
+
+#note: this function needs to be optimized for single frame process
+    def single_preprocess(self, batch, sid):
+        for kk in self._data_dict.keys():
+            if "find_" in kk:
+                pass
+            else:
+                batch[kk] = torch.tensor(batch[kk][sid], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+                if self._data_dict[kk]['atomic']:
+                    batch[kk] = batch[kk].view(-1, self._data_dict[kk]['ndof'])
+
+        for kk in ['type', 'real_natoms_vec']:
+            if kk in batch.keys():
+                batch[kk] = torch.tensor(batch[kk][sid], dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        batch['atype'] = batch.pop('type')
+
+        coord = batch['coord']
+        atype = batch['atype']
+        box = batch['box']
+        rcut = self.rcut
+        sec = self.sec
+        selected, selected_type, shift, mapping = [], [], [], []
+        region = Region3D(box)
+        nloc = atype.shape[0]
+        _coord = normalize_coord(coord, region, nloc)
+        batch['coord'] = _coord
+        selected, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec, type_split=self.type_split)
+        batch['selected'] = selected
+        batch['selected_type'] = selected_type
+
+        batch['shift'] = shift
+        batch['mapping'] = mapping
+        return batch
+
+    def _get_item(self, index):
+        for i in range(0,len(self._dirs) + 1):#note: if different sets can be merged, prefix sum is unused to calculate
+            if index < self.prefix_sum[i]:
+                break
+        frames = self._load_set(self._dirs[i-1])
+        frame = self.single_preprocess(frames,index-self.prefix_sum[i-1])
+        return frame
 
 
 def _make_idx_map(atom_type):
@@ -535,3 +581,33 @@ class DeepmdDataSet(Dataset):
         np_batch['natoms'] = np_batch['natoms'][0]
         np_batch['force'] = np_batch['force'].reshape(batch_size, -1)
         return np_batch, pt_batch
+
+class DeepmdDataSetForLoader(Dataset):
+
+    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None):
+        '''Construct DeePMD-style dataset containing frames cross different systems.
+
+        Args:
+        - systems: Paths to systems.
+        - batch_size: Max frame count in a batch.
+        - type_map: Atom types.
+        '''
+        self._type_map = type_map
+        if sel is not None:
+            if isinstance(sel, int):
+                sel = [sel]
+            sec = torch.cumsum(torch.tensor(sel), dim=0)
+        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map)
+        self.mixed_type = self._data_system.mixed_type
+        self._ntypes = self._data_system.get_ntypes()
+        self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
+
+
+    def __len__(self):
+        return self._data_system.nframes
+
+    def __getitem__(self, index):
+        '''Get a frame from the selected system.'''
+        b_data = self._data_system._get_item(index)
+        b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
+        return b_data
