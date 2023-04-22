@@ -570,7 +570,7 @@ class DeepmdDataSet(Dataset):
         """
         pt_batch = self[sys_idx]
         np_batch = {}
-        for key in ['coord', 'box', 'force', 'energy']:
+        for key in ['coord', 'box', 'force', 'energy', 'virial']:
             if key in pt_batch.keys():
                 np_batch[key] = pt_batch[key].cpu().numpy()
         for key in ['atype', 'natoms']:
