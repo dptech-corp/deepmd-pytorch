@@ -21,7 +21,7 @@ def setup_seed(seed):
 class DpLoaderSet(Dataset):
     """A dataset for storing DataLoaders to multiple Systems."""
 
-    def __init__(self, systems, batch_size, model_params,seed):
+    def __init__(self, systems, batch_size, model_params,seed = 10):
         setup_seed(seed)
         if isinstance(systems, str):
             with h5py.File(systems) as file:
