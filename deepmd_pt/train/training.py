@@ -6,7 +6,7 @@ import math
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
-from deepmd_pt.utils.env import DEVICE, JIT
+from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
 from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
 from deepmd_pt.optimizer.LKF import LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
@@ -135,8 +135,8 @@ class Trainer(object):
             # DDP will guarantee the model parameters are identical across all processes
             self.wrapper = DDP(
                 self.wrapper,
-                device_ids=[self.rank],
-                output_device=self.rank,
+                device_ids=[LOCAL_RANK],
+                output_device=LOCAL_RANK,
                 find_unused_parameters=True, # TODO: otherwise the model might throw an error for attention layers
             )
 
@@ -385,4 +385,3 @@ class Trainer(object):
         print_str += "   %8.1e\n" % cur_lr
         fout.write(print_str)
         fout.flush()
-
