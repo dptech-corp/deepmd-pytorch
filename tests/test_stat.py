@@ -121,7 +121,7 @@ class TestDataset(unittest.TestCase):
         dp_random.seed(10)
         my_dataset = self.my_dataset
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
-        sampled = my_make(my_dataset, self.data_stat_nbatch)
+        my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
         for sys in sampled:
             for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
