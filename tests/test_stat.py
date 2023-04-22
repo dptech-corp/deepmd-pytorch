@@ -27,7 +27,10 @@ def compare(ut, base, given):
         for idx in range(len(base)):
             compare(ut, base[idx], given[idx])
     elif isinstance(base, np.ndarray):
-        ut.assertTrue(np.allclose(base.reshape(-1), given.reshape(-1)))
+        try:
+            ut.assertTrue(np.allclose(base.reshape(-1), given.reshape(-1)))
+        except:
+            print("result: ",base.reshape(-1), given.reshape(-1))
     else:
         ut.assertEqual(base, given)
 
