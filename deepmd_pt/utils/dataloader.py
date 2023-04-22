@@ -3,7 +3,7 @@ import os
 import queue
 import time
 from threading import Thread
-from typing import List
+from typing import Callable, Dict, List, Tuple, Type, Union
 
 import h5py
 import torch
@@ -11,7 +11,6 @@ import torch.distributed as dist
 from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.dataloader import default_collate
 from torch.utils.data.distributed import DistributedSampler
 
 
@@ -70,6 +69,7 @@ class DpLoaderSet(Dataset):
 _sentinel = object()
 QUEUESIZE = 32
 
+
 class BackgroundConsumer(Thread):
     def __init__(self, queue, source, max_len):
         Thread.__init__(self)
@@ -79,10 +79,11 @@ class BackgroundConsumer(Thread):
 
     def run(self):
         for item in self._source:
-            self._queue.put(item) # Blocking if the queue is full
+            self._queue.put(item)  # Blocking if the queue is full
 
         # Signal the consumer we are done.
         self._queue.put(_sentinel)
+
 
 class BufferedIterator(object):
     def __init__(self, iterable):
@@ -132,22 +133,46 @@ class BufferedIterator(object):
         return item
 
 
+def collate_tensor_fn(batch):
+    elem = batch[0]
+    out = None
+    if torch.utils.data.get_worker_info() is not None:
+        # If we're in a background process, concatenate directly into a
+        # shared memory tensor to avoid an extra copy
+        numel = sum(x.numel() for x in batch)
+        storage = elem._typed_storage()._new_shared(numel, device=elem.device)
+        out = elem.new(storage).resize_(len(batch), *list(elem.size()))
+    return torch.stack(batch, 0, out=out)
+
+
 def collate_batch(batch):
-    batch = default_collate(batch)
-    shift = batch["shift"]
-    mapping = batch["mapping"]
-    natoms_extended = max([item.shape[0] for item in shift])
-    n_frames = len(shift)
-    batch["shift"] = torch.zeros(
-        (n_frames, natoms_extended, 3),
-        dtype=env.GLOBAL_PT_FLOAT_PRECISION,
-        device=env.PREPROCESS_DEVICE,
-    )
-    batch["mapping"] = torch.zeros(
-        (n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE
-    )
-    for i in range(len(shift)):
-        natoms_tmp = shift[i].shape[0]
-        batch["shift"][i, :natoms_tmp] = shift[i]
-        batch["mapping"][i, :natoms_tmp] = mapping[i]
-    return batch
+    example = batch[0]
+    result = example.copy()
+    for key in example.keys():
+        if key == "shift" or key == "mapping":
+            natoms_extended = max([d[key].shape[0] for d in batch])
+            n_frames = len(batch)
+            list = []
+            for x in range(n_frames):
+                list.append(batch[x][key])
+            if key == "shift":
+                result[key] = torch.zeros(
+                    (n_frames, natoms_extended, 3),
+                    dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                    device=env.PREPROCESS_DEVICE,
+                )
+            else:
+                result[key] = torch.zeros(
+                    (n_frames, natoms_extended),
+                    dtype=torch.long,
+                    device=env.PREPROCESS_DEVICE,
+                )
+            for i in range(len(batch)):
+                natoms_tmp = list[i].shape[0]
+                result[key][i, :natoms_tmp] = list[i]
+        elif "find_" in key:
+            result[key] = batch[0][key]
+        else:
+            result[key] = collate_tensor_fn([d[key] for d in batch])
+
+    return result

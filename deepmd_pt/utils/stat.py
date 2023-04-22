@@ -2,9 +2,11 @@ import numpy as np
 import torch
 from collections import defaultdict
 from deepmd_pt.utils.dataloader import BufferedIterator
+from deepmd_pt.utils import env
+
 
 def make_stat_input(datasets, dataloaders, nbatches):
-    '''Pack data for statistics.
+    """Pack data for statistics.
 
     Args:
     - dataset: A list of dataset to analyze.
@@ -12,24 +14,58 @@ def make_stat_input(datasets, dataloaders, nbatches):
 
     Returns:
     - a list of dicts, each of which contains data from a system
-    '''
+    """
     lst = []
-    keys = ['coord', 'force', 'energy', 'atype', 'natoms', 'mapping', 'selected', 'selected_type', 'shift']
+    keys = [
+        "coord",
+        "force",
+        "energy",
+        "atype",
+        "natoms",
+        "mapping",
+        "selected",
+        "selected_type",
+        "shift",
+    ]
     if datasets[0].mixed_type:
-        keys += ['real_natoms_vec']
+        keys.append("real_natoms_vec")
     for i in range(len(datasets)):
         sys_stat = {key: [] for key in keys}
         iterator = iter(dataloaders[i])
         for _ in range(nbatches):
             try:
                 stat_data = next(iterator)
-            except:
+            except StopIteration:
                 iterator = iter(dataloaders[i])
                 stat_data = next(iterator)
             for dd in stat_data:
                 if dd in keys:
                     sys_stat[dd].append(stat_data[dd])
         for key in keys:
+            if key == "mapping" or key == "shift":
+                extend = max(d.shape[1] for d in sys_stat[key])
+                for jj in range(len(sys_stat[key])):
+                    l = []
+                    item = sys_stat[key][jj]
+                    for ii in range(item.shape[0]):
+                        l.append(item[ii])
+                    n_frames = len(item)
+                    if key == "shift":
+                        shape = torch.zeros(
+                            (n_frames, extend, 3),
+                            dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                            device=env.PREPROCESS_DEVICE,
+                        )
+                    else:
+                        shape = torch.zeros(
+                            (n_frames, extend),
+                            dtype=torch.long,
+                            device=env.PREPROCESS_DEVICE,
+                        )
+                    for i in range(len(item)):
+                        natoms_tmp = l[i].shape[0]
+                        shape[i, :natoms_tmp] = l[i]
+                    sys_stat[key][jj] = shape
             sys_stat[key] = torch.cat(sys_stat[key], dim=0)
         lst.append(sys_stat)
     return lst
