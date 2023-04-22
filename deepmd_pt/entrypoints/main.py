@@ -54,7 +54,7 @@ def test(FLAGS):
 def main(args=None):
     logging.basicConfig(
         level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
-        format='%(asctime)-15s [%(filename)s:%(lineno)d] %(levelname)s %(message)s'
+        format=f"%(asctime)-15s {os.environ.get('RANK') or ''} [%(filename)s:%(lineno)d] %(levelname)s %(message)s"
     )
     parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
