@@ -43,6 +43,9 @@ class DeepmdDataSystem(object):
             "if one of the set is of mixed_type format, "
             "then all of the sets in this system should be of mixed_type format!"
         )
+        if len(self._dirs)==0:
+            raise RuntimeError(f"No set found in system {sys_path}.")
+
         self.mixed_type = self._check_mode(self._dirs[0])
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
