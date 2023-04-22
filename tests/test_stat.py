@@ -11,7 +11,6 @@ from deepmd.utils.data_system import DeepmdDataSystem
 from deepmd.utils import random as tf_random
 from deepmd.common import expand_sys_str
 
-from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.descriptor.se_a import DescrptSeA
 from deepmd_pt.utils.stat import make_stat_input as my_make, compute_output_stats
@@ -94,7 +93,7 @@ class TestDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dp_fn.bias_atom_e, bias_atom_e[:,0]))
 
     def test_stat_input(self):
-        dp_random.seed(10)
+        torch.manual_seed(10)
         my_dataset = self.my_dataset
         my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
         # list of dicts, each dict contains samples from a system
@@ -118,7 +117,7 @@ class TestDataset(unittest.TestCase):
         box = self.dp_merged['box']
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
-        dp_random.seed(10)
+        torch.manual_seed(args.seed)
         my_dataset = self.my_dataset
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
