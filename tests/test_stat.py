@@ -117,7 +117,7 @@ class TestDataset(unittest.TestCase):
         box = self.dp_merged['box']
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
-        torch.manual_seed(args.seed)
+        torch.manual_seed(10)
         my_dataset = self.my_dataset
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
