@@ -4,6 +4,8 @@ import json
 import copy
 import os
 
+from torch.utils.data import DataLoader
+from deepmd_pt.utils.dataloader import BufferedIterator,DpLoaderSet
 from deepmd.common import expand_sys_str
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.model import EnergyModelSeA
@@ -22,15 +24,16 @@ def get_dataset(config):
     batch_size = config['training']['training_data']['batch_size']
     type_map = model_config['type_map']
 
-    dataset = DeepmdDataSet(
-        systems=systems,
-        batch_size=batch_size,
-        type_map=type_map,
-        rcut=rcut,
-        sel=sel
-    )
+    dataset = DpLoaderSet(systems,batch_size,
+        model_params={
+                'descriptor': {
+                    'sel': sel,
+                    'rcut': rcut,
+                },
+                'type_map': type_map
+            })
     data_stat_nbatch = model_config.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(dataset, data_stat_nbatch)
+    sampled = make_stat_input(dataset.systems, dataset.dataloaders, data_stat_nbatch)
     return dataset, sampled
 
 class TestSaveLoadDPA1(unittest.TestCase):
@@ -45,6 +48,14 @@ class TestSaveLoadDPA1(unittest.TestCase):
         self.task_key = "Default"
         self.input_dict, self.label_dict = self.get_data()
         self.start_lr = self.config['learning_rate']['start_lr']
+        self.training_dataloader = DataLoader(
+            self.dataset,
+            sampler=torch.utils.data.RandomSampler(self.dataset),
+            batch_size=None,
+            num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
+            drop_last=False,
+        )
+        self.training_data = BufferedIterator(iter(self.training_dataloader))
         
     def get_model_result(self, read=False, model_file='tmp_model.pt'):
         wrapper = self.create_wrapper()
@@ -64,7 +75,12 @@ class TestSaveLoadDPA1(unittest.TestCase):
         return ModelWrapper(model, self.loss)
         
     def get_data(self):
-        batch_data = self.dataset.get_training_batch()
+        try:
+            batch_data = next(iter(self.training_data))
+        except StopIteration:
+            # Refresh the status of the dataloader to start from a new epoch
+            self.training_data = BufferedIterator(iter(self.training_dataloader))
+            batch_data = next(iter(self.training_data))
         input_dict = {}
         for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
             if item in batch_data:
