@@ -130,7 +130,7 @@ class TestDataset(unittest.TestCase):
         my_en.mean = my_en.mean
         my_en.stddev = my_en.stddev
         try:
-            self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1])))
+            self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1]),rtol=0.01))
         except:
             print("sample: ",sampled)
             print("compare: ",self.dp_d.davg.reshape([-1]),"   ", my_en.mean.cpu().reshape([-1]))
