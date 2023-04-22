@@ -42,6 +42,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
                 if dd in keys:
                     sys_stat[dd].append(stat_data[dd])
         for key in keys:
+            '''
             if key == "mapping" or key == "shift":
                 extend = max(d.shape[1] for d in sys_stat[key])
                 for jj in range(len(sys_stat[key])):
@@ -66,6 +67,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
                         natoms_tmp = l[i].shape[0]
                         shape[i, :natoms_tmp] = l[i]
                     sys_stat[key][jj] = shape
+            '''
             sys_stat[key] = torch.cat(sys_stat[key], dim=0)
         lst.append(sys_stat)
     return lst
