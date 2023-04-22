@@ -129,7 +129,8 @@ class TestDataset(unittest.TestCase):
         my_en.compute_input_stats(sampled)
         my_en.mean = my_en.mean
         my_en.stddev = my_en.stddev
-        print(self.dp_d.davg.reshape([-1]),my_en.mean.cpu().reshape([-1]))
+        print ("sample",sampled)
+        print("compare: ",self.dp_d.davg.reshape([-1]),my_en.mean.cpu().reshape([-1]))
         self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1])))
         self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1])))
     
