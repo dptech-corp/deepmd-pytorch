@@ -45,6 +45,7 @@ class TestDataset(unittest.TestCase):
         self.systems = config['training']['validation_data']['systems']
         if isinstance(self.systems, str):
             self.systems = expand_sys_str(self.systems)
+        torch.manual_seed(10)
         self.my_dataset = DpLoaderSet(self.systems,self.batch_size,
         model_params={
                 'descriptor': {
@@ -59,8 +60,7 @@ class TestDataset(unittest.TestCase):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
-
-        torch.manual_seed(10)
+        
         my_dataset = self.my_dataset
         self.my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
 
@@ -131,12 +131,8 @@ class TestDataset(unittest.TestCase):
         my_en.compute_input_stats(sampled)
         my_en.mean = my_en.mean
         my_en.stddev = my_en.stddev
-        try:
-            self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1]),rtol=0.01))
-        except:
-            print("sample: ",sampled)
-            print("compare: ",self.dp_d.davg.reshape([-1]),"   ", my_en.mean.cpu().reshape([-1]))
-        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1]),rtol=0.01))
+        self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1])))
+        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1])))
     
 if __name__ == '__main__':
     unittest.main()
