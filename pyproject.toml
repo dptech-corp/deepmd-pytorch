@@ -15,7 +15,7 @@ classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
 ]
 dependencies = [
-     'torch >= 2',
+     'torch >= 2a',
      'tqdm',
      'h5py',
      'wandb',
