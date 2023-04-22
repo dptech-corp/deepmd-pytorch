@@ -45,7 +45,14 @@ class TestDataset(unittest.TestCase):
         self.systems = config['training']['validation_data']['systems']
         if isinstance(self.systems, str):
             self.systems = expand_sys_str(self.systems)
-        self.my_dataset = DeepmdDataSet(self.systems, self.batch_size, model_config['type_map'], self.rcut, self.sel)
+        self.my_dataset = DpLoaderSet(self.systems,self.batch_size,
+        model_params={
+                'descriptor': {
+                    'sel': self.sel,
+                    'rcut': self.rcut,
+                },
+                'type_map': model_config['type_map']
+            })
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.data_stat_nbatch = 2
@@ -88,7 +95,8 @@ class TestDataset(unittest.TestCase):
     def test_stat_input(self):
         dp_random.seed(10)
         my_dataset = self.my_dataset
-        my_sampled = my_make(my_dataset, self.data_stat_nbatch) # list of dicts, each dict contains samples from a system
+        my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
+        # list of dicts, each dict contains samples from a system
         dp_keys = set(self.dp_merged.keys()) # dict of list of batches
         self.dp_merged['natoms'] = self.dp_merged['natoms_vec']
         for key in dp_keys:
