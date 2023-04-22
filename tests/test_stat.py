@@ -15,6 +15,7 @@ from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.descriptor.se_a import DescrptSeA
 from deepmd_pt.utils.stat import make_stat_input as my_make, compute_output_stats
+from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils import env
 
 
