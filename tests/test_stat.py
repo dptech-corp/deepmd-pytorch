@@ -27,10 +27,7 @@ def compare(ut, base, given):
         for idx in range(len(base)):
             compare(ut, base[idx], given[idx])
     elif isinstance(base, np.ndarray):
-        try:
-            ut.assertTrue(np.allclose(base.reshape(-1), given.reshape(-1)))
-        except:
-            print("result: ",base.reshape(-1), given.reshape(-1))
+        ut.assertTrue(np.allclose(base.reshape(-1), given.reshape(-1)))
     else:
         ut.assertEqual(base, given)
 
@@ -62,6 +59,10 @@ class TestDataset(unittest.TestCase):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
+
+        torch.manual_seed(10)
+        my_dataset = self.my_dataset
+        self.my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
 
         tf_random.seed(10)
         dp_dataset = DeepmdDataSystem(self.systems, self.batch_size, 1, self.rcut)
@@ -96,9 +97,7 @@ class TestDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dp_fn.bias_atom_e, bias_atom_e[:,0]))
 
     def test_stat_input(self):
-        torch.manual_seed(10)
-        my_dataset = self.my_dataset
-        my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
+        my_sampled = self.my_sampled
         # list of dicts, each dict contains samples from a system
         dp_keys = set(self.dp_merged.keys()) # dict of list of batches
         self.dp_merged['natoms'] = self.dp_merged['natoms_vec']
@@ -111,10 +110,7 @@ class TestDataset(unittest.TestCase):
                 bsz = item['energy'].shape[0]//self.data_stat_nbatch
                 for j in range(self.data_stat_nbatch):
                     lst.append(item[key][j*bsz:(j+1)*bsz].cpu().numpy())
-            try:
                 compare(self, self.dp_merged[key], lst)
-            except:
-                print(key)
 
     def test_descriptor(self):
         coord = self.dp_merged['coord']
@@ -123,10 +119,8 @@ class TestDataset(unittest.TestCase):
         box = self.dp_merged['box']
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
-        torch.manual_seed(10)
-        my_dataset = self.my_dataset
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
-        sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
+        sampled = self.my_sampled
         for sys in sampled:
             for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
                 if key in sys.keys():
