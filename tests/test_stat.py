@@ -60,7 +60,7 @@ class TestDataset(unittest.TestCase):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
-        
+
         my_dataset = self.my_dataset
         self.my_sampled = my_make(my_dataset.systems, my_dataset.dataloaders, self.data_stat_nbatch)
 
@@ -110,10 +110,7 @@ class TestDataset(unittest.TestCase):
                 bsz = item['energy'].shape[0]//self.data_stat_nbatch
                 for j in range(self.data_stat_nbatch):
                     lst.append(item[key][j*bsz:(j+1)*bsz].cpu().numpy())
-                try:
-                    compare(self, self.dp_merged[key], lst)
-                except:
-                    print(key)
+                compare(self, self.dp_merged[key], lst)
 
     def test_descriptor(self):
         coord = self.dp_merged['coord']
