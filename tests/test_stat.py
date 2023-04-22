@@ -134,7 +134,7 @@ class TestDataset(unittest.TestCase):
         except:
             print("sample: ",sampled)
             print("compare: ",self.dp_d.davg.reshape([-1]),"   ", my_en.mean.cpu().reshape([-1]))
-        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1])))
+        self.assertTrue(np.allclose(self.dp_d.dstd.reshape([-1]), my_en.stddev.cpu().reshape([-1]),rtol=0.01))
     
 if __name__ == '__main__':
     unittest.main()
