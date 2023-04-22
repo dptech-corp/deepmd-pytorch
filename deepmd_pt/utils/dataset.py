@@ -89,7 +89,7 @@ class DeepmdDataSystem(object):
         self.prefix_sum = [0] * (len(self._dirs) +1)
         for item in self._dirs:
             frames = self._load_set(item, fast=True)
-            self.prefix_sum[i] += frames
+            self.prefix_sum[i] = self.prefix_sum[i - 1] + frames
             i += 1
             self.nframes += frames
 
