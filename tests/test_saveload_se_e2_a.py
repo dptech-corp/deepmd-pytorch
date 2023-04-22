@@ -43,11 +43,6 @@ class TestSaveLoadDPA1(unittest.TestCase):
             self.config = json.load(fin)
         self.config['loss']['starter_learning_rate'] = self.config['learning_rate']['start_lr']
         self.dataset, self.sampled = get_dataset(self.config)
-        self.loss = EnergyStdLoss(**self.config['loss'])
-        self.cur_lr = 1
-        self.task_key = "Default"
-        self.input_dict, self.label_dict = self.get_data()
-        self.start_lr = self.config['learning_rate']['start_lr']
         self.training_dataloader = DataLoader(
             self.dataset,
             sampler=torch.utils.data.RandomSampler(self.dataset),
@@ -56,6 +51,11 @@ class TestSaveLoadDPA1(unittest.TestCase):
             drop_last=False,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
+        self.loss = EnergyStdLoss(**self.config['loss'])
+        self.cur_lr = 1
+        self.task_key = "Default"
+        self.input_dict, self.label_dict = self.get_data()
+        self.start_lr = self.config['learning_rate']['start_lr']
         
     def get_model_result(self, read=False, model_file='tmp_model.pt'):
         wrapper = self.create_wrapper()
