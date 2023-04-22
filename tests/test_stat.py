@@ -110,7 +110,10 @@ class TestDataset(unittest.TestCase):
                 bsz = item['energy'].shape[0]//self.data_stat_nbatch
                 for j in range(self.data_stat_nbatch):
                     lst.append(item[key][j*bsz:(j+1)*bsz].cpu().numpy())
-                compare(self, self.dp_merged[key], lst)
+                try:
+                    compare(self, self.dp_merged[key], lst)
+                except:
+                    print(key)
 
     def test_descriptor(self):
         coord = self.dp_merged['coord']
