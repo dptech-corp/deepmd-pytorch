@@ -28,21 +28,25 @@ class EnergyModelSeA(BaseModel):
             NotImplementedError('Only descriptor `se_e2_a` is supported for se_a model!')
 
         # Statistics
-        for sys in sampled:
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
-                if key in sys.keys():
-                    sys[key] = sys[key].to(env.DEVICE)
-        self.descriptor.compute_input_stats(sampled)
+        if sampled:
+            for sys in sampled:
+                for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift', 'mapping']:
+                    if key in sys.keys():
+                        sys[key] = sys[key].to(env.DEVICE)
+            self.descriptor.compute_input_stats(sampled)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = self.descriptor.ntypes
         fitting_param['embedding_width'] = self.descriptor.dim_out
-        energy = [item['energy'] for item in sampled]
-        natoms = [item['natoms'] for item in sampled]
-        tmp = compute_output_stats(energy, natoms)
-        fitting_param['bias_atom_e'] = tmp[:, 0]
+        if sampled:
+            energy = [item['energy'] for item in sampled]
+            natoms = [item['natoms'] for item in sampled]
+            tmp = compute_output_stats(energy, natoms)
+            fitting_param['bias_atom_e'] = tmp[:, 0]
+        else:
+            fitting_param['bias_atom_e'] = torch.zeros(self.descriptor.ntypes)
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, box=None):

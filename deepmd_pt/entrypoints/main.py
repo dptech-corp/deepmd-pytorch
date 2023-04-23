@@ -37,7 +37,8 @@ def train(FLAGS):
     train_data = DpLoaderSet(training_systems,training_dataset_params['batch_size'],model_params)
     validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params)
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+    sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch) \
+        if not FLAGS.CKPT else None
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
