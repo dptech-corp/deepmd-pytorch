@@ -587,7 +587,7 @@ class DeepmdDataSet(Dataset):
 
 class DeepmdDataSetForLoader(Dataset):
 
-    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None):
+    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None, type_split=True):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -600,7 +600,7 @@ class DeepmdDataSetForLoader(Dataset):
             if isinstance(sel, int):
                 sel = [sel]
             sec = torch.cumsum(torch.tensor(sel), dim=0)
-        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map)
+        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,type_split=type_split)
         self.mixed_type = self._data_system.mixed_type
         self._ntypes = self._data_system.get_ntypes()
         self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
