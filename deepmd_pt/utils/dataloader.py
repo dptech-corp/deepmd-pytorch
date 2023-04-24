@@ -21,7 +21,7 @@ def setup_seed(seed):
 class DpLoaderSet(Dataset):
     """A dataset for storing DataLoaders to multiple Systems."""
 
-    def __init__(self, systems, batch_size, model_params,seed = 10):
+    def __init__(self, systems, batch_size, model_params,seed = 10,type_split = True):
         setup_seed(seed)
         if isinstance(systems, str):
             with h5py.File(systems) as file:
@@ -34,6 +34,7 @@ class DpLoaderSet(Dataset):
                 type_map=model_params["type_map"],
                 rcut=model_params["descriptor"]["rcut"],
                 sel=model_params["descriptor"]["sel"],
+                type_split=type_split
             )
             self.systems.append(ds)
         self.sampler_list: List[DistributedSampler] = []
