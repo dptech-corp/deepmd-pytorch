@@ -46,7 +46,7 @@ def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = inference.Trainer(config, FLAGS.CKPT)
+    trainer = inference.Trainer(config, FLAGS.CKPT, FLAGS.numb_test)
     trainer.run()
 
 
@@ -65,6 +65,7 @@ def main(args=None):
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+    test_parser.add_argument("-n", "--numb-test", default=100, type=int, help="The number of data for test")
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)
