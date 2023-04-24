@@ -51,7 +51,7 @@ class Trainer(object):
         self.save_freq = training_params.get("save_freq", 1000)
         self.opt_type = training_params.get("opt_type", "Adam")
         self.kf_blocksize = training_params.get("kf_blocksize", 5120)
-        self.kf_distributed = training_params.get("kf_distributed", False)
+        self.kf_distributed = dist.is_initialized()
         self.wandb_config = training_params.get("wandb_config", {})
         self.wandb_enabled = self.wandb_config.get("wandb_enabled", False)
         if self.wandb_enabled:
