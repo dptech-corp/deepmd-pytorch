@@ -193,9 +193,14 @@ class Trainer(object):
                 )
                 # [coord, atype, natoms, mapping, shift, selected, box]
                 model_pred = {"energy": p_energy, "force": p_force}
-                loss, more_loss = self.wrapper.loss[task_key](
-                    model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
-                )
+                if not dist.is_initialized():
+                    loss, more_loss = self.wrapper.loss[task_key](
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                    )
+                else:
+                   loss, more_loss = self.wrapper.module.loss[task_key](
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                    ) 
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
