@@ -51,7 +51,6 @@ class Trainer(object):
         self.save_freq = training_params.get("save_freq", 1000)
         self.opt_type = training_params.get("opt_type", "Adam")
         self.kf_blocksize = training_params.get("kf_blocksize", 5120)
-        self.kf_distributed = dist.is_initialized()
         self.wandb_config = training_params.get("wandb_config", {})
         self.wandb_enabled = self.wandb_config.get("wandb_enabled", False)
         if self.wandb_enabled:
@@ -185,7 +184,7 @@ class Trainer(object):
                 self.scheduler.step()
             elif self.opt_type == "LKF":
                 KFOptWrapper = KFOptimizerWrapper(
-                    self.wrapper, self.optimizer, 24, 6, self.kf_distributed
+                    self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                 )
                 _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
                 p_energy, p_force = KFOptWrapper.update_force(
