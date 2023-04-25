@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import torch
 from deepmd_pt.utils.preprocess import compute_smooth_weight
+from IPython import embed
 
 
 def _make_env_mat_se_a(selected, coord, rcut: float, ruct_smth: float):
@@ -21,7 +22,7 @@ def _make_env_mat_se_a(selected, coord, rcut: float, ruct_smth: float):
     t1 = diff / length ** 2
     weight = compute_smooth_weight(length, ruct_smth, rcut)
     env_mat_se_a = torch.cat([t0, t1], dim=-1) * weight * mask.unsqueeze(-1)
-    return env_mat_se_a
+    return env_mat_se_a, diff * mask.unsqueeze(-1)
 
 
 def prod_env_mat_se_a(
@@ -46,8 +47,8 @@ def prod_env_mat_se_a(
     """
     nnei = sec[-1]  # 总的邻居数量
     nframes = extended_coord.shape[0]  # 样本数量
-    _env_mat_se_a = _make_env_mat_se_a(selected, extended_coord, rcut, rcut_smth)  # shape [n_atom, dim, 4]
+    _env_mat_se_a, diff = _make_env_mat_se_a(selected, extended_coord, rcut, rcut_smth)  # shape [n_atom, dim, 4]
     t_avg = mean[atype]  # [n_atom, dim, 4]
     t_std = stddev[atype]  # [n_atom, dim, 4]
     env_mat_se_a = (_env_mat_se_a - t_avg) / t_std
-    return env_mat_se_a
+    return env_mat_se_a, diff

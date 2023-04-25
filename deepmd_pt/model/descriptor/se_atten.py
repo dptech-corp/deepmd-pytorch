@@ -11,6 +11,7 @@ except:
 
 from deepmd_pt.model.descriptor.descriptor import Descriptor
 from deepmd_pt.model.network.network import TypeFilter, NeighborWiseAttention
+from IPython import embed
 
 
 class DescrptSeAtten(Descriptor):
@@ -101,6 +102,13 @@ class DescrptSeAtten(Descriptor):
         """
         return self.filter_neuron[-1] * self.axis_neuron
 
+    @property
+    def dim_emb(self):
+        """
+        Returns the output dimension of embedding
+        """
+        return self.filter_neuron[-1]
+
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
         """
@@ -114,7 +122,7 @@ class DescrptSeAtten(Descriptor):
             index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
-            env_mat = prod_env_mat_se_a(
+            env_mat, _ = prod_env_mat_se_a(
                 extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
@@ -165,20 +173,22 @@ class DescrptSeAtten(Descriptor):
         - box: Tell simulation box with shape [nframes, 9].
 
         Returns:
-        - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
+        - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
+        - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         nloc = selected.shape[1]
-        dmatrix = prod_env_mat_se_a(
+        dmatrix, diff = prod_env_mat_se_a(
             extended_coord, selected, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth, self.sec)
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
 
+
         ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
                                     nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
         nei_mask = selected_type != self.ntypes
-        ret = self.dpa1_attention(ret, nei_mask, input_r)
+        ret = self.dpa1_attention(ret, nei_mask, input_r)  # shape is [nframes*nloc, self.neei, out_size]
         inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
         xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
         xyz_scatter /= self.nnei
@@ -186,7 +196,8 @@ class DescrptSeAtten(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron)
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
+               ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

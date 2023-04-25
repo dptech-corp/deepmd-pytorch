@@ -82,7 +82,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
             self.training_data = BufferedIterator(iter(self.training_dataloader))
             batch_data = next(iter(self.training_data))
         input_dict = {}
-        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
+        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'selected', 'selected_loc', 'selected_type', 'box']:
             if item in batch_data:
                 input_dict[item] = batch_data[item]
             else:

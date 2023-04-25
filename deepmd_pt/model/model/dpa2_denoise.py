@@ -2,15 +2,17 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task.ener import EnergyFittingNetType
+from deepmd_pt.model.task.denoise import DenoiseNet
+from deepmd_pt.model.task.type_predict import TypePredictNet
 from deepmd_pt.model.network import TypeEmbedNet
+from deepmd_pt.model.backbone.evoformer2b import Evoformer2bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 from IPython import embed
 
 
-class EnergyModelDPA1(BaseModel):
+class DenoiseModelDPA2(BaseModel):
 
     def __init__(self, model_params, sampled):
         """Based on components, construct a DPA-1 model for energy.
@@ -19,7 +21,7 @@ class EnergyModelDPA1(BaseModel):
         - model_params: The Dict-like configuration with model options.
         - sampled: The sampled dataset for stat.
         """
-        super(EnergyModelDPA1, self).__init__()
+        super(DenoiseModelDPA2, self).__init__()
         # Descriptor + Type Embedding Net
         ntypes = len(model_params['type_map'])
         self.ntypes = ntypes
@@ -40,7 +42,7 @@ class EnergyModelDPA1(BaseModel):
 
         self.descriptor_type = descriptor_param['type']
 
-        assert self.descriptor_type == 'se_atten', 'Only descriptor `se_atten` is supported for DPA-1!'
+        assert self.descriptor_type == 'se_atten', 'Only descriptor `se_atten` is supported for DPA-2!'
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
@@ -49,21 +51,23 @@ class EnergyModelDPA1(BaseModel):
                 sys[key] = sys[key].to(env.DEVICE)
         self.descriptor.compute_input_stats(sampled)
 
-        # Fitting
-        fitting_param = model_params.pop('fitting_net')
-        assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
-        fitting_param['ntypes'] = 1
-        fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-        energy = [item['energy'] for item in sampled]
-        mixed_type = 'real_natoms_vec' in sampled[0]
-        if mixed_type:
-            input_natoms = [item['real_natoms_vec'] for item in sampled]
+        # BackBone
+        backbone_param = model_params.pop('backbone')
+        backbone_type = backbone_param.pop('type')
+        backbone_param['atomic_dim'] = self.descriptor.dim_out
+        backbone_param['pair_dim'] = self.descriptor.dim_emb
+        backbone_param['nnei'] = self.descriptor.nnei
+        if backbone_type == 'evo-2b':
+            self.backbone = Evoformer2bBackBone(**backbone_param)
         else:
-            input_natoms = [item['natoms'] for item in sampled]
-        tmp = compute_output_stats(energy, input_natoms)
-        fitting_param['bias_atom_e'] = tmp[:, 0]
-        fitting_param['use_tebd'] = True
-        self.fitting_net = EnergyFittingNetType(**fitting_param)
+            NotImplementedError(f"Unknown backbone type {backbone_type}!")
+
+        assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
+        # Denoise and predict
+        self.coord_denoise_net = DenoiseNet(self.backbone.attn_head, self.backbone.activation_function)
+        self.type_predict_net = TypePredictNet(self.backbone.feature_dim, self.ntypes - 1,
+                                               # last type is `MASKED_TOKEN`
+                                               self.backbone.activation_function)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
         """Return total energy of the system.
@@ -81,25 +85,22 @@ class EnergyModelDPA1(BaseModel):
         # coord nframes x nloc x 3
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
-        extended_coord.requires_grad_(True)
+        # extended_coord.requires_grad_(True)
         atype_tebd = self.type_embedding(atype)
         selected_type[selected_type == -1] = self.ntypes
         nlist_tebd = self.type_embedding(selected_type)
+        nnei_mask = selected != -1
+        padding_selected_loc = selected_loc * nnei_mask
 
-        descriptor, env_mat, _ = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
-        atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
-        energy = atom_energy.sum(dim=1)
-        faked_grad = torch.ones_like(energy)
-        lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-        extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-        assert extended_force is not None
-        virial = -torch.transpose(extended_coord, 1, 2)@extended_force
-        mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
-        force = torch.zeros_like(coord)
-        force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
-        force = -force
-        model_predict = {'energy': energy,
-                         'force': force,
-                         'virial': virial,
+        descriptor, env_mat, diff = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
+        atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep = \
+            self.backbone(descriptor, env_mat, padding_selected_loc, selected_type, nnei_mask)
+
+        updated_coord = self.coord_denoise_net(coord, delta_pair_rep, diff, nnei_mask)
+        logits = self.type_predict_net(atomic_rep)
+        model_predict = {'updated_coord': updated_coord,
+                         'logits': logits,
+                         'norm_x': norm_x,
+                         'norm_delta_pair_rep': norm_delta_pair_rep,
                          }
         return model_predict

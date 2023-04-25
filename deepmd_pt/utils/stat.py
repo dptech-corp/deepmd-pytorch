@@ -24,6 +24,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
         "natoms",
         "mapping",
         "selected",
+        "selected_loc",
         "selected_type",
         "shift",
     ]
