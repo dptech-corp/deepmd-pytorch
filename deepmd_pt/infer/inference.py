@@ -1,4 +1,6 @@
+import logging
 import math
+from copy import deepcopy
 from typing import Any, Dict
 
 import torch
@@ -29,25 +31,13 @@ class Trainer(object):
 
         # Data + Model
         dp_random.seed(training_params['seed'])
-        dataset_params = training_params.pop('validation_data')
-        systems = dataset_params['systems']
-        data = DpLoaderSet(systems, dataset_params['batch_size'], model_params)
-        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        sampled = make_stat_input(data.systems, data.dataloaders, data_stat_nbatch)
-
-        self.dataloader = DataLoader(
-            data,
-            sampler=torch.utils.data.RandomSampler(data),
-            batch_size=None,
-            num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
-            drop_last=False,
-        )
-        self.data = BufferedIterator(iter(self.dataloader))
+        self.dataset_params = training_params.pop('validation_data')
+        self.model_params = deepcopy(model_params)
 
         if model_params["descriptor"]["type"] == "se_e2_a":
-            self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
+            self.model = EnergyModelSeA(model_params).to(DEVICE)
         elif model_params["descriptor"]["type"] == "se_atten":
-            self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+            self.model = EnergyModelDPA1(model_params).to(DEVICE)
         else:
             raise NotImplementedError
 
@@ -65,8 +55,8 @@ class Trainer(object):
         loss_params["starter_learning_rate"] = 1.0 # TODO: lr here is useless
         self.loss = EnergyStdLoss(**loss_params)
 
-    def get_data(self):
-        batch_data = next(iter(self.data))
+    def get_data(self, data):
+        batch_data = next(iter(data))
         for key in batch_data.keys():
             batch_data[key] = batch_data[key].to(DEVICE)
         input_dict = {}
@@ -91,22 +81,51 @@ class Trainer(object):
         return input_dict, label_dict
 
     def run(self):
-        single_results = {}
-        sum_natoms = 0
-        for _ in range(self.numb_test):
-            try:
-                input_dict, label_dict = self.get_data()
-            except StopIteration:
-                break
-            model_pred, _, _ = self.wrapper(**input_dict)
-            _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0) # TODO: lr here is useless
-            natoms = input_dict["natoms"][0, 0]
-            sum_natoms += natoms
-            for k, v in more_loss.items():
-                if "rmse" in k:
-                    single_results[k] = single_results.get(k, 0.0) + v**2 * natoms
-        results = {
-            k: math.sqrt(v / sum_natoms) for k, v in single_results.items()
+        systems = self.dataset_params["systems"]
+        system_results = {}
+        global_sum_natoms = 0
+        for system in systems:
+            logging.info("# ---------------output of dp test--------------- ")
+            logging.info(f"# testing system : {system}")
+            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params)
+            dataloader = DataLoader(
+                dataset,
+                sampler=torch.utils.data.RandomSampler(dataset),
+                batch_size=None,
+                num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
+                drop_last=False,
+            )
+            data = BufferedIterator(iter(dataloader))
+
+            single_results = {}
+            sum_natoms = 0
+            for _ in range(self.numb_test):
+                try:
+                    input_dict, label_dict = self.get_data(data)
+                except StopIteration:
+                    break
+                model_pred, _, _ = self.wrapper(**input_dict)
+                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0) # TODO: lr here is useless
+                natoms = input_dict["natoms"][0, 0]
+                sum_natoms += natoms
+                for k, v in more_loss.items():
+                    if "rmse" in k:
+                        single_results[k] = single_results.get(k, 0.0) + v**2 * natoms
+            results = {
+                k: math.sqrt(v / sum_natoms) for k, v in single_results.items()
+            }
+            for item in sorted(list(results.keys())):
+                logging.info(f"{item}: {results[item]:.4f}")
+            logging.info("# ----------------------------------------------- ")
+            for k, v in single_results.items():
+                system_results[k] = system_results.get(k, 0.0) + v
+            global_sum_natoms += sum_natoms
+
+        global_results = {
+            k: math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
         }
-        for item in sorted(list(results.keys())):
-            print(f"{item}: {results[item]:.4f}")
+        logging.info("# ----------weighted average of errors----------- ")
+        logging.info(f"# number of systems : {len(systems)}")
+        for item in sorted(list(global_results.keys())):
+            logging.info(f"{item}: {global_results[item]:.4f}")
+        logging.info("# ----------------------------------------------- ")
