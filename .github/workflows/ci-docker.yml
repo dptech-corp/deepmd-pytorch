@@ -1,7 +1,9 @@
 name: Build docker image and push to Docker Hub
 
 on:
-  - push
+  push:
+    tags:
+      - '*'
 
 jobs:
   build-n-push:
@@ -42,8 +44,7 @@ jobs:
         password: ${{ secrets.MAILPASSWORD }}
         subject: Docker Auto Build for DeePMD-Pytorch
         body: |
-          Docker image has been pushed to dp-hpc-registry.cn-wulanchabu.cr.aliyuncs.com/eflops/deepmd-pytorch
-          Tags: ${{ steps.meta.outputs.tags }}
+          Docker image has been pushed to ${{ steps.meta.outputs.tags }}
         to: ${{ secrets.MAIL_RECEIVER_LIST }}
         from: Github Actions
         content_type: text
