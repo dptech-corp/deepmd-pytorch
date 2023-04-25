@@ -4,4 +4,4 @@ FROM python:3.8
 # RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 # RUN pip install ipykernel
 COPY . .
-RUN pip install --no-cache-dir .
+RUN pip install -v -v -v .
