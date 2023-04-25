@@ -12,6 +12,8 @@ from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 def setup_seed(seed):

@@ -9,7 +9,6 @@ except:
     from torch.jit import Final
 
 from deepmd_pt.utils.utils import get_activation_fn
-from IPython import embed
 
 
 def Tensor(*shape):
@@ -577,12 +576,12 @@ class Evoformer2bEncoder(torch.nn.Module):
         else:
             self.atomic_residual = False
         self.in_proj = SimpleLinear(self.atomic_dim, self.feature_dim, bavg=0., stddev=1., use_timestep=False,
-                                    activate=activation_function)  # TODO
+                                    activate='tanh')  # TODO
         self.out_proj = SimpleLinear(self.feature_dim, self.atomic_dim, bavg=0., stddev=1., use_timestep=False,
-                                     activate=activation_function)
+                                     activate='tanh')
         if self._emb_layer_norm:
             self.emb_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.in_proj_pair = NonLinearHead(self.pair_dim, self.attn_head, activation_fn=activation_function)
+        self.in_proj_pair = NonLinearHead(self.pair_dim, self.attn_head, activation_fn=None)
         evoformer_encoder_layers = []
         for i in range(self.layer_num):
             evoformer_encoder_layers.append(EvoformerEncoderLayer(
@@ -617,6 +616,8 @@ class Evoformer2bEncoder(torch.nn.Module):
         - norm_delta_pair_rep: Normalization loss of delta_pair_rep.
         """
         # Global branch
+        # input_rep = atomic_rep.detach()
+        # in_pair = pair_rep.detach()
         nframes, nloc, _ = atomic_rep.size()
         nnei = pair_rep.shape[2]
         # [nframes, nloc, feature_dim]
@@ -628,18 +629,28 @@ class Evoformer2bEncoder(torch.nn.Module):
         if self._emb_layer_norm:
             atomic_rep = self.emb_layer_norm(atomic_rep)
 
+        # in_atomic_rep = atomic_rep.detach()
+
         # Local branch
         # [nframes, nloc, nnei, attn_head]
         pair_rep = self.in_proj_pair(pair_rep)
         # [nframes, attn_head, nloc, nnei]
         pair_rep = pair_rep.permute(0, 3, 1, 2).contiguous()
+        # input_pair_rep_2 = pair_rep.detach()
         input_pair_rep = pair_rep
         pair_rep = pair_rep.masked_fill(~nlist_mask.unsqueeze(1), float("-inf"))
+
+        pair_layer = []
+        atomic_layer = []
+        pair_layer.append(pair_rep)
+        atomic_layer.append(atomic_rep)
 
         for i in range(self.layer_num):
             atomic_rep, pair_rep, _ = self.evoformer_encoder_layers[i](
                 atomic_rep, attn_bias=pair_rep, nlist_mask=nlist_mask, nlist=nlist, return_attn=True
             )
+            pair_layer.append(pair_rep)
+            atomic_layer.append(atomic_rep)
 
         def norm_loss(x, eps=1e-10, tolerance=1.0):
             # x = x.float()

@@ -10,7 +10,6 @@ import torch.distributed as dist
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
-from IPython import embed
 
 from deepmd_pt.utils.stat import make_stat_input
 

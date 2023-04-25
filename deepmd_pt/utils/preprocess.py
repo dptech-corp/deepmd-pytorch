@@ -2,7 +2,6 @@ import logging
 import numpy as np
 import torch
 from deepmd_pt.utils import env
-from IPython import embed
 
 
 class Region3D(object):

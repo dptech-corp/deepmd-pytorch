@@ -4,7 +4,6 @@ from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
 from deepmd_pt.loss.loss import TaskLoss
 import torch.nn.functional as F
 from deepmd_pt.utils import env
-from IPython import embed
 
 
 class DenoiseLoss(TaskLoss):
@@ -42,9 +41,6 @@ class DenoiseLoss(TaskLoss):
         """
         updated_coord = model_pred["updated_coord"]
         logits = model_pred["logits"]
-        norm_x = model_pred["norm_x"]
-        norm_delta_pair_rep = model_pred["norm_delta_pair_rep"]
-
         clean_coord = label["clean_coord"]
         clean_type = label["clean_type"]
         coord_mask = label['coord_mask']
@@ -95,6 +91,8 @@ class DenoiseLoss(TaskLoss):
             loss += self.masked_token_loss * token_loss
             more_loss['token_error'] = token_loss.detach()
         if self.has_norm:
+            norm_x = model_pred["norm_x"]
+            norm_delta_pair_rep = model_pred["norm_delta_pair_rep"]
             loss += self.norm_loss * (norm_x + norm_delta_pair_rep)
             more_loss['norm_loss'] = norm_x.detach() + norm_delta_pair_rep.detach()
 

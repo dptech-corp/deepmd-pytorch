@@ -11,12 +11,12 @@ from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
 from deepmd_pt.optimizer.LKF import LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
-from IPython import embed
+
 
 import wandb as wb
 
@@ -102,18 +102,21 @@ class Trainer(object):
         else:
             self.valid_numb_batch = 1
 
-        if model_params.get("backbone", None) is None:
-            if model_params["descriptor"]["type"] == "se_e2_a":
-                self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
-            elif model_params["descriptor"]["type"] == "se_atten":
-                self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+        if model_params.get("fitting_net", None) is not None:
+            if model_params.get("backbone", None) is None:
+                if model_params["descriptor"]["type"] == "se_e2_a":
+                    self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
+                elif model_params["descriptor"]["type"] == "se_atten":
+                    self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+                else:
+                    raise NotImplementedError
             else:
-                raise NotImplementedError
+                self.model = EnergyModelDPA2(model_params, sampled).to(DEVICE)
         else:
-            if model_params["descriptor"]["type"] == "se_atten":
-                self.model = DenoiseModelDPA2(model_params, sampled).to(DEVICE)
+            if model_params.get("backbone", None) is None:
+                self.model = DenoiseModelDPA1(model_params, sampled).to(DEVICE)
             else:
-                raise NotImplementedError
+                self.model = DenoiseModelDPA2(model_params, sampled).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop("learning_rate")

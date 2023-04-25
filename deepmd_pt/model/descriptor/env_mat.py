@@ -2,7 +2,6 @@ import logging
 import numpy as np
 import torch
 from deepmd_pt.utils.preprocess import compute_smooth_weight
-from IPython import embed
 
 
 def _make_env_mat_se_a(selected, coord, rcut: float, ruct_smth: float):

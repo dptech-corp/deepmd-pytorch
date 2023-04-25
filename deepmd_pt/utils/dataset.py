@@ -11,7 +11,6 @@ from tqdm import trange
 import h5py
 import torch.distributed as dist
 from deepmd_pt.utils.cache import lru_cache
-from IPython import embed
 
 
 class DeepmdDataSystem(object):
@@ -150,84 +149,84 @@ class DeepmdDataSystem(object):
             'high_prec': high_prec
         }
 
-    # # deprecated TODO
-    # def get_batch_for_train(self, batch_size: int):
-    #     '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
-    #
-    #     Args:
-    #     - batch_size: Frame count.
-    #     '''
-    #     if not hasattr(self, '_frames'):
-    #         self.set_size = 0
-    #         self._set_count = 0
-    #         self._iterator = 0
-    #     if batch_size == 'auto':
-    #         batch_size = -(-32 // self._natoms)
-    #     if self._iterator + batch_size > self.set_size:
-    #         set_idx = self._set_count % len(self._dirs)
-    #         if self.sets[set_idx] is None:
-    #             frames = self._load_set(self._dirs[set_idx])
-    #             frames = self.preprocess(frames)
-    #             cnt = 0
-    #             for item in self.sets:
-    #                 if item is not None:
-    #                     cnt += 1
-    #             if cnt < env.CACHE_PER_SYS:
-    #                 self.sets[set_idx] = frames
-    #         else:
-    #             frames = self.sets[set_idx]
-    #         self._frames = frames
-    #         self._shuffle_data()
-    #         if dist.is_initialized():
-    #             world_size = dist.get_world_size()
-    #             rank = dist.get_rank()
-    #             ssize = self._frames['coord'].shape[0]
-    #             subsize = ssize // world_size
-    #             self._iterator = rank * subsize
-    #             self.set_size = min((rank + 1) * subsize, ssize)
-    #         else:
-    #             self.set_size = self._frames['coord'].shape[0]
-    #             self._iterator = 0
-    #         self._set_count += 1
-    #     iterator = min(self._iterator + batch_size, self.set_size)
-    #     idx = np.arange(self._iterator, iterator)
-    #     self._iterator += batch_size
-    #     return self._get_subdata(idx)
-
     # deprecated TODO
-    # def get_batch(self, batch_size: int):
-    #     '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
-    #     Args:
-    #     - batch_size: Frame count.
-    #     '''
-    #     if not hasattr(self, '_frames'):
-    #         self.set_size = 0
-    #         self._set_count = 0
-    #         self._iterator = 0
-    #     if batch_size == 'auto':
-    #         batch_size = -(-32 // self._natoms)
-    #     if self._iterator + batch_size > self.set_size:
-    #         set_idx = self._set_count % len(self._dirs)
-    #         if self.sets[set_idx] is None:
-    #             frames = self._load_set(self._dirs[set_idx])
-    #             frames = self.preprocess(frames)
-    #             cnt = 0
-    #             for item in self.sets:
-    #                 if not item is None:
-    #                     cnt += 1
-    #             if cnt < env.CACHE_PER_SYS:
-    #                 self.sets[set_idx] = frames
-    #         else:
-    #             frames = self.sets[set_idx]
-    #         self._frames = frames
-    #         self._shuffle_data()
-    #         self.set_size = self._frames['coord'].shape[0]
-    #         self._iterator = 0
-    #         self._set_count += 1
-    #     iterator = min(self._iterator + batch_size, self.set_size)
-    #     idx = np.arange(self._iterator, iterator)
-    #     self._iterator += batch_size
-    #     return self._get_subdata(idx)
+    def get_batch_for_train(self, batch_size: int):
+        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+
+        Args:
+        - batch_size: Frame count.
+        '''
+        if not hasattr(self, '_frames'):
+            self.set_size = 0
+            self._set_count = 0
+            self._iterator = 0
+        if batch_size == 'auto':
+            batch_size = -(-32 // self._natoms)
+        if self._iterator + batch_size > self.set_size:
+            set_idx = self._set_count % len(self._dirs)
+            if self.sets[set_idx] is None:
+                frames = self._load_set(self._dirs[set_idx])
+                frames = self.preprocess(frames)
+                cnt = 0
+                for item in self.sets:
+                    if item is not None:
+                        cnt += 1
+                if cnt < env.CACHE_PER_SYS:
+                    self.sets[set_idx] = frames
+            else:
+                frames = self.sets[set_idx]
+            self._frames = frames
+            self._shuffle_data()
+            if dist.is_initialized():
+                world_size = dist.get_world_size()
+                rank = dist.get_rank()
+                ssize = self._frames['coord'].shape[0]
+                subsize = ssize // world_size
+                self._iterator = rank * subsize
+                self.set_size = min((rank + 1) * subsize, ssize)
+            else:
+                self.set_size = self._frames['coord'].shape[0]
+                self._iterator = 0
+            self._set_count += 1
+        iterator = min(self._iterator + batch_size, self.set_size)
+        idx = np.arange(self._iterator, iterator)
+        self._iterator += batch_size
+        return self._get_subdata(idx)
+
+
+    def get_batch(self, batch_size: int):
+        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        Args:
+        - batch_size: Frame count.
+        '''
+        if not hasattr(self, '_frames'):
+            self.set_size = 0
+            self._set_count = 0
+            self._iterator = 0
+        if batch_size == 'auto':
+            batch_size = -(-32 // self._natoms)
+        if self._iterator + batch_size > self.set_size:
+            set_idx = self._set_count % len(self._dirs)
+            if self.sets[set_idx] is None:
+                frames = self._load_set(self._dirs[set_idx])
+                frames = self.preprocess(frames)
+                cnt = 0
+                for item in self.sets:
+                    if not item is None:
+                        cnt += 1
+                if cnt < env.CACHE_PER_SYS:
+                    self.sets[set_idx] = frames
+            else:
+                frames = self.sets[set_idx]
+            self._frames = frames
+            self._shuffle_data()
+            self.set_size = self._frames['coord'].shape[0]
+            self._iterator = 0
+            self._set_count += 1
+        iterator = min(self._iterator + batch_size, self.set_size)
+        idx = np.arange(self._iterator, iterator)
+        self._iterator += batch_size
+        return self._get_subdata(idx)
 
     def get_ntypes(self):
         '''Number of atom types in the system.'''
@@ -417,62 +416,62 @@ class DeepmdDataSystem(object):
                 data = np.zeros([nframes, ndof]).astype(env.GLOBAL_NP_FLOAT_PRECISION)
             return np.float32(0.0), data
 
-    # # deprecated TODO
-    # def preprocess(self, batch):
-    #     n_frames = batch['coord'].shape[0]
-    #     for kk in self._data_dict.keys():
-    #         if "find_" in kk:
-    #             pass
-    #         else:
-    #             batch[kk] = torch.tensor(batch[kk], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
-    #             if self._data_dict[kk]['atomic']:
-    #                 batch[kk] = batch[kk].view(n_frames, -1, self._data_dict[kk]['ndof'])
-    #
-    #     for kk in ['type', 'real_natoms_vec']:
-    #         if kk in batch.keys():
-    #             batch[kk] = torch.tensor(batch[kk], dtype=torch.long, device=env.PREPROCESS_DEVICE)
-    #     batch['atype'] = batch.pop('type')
-    #
-    #     keys = ['selected', 'selected_loc', 'selected_type', 'shift', 'mapping']
-    #     coord = batch['coord']
-    #     atype = batch['atype']
-    #     box = batch['box']
-    #     rcut = self.rcut
-    #     sec = self.sec
-    #     assert batch['atype'].max() < len(self._type_map)
-    #     selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
-    #
-    #     for sid in trange(n_frames, disable=None):
-    #         region = Region3D(box[sid])
-    #         nloc = atype[sid].shape[0]
-    #         _coord = normalize_coord(coord[sid], region, nloc)
-    #         coord[sid] = _coord
-    #         a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
-    #         selected.append(a)
-    #         selected_loc.append(b)
-    #         selected_type.append(c)
-    #         shift.append(d)
-    #         mapping.append(e)
-    #     selected = torch.stack(selected)
-    #     selected_type = torch.stack(selected_type)
-    #     batch['selected'] = selected
-    #     batch['selected_loc'] = selected_loc
-    #     batch['selected_type'] = selected_type
-    #     natoms_extended = max([item.shape[0] for item in shift])
-    #     batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION,
-    #                                  device=env.PREPROCESS_DEVICE)
-    #     batch['mapping'] = torch.zeros((n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE)
-    #     for i in range(len(shift)):
-    #         natoms_tmp = shift[i].shape[0]
-    #         batch['shift'][i, :natoms_tmp] = shift[i]
-    #         batch['mapping'][i, :natoms_tmp] = mapping[i]
-    #     return batch
+    # deprecated TODO
+    def preprocess(self, batch):
+        n_frames = batch['coord'].shape[0]
+        for kk in self._data_dict.keys():
+            if "find_" in kk:
+                pass
+            else:
+                batch[kk] = torch.tensor(batch[kk], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+                if self._data_dict[kk]['atomic']:
+                    batch[kk] = batch[kk].view(n_frames, -1, self._data_dict[kk]['ndof'])
 
-    # def _shuffle_data(self):
-    #     nframes = self._frames['coord'].shape[0]
-    #     idx = np.arange(nframes)
-    #     dp_random.shuffle(idx)
-    #     self.idx_mapping = idx
+        for kk in ['type', 'real_natoms_vec']:
+            if kk in batch.keys():
+                batch[kk] = torch.tensor(batch[kk], dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        batch['atype'] = batch.pop('type')
+
+        keys = ['selected', 'selected_loc', 'selected_type', 'shift', 'mapping']
+        coord = batch['coord']
+        atype = batch['atype']
+        box = batch['box']
+        rcut = self.rcut
+        sec = self.sec
+        assert batch['atype'].max() < len(self._type_map)
+        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
+
+        for sid in trange(n_frames, disable=None):
+            region = Region3D(box[sid])
+            nloc = atype[sid].shape[0]
+            _coord = normalize_coord(coord[sid], region, nloc)
+            coord[sid] = _coord
+            a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
+            selected.append(a)
+            selected_loc.append(b)
+            selected_type.append(c)
+            shift.append(d)
+            mapping.append(e)
+        selected = torch.stack(selected)
+        selected_type = torch.stack(selected_type)
+        batch['selected'] = selected
+        batch['selected_loc'] = selected_loc
+        batch['selected_type'] = selected_type
+        natoms_extended = max([item.shape[0] for item in shift])
+        batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                                     device=env.PREPROCESS_DEVICE)
+        batch['mapping'] = torch.zeros((n_frames, natoms_extended), dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        for i in range(len(shift)):
+            natoms_tmp = shift[i].shape[0]
+            batch['shift'][i, :natoms_tmp] = shift[i]
+            batch['mapping'][i, :natoms_tmp] = mapping[i]
+        return batch
+
+    def _shuffle_data(self):
+        nframes = self._frames['coord'].shape[0]
+        idx = np.arange(nframes)
+        dp_random.shuffle(idx)
+        self.idx_mapping = idx
 
     def _get_subdata(self, idx=None):
         data = self._frames

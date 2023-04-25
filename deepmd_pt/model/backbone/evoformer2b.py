@@ -10,7 +10,6 @@ except:
 
 from deepmd_pt.model.backbone.backbone import BackBone
 from deepmd_pt.model.network.network import Evoformer2bEncoder
-from IPython import embed
 
 
 class Evoformer2bBackBone(BackBone):

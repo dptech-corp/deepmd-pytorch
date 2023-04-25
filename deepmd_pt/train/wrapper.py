@@ -5,7 +5,7 @@ from typing import Dict, Union
 
 if torch.__version__.startswith("2"):
     import torch._dynamo
-from IPython import embed
+
 
 class ModelWrapper(torch.nn.Module):
 

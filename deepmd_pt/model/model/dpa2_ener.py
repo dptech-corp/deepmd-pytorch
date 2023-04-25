@@ -7,11 +7,12 @@ from deepmd_pt.model.task.type_predict import TypePredictNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.backbone.evoformer2b import Evoformer2bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
+from deepmd_pt.model.task.ener import EnergyFittingNetType
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
 
-class DenoiseModelDPA2(BaseModel):
+class EnergyModelDPA2(BaseModel):
 
     def __init__(self, model_params, sampled):
         """Based on components, construct a DPA-1 model for energy.
@@ -20,7 +21,7 @@ class DenoiseModelDPA2(BaseModel):
         - model_params: The Dict-like configuration with model options.
         - sampled: The sampled dataset for stat.
         """
-        super(DenoiseModelDPA2, self).__init__()
+        super(EnergyModelDPA2, self).__init__()
         # Descriptor + Type Embedding Net
         ntypes = len(model_params['type_map'])
         self.ntypes = ntypes
@@ -61,12 +62,21 @@ class DenoiseModelDPA2(BaseModel):
         else:
             NotImplementedError(f"Unknown backbone type {backbone_type}!")
 
-        assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
-        # Denoise and predict
-        self.coord_denoise_net = DenoiseNet(self.backbone.attn_head, self.backbone.activation_function)
-        self.type_predict_net = TypePredictNet(self.backbone.feature_dim, self.ntypes - 1,
-                                               # last type is `MASKED_TOKEN`
-                                               self.backbone.activation_function)
+        # Fitting
+        fitting_param = model_params.pop('fitting_net')
+        assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
+        fitting_param['ntypes'] = 1
+        fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
+        energy = [item['energy'] for item in sampled]
+        mixed_type = 'real_natoms_vec' in sampled[0]
+        if mixed_type:
+            input_natoms = [item['real_natoms_vec'] for item in sampled]
+        else:
+            input_natoms = [item['natoms'] for item in sampled]
+        tmp = compute_output_stats(energy, input_natoms)
+        fitting_param['bias_atom_e'] = tmp[:, 0]
+        fitting_param['use_tebd'] = True
+        self.fitting_net = EnergyFittingNetType(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
         """Return total energy of the system.
@@ -95,11 +105,19 @@ class DenoiseModelDPA2(BaseModel):
         atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep = \
             self.backbone(descriptor, env_mat, padding_selected_loc, selected_type, nnei_mask)
 
-        updated_coord = self.coord_denoise_net(coord, delta_pair_rep, diff, nnei_mask)
-        logits = self.type_predict_net(atomic_rep)
-        model_predict = {'updated_coord': updated_coord,
-                         'logits': logits,
-                         'norm_x': norm_x,
-                         'norm_delta_pair_rep': norm_delta_pair_rep,
+        atom_energy = self.fitting_net(transformed_atomic_rep, atype, atype_tebd)
+        energy = atom_energy.sum(dim=1)
+        faked_grad = torch.ones_like(energy)
+        lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
+        extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+        assert extended_force is not None
+        virial = -torch.transpose(extended_coord, 1, 2) @ extended_force
+        mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
+        force = torch.zeros_like(coord)
+        force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
+        force = -force
+        model_predict = {'energy': energy,
+                         'force': force,
+                         'virial': virial,
                          }
         return model_predict

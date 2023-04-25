@@ -10,7 +10,6 @@ except:
 
 from deepmd_pt.model.network.network import MaskLMHead
 from deepmd_pt.model.task.task import TaskBaseMethod
-from IPython import embed
 
 
 class TypePredictNet(TaskBaseMethod):
