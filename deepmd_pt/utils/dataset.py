@@ -39,6 +39,7 @@ class DeepmdDataSystem(object):
             self._dirs.sort()
         self.type_split = type_split
         self.noise_settings = noise_settings
+        self._check_pbc(sys_path)
         if noise_settings is not None:
             self.noise_type = noise_settings.get("noise_type", "uniform")
             self.noise = float(noise_settings.get("noise", 1.0))
@@ -89,7 +90,7 @@ class DeepmdDataSystem(object):
         self._idx_map = _make_idx_map(self._atom_type)
 
         self._data_dict = {}
-        self.add('box', 9, must=True)
+        self.add('box', 9, must=self.pbc)
         self.add('coord', 3, atomic=True, must=True)
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
@@ -108,6 +109,12 @@ class DeepmdDataSystem(object):
             self.prefix_sum[i] = self.prefix_sum[i - 1] + frames
             i += 1
             self.nframes += frames
+
+    def _check_pbc(self, sys_path):
+        pbc = True
+        if os.path.isfile(os.path.join(sys_path, 'nopbc')):
+            pbc = False
+        self.pbc = pbc
 
     def set_noise(self, noise_settings):
         # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
@@ -504,19 +511,28 @@ class DeepmdDataSystem(object):
         clean_coord = batch.pop('coord')
         clean_type = batch.pop('type')
         nloc = clean_type.shape[0]
+        rcut = self.rcut
+        sec = self.sec
+        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
+        if self.pbc:
+            box = batch['box']
+            region = Region3D(box)
+        else:
+            box = None
+            region = None
         if self.noise_settings is None:
             batch['atype'] = clean_type
             batch['coord'] = clean_coord
             coord = clean_coord
             atype = batch['atype']
-            box = batch['box']
-            rcut = self.rcut
-            sec = self.sec
-            selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
-            region = Region3D(box)
-            _coord = normalize_coord(coord, region, nloc)
+            if self.pbc:
+                _coord = normalize_coord(coord, region, nloc)
+
+            else:
+                _coord = coord.clone()
             batch['coord'] = _coord
             selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec,
+                                                                                 pbc=self.pbc,
                                                                                  type_split=self.type_split)
             batch['selected'] = selected
             batch['selected_loc'] = selected_loc
@@ -584,16 +600,15 @@ class DeepmdDataSystem(object):
                     batch['type_mask'] = torch.tensor(np.zeros_like(type_mask, dtype=np.bool),
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
-                box = batch['box']
-                rcut = self.rcut
-                sec = self.sec
-                selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
-                region = Region3D(box)
-                _coord = normalize_coord(noised_coord, region, nloc)
+                if self.pbc:
+                    _coord = normalize_coord(noised_coord, region, nloc)
+                else:
+                    _coord = noised_coord.clone()
                 batch['coord'] = _coord
                 try:
                     selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, masked_type, region,
                                                                                          rcut, sec,
+                                                                                         pbc=self.pbc,
                                                                                          type_split=self.type_split,
                                                                                          min_check=True)
                 except RuntimeError as e:

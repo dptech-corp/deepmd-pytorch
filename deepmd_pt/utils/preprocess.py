@@ -223,6 +223,7 @@ def make_env_mat(coord,
                  region,
                  rcut: float,
                  sec,
+                 pbc=True,
                  type_split=True,
                  min_check=False):
     """Based on atom coordinates, return environment matrix.
@@ -233,9 +234,15 @@ def make_env_mat(coord,
         merged_mapping: mapping from nall index to nloc index, [nall]
     """
     # 将盒子外的原子，通过镜像挪入盒子内
-    merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
-    merged_coord = coord[merged_mapping] - merged_coord_shift
-    assert merged_coord.shape[0] > coord.shape[0], 'No ghost atom is added!'
+    if pbc:
+        merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
+        merged_coord = coord[merged_mapping] - merged_coord_shift
+        assert merged_coord.shape[0] > coord.shape[0], 'No ghost atom is added!'
+    else:
+        merged_coord_shift = torch.zeros_like(coord)
+        merged_atype = atype.clone()
+        merged_mapping = torch.arange(atype.numel(), device=env.PREPROCESS_DEVICE)
+        merged_coord = coord.clone()
 
     # 构建邻居列表，并按 sel_a 筛选
     selected, selected_loc, selected_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
