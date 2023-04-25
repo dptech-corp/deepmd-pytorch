@@ -3,7 +3,4 @@ RUN apt update && apt install -y --no-install-recommends openssh-server sudo
 RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 RUN pip install ipykernel
 COPY . .
-RUN pip install tqdm
-RUN pip install h5py
-RUN pip install wandb
-RUN pip install . -i https://pypi.org/simple
+RUN pip install . -v -v -v
