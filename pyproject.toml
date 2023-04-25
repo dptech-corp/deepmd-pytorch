@@ -15,10 +15,26 @@ classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
 ]
 dependencies = [
+     'torch >= 2a',
+     'tqdm',
+     'h5py',
+     'wandb',
 ]
 requires-python = ">=3.8"
 readme = "README.md"
 keywords = ["deepmd"]
 
+[project.urls]
+repository = "https://github.com/dptech-corp/deepmd-pytorch"
+
+[project.scripts]
+dp_pt = "deepmd_pt.entrypoints.main:main"
+
 [tool.setuptools.packages.find]
 include = ["deepmd_pt*"]
+
+[tool.setuptools_scm]
+write_to = "deepmd_pt/_version.py"
+
+[tool.cibuildwheel]
+test-command = ["dp_pt -h",]
