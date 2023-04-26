@@ -38,7 +38,7 @@ def train(FLAGS):
     validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params)
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch) \
-        if not FLAGS.CKPT else None
+        if FLAGS.CKPT is None and not FLAGS.skip_stat else None
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
@@ -62,6 +62,7 @@ def main(args=None):
     train_parser = subparsers.add_parser('train', help='Train a model.')
     train_parser.add_argument('INPUT', help='A Json-format configuration file.')
     train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
+    train_parser.add_argument('--skip-stat', action='store_true', default=False, help='Whether to do statistics for mean and stddev for descriptor.')
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
