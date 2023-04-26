@@ -64,8 +64,6 @@ class KFOptimizerWrapper:
             model_pred, _, _ = self.model(**inputs, inference_only=True)
             Etot_predict = model_pred['energy']
             natoms_sum = inputs['natoms'][0, 0]
-            model_pred, _, _ = self.model(**inputs, inference_only=True)
-            Etot_predict = model_pred['energy']
             force_predict = model_pred['force']
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
             error_tmp = update_prefactor * error_tmp
