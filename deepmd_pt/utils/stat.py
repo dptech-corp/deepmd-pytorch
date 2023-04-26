@@ -3,7 +3,7 @@ import torch
 from collections import defaultdict
 from deepmd_pt.utils.dataloader import BufferedIterator
 from deepmd_pt.utils import env
-
+from tqdm import trange
 
 def make_stat_input(datasets, dataloaders, nbatches):
     """Pack data for statistics.
@@ -29,7 +29,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
     ]
     if datasets[0].mixed_type:
         keys.append("real_natoms_vec")
-    for i in range(len(datasets)):
+    for i in trange(len(datasets)):
         sys_stat = {key: [] for key in keys}
         iterator = iter(dataloaders[i])
         for _ in range(nbatches):
