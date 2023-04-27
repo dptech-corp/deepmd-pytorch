@@ -174,14 +174,11 @@ class Trainer(object):
         self.multi_task_mode = False
         self.task_keys = ["Default"]
 
-        if os.path.exists(self.disp_file):
-            self.lcurve_should_print_header = False
-        else:
-            self.lcurve_should_print_header = True
+        self.lcurve_should_print_header = True
 
     def run(self):
         fout = (
-            open(self.disp_file, mode="a", buffering=1) if self.rank == 0 else None
+            open(self.disp_file, mode="w", buffering=1) if self.rank == 0 else None
         )  # line buffered
         logging.info("Start to train %d steps.", self.num_steps)
         if dist.is_initialized():
@@ -235,7 +232,7 @@ class Trainer(object):
 
                 msg = f"step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}"
                 rmse_val = {
-                    item: more_loss[item] for item in more_loss
+                    item: more_loss[item] for item in more_loss if 'l2_' not in item
                 }
                 for item in sorted(list(rmse_val.keys())):
                     if item in rmse_val:
@@ -265,10 +262,10 @@ class Trainer(object):
                         natoms = input_dict["natoms"][0, 0]
                         sum_natoms += natoms
                         for k, v in more_loss.items():
-                            # if "rmse" in k:
-                            single_results[k] = (
-                                single_results.get(k, 0.0) + v * natoms
-                            )
+                            if 'l2_' not in k:
+                                single_results[k] = (
+                                    single_results.get(k, 0.0) + v * natoms
+                                )
                     valid_results = {
                         k: v / sum_natoms for k, v in single_results.items()
                     }
