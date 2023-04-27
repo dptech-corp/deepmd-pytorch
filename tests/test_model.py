@@ -255,7 +255,8 @@ class TestEnergy(unittest.TestCase):
                 'fitting_net': {
                     'neuron': self.n_neuron
                 },
-                'data_stat_nbatch': self.data_stat_nbatch
+                'data_stat_nbatch': self.data_stat_nbatch,
+                'type_map': self.type_map,
             },
             sampled=sampled
         )

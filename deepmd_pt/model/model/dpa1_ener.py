@@ -11,7 +11,7 @@ from deepmd_pt.model.model import BaseModel
 
 class EnergyModelDPA1(BaseModel):
 
-    def __init__(self, model_params, sampled):
+    def __init__(self, model_params, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -43,24 +43,28 @@ class EnergyModelDPA1(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        for sys in sampled:
-            for key in sys:
-                sys[key] = sys[key].to(env.DEVICE)
-        self.descriptor.compute_input_stats(sampled)
+        if sampled is not None:
+            for sys in sampled:
+                for key in sys:
+                    sys[key] = sys[key].to(env.DEVICE)
+            self.descriptor.compute_input_stats(sampled)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-        energy = [item['energy'] for item in sampled]
-        mixed_type = 'real_natoms_vec' in sampled[0]
-        if mixed_type:
-            input_natoms = [item['real_natoms_vec'] for item in sampled]
+        if sampled is not None:
+            energy = [item['energy'] for item in sampled]
+            mixed_type = 'real_natoms_vec' in sampled[0]
+            if mixed_type:
+                input_natoms = [item['real_natoms_vec'] for item in sampled]
+            else:
+                input_natoms = [item['natoms'] for item in sampled]
+            tmp = compute_output_stats(energy, input_natoms)
+            fitting_param['bias_atom_e'] = tmp[:, 0]
         else:
-            input_natoms = [item['natoms'] for item in sampled]
-        tmp = compute_output_stats(energy, input_natoms)
-        fitting_param['bias_atom_e'] = tmp[:, 0]
+            fitting_param['bias_atom_e'] = [0.0] * ntypes
         fitting_param['use_tebd'] = True
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
