@@ -1,7 +1,6 @@
 import torch
-import math
 from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
-from deepmd_pt.loss.loss import TaskLoss
+from deepmd_pt.loss import TaskLoss
 from deepmd_pt.utils import env
 
 
@@ -51,7 +50,7 @@ class EnergyStdLoss(TaskLoss):
         atom_norm = 1. / natoms[0, 0]
         if self.has_e and 'energy' in model_pred and 'energy' in label:
             l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
-            # more_loss['l2_ener_loss'] = l2_ener_loss.detach()
+            more_loss['l2_ener_loss'] = l2_ener_loss.detach()
             loss += atom_norm * (pref_e * l2_ener_loss)
             rmse_e = l2_ener_loss.sqrt() * atom_norm
             more_loss['rmse_e'] = rmse_e.detach()
@@ -59,7 +58,7 @@ class EnergyStdLoss(TaskLoss):
         if self.has_f and 'force' in model_pred and 'force' in label:
             diff_f = label['force'] - model_pred['force']
             l2_force_loss = torch.mean(torch.square(diff_f))
-            # more_loss['l2_force_loss'] = l2_force_loss.detach()
+            more_loss['l2_force_loss'] = l2_force_loss.detach()
             loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
             rmse_f = l2_force_loss.sqrt()
             more_loss['rmse_f'] = rmse_f.detach()
@@ -67,9 +66,9 @@ class EnergyStdLoss(TaskLoss):
         if self.has_v and 'virial' in model_pred and 'virial' in label:
             diff_v = label['virial'] - model_pred['virial'].reshape(-1, 9)
             l2_virial_loss = torch.mean(torch.square(diff_v))
-            # more_loss['l2_virial_loss'] = l2_virial_loss.detach()
+            more_loss['l2_virial_loss'] = l2_virial_loss.detach()
             loss += atom_norm * (pref_v * l2_virial_loss)
             rmse_v = l2_virial_loss.sqrt() * atom_norm
             more_loss['rmse_v'] = rmse_v.detach()
-        more_loss['rmse'] = math.sqrt(loss.detach())
+        more_loss['rmse'] = torch.sqrt(loss.detach())
         return loss, more_loss

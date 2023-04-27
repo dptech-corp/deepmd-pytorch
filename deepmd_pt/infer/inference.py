@@ -4,8 +4,8 @@ from copy import deepcopy
 from typing import Any, Dict
 
 import torch
-from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModelDPA1, EnergyModelSeA
+from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
+from deepmd_pt.model.model import EnergyModelDPA1, EnergyModelSeA, EnergyModelDPA2, DenoiseModelDPA1, DenoiseModelDPA2
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
@@ -34,15 +34,24 @@ class Trainer(object):
         self.dataset_params = training_params.pop('validation_data')
         self.model_params = deepcopy(model_params)
 
-        if model_params["descriptor"]["type"] == "se_e2_a":
-            self.model = EnergyModelSeA(model_params).to(DEVICE)
-        elif model_params["descriptor"]["type"] == "se_atten":
-            self.model = EnergyModelDPA1(model_params).to(DEVICE)
+        if model_params.get("fitting_net", None) is not None:
+            if model_params.get("backbone", None) is None:
+                if model_params["descriptor"]["type"] == "se_e2_a":
+                    self.model = EnergyModelSeA(model_params).to(DEVICE)
+                elif model_params["descriptor"]["type"] == "se_atten":
+                    self.model = EnergyModelDPA1(model_params).to(DEVICE)
+                else:
+                    raise NotImplementedError
+            else:
+                self.model = EnergyModelDPA2(model_params).to(DEVICE)
         else:
-            raise NotImplementedError
+            if model_params.get("backbone", None) is None:
+                self.model = DenoiseModelDPA1(model_params).to(DEVICE)
+            else:
+                self.model = DenoiseModelDPA2(model_params).to(DEVICE)
 
         # Model Wrapper
-        self.wrapper = ModelWrapper(self.model) # inference only
+        self.wrapper = ModelWrapper(self.model)  # inference only
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
@@ -51,11 +60,18 @@ class Trainer(object):
 
         # Loss
         loss_params = config.pop("loss")
-        assert loss_params.pop("type", "ener"), "Only loss `ener` is supported!"
-        loss_params["starter_learning_rate"] = 1.0 # TODO: lr here is useless
-        self.loss = EnergyStdLoss(**loss_params)
+        loss_type = loss_params.pop("type", "ener")
+        if loss_type == 'ener':
+            loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
+            self.loss = EnergyStdLoss(**loss_params)
+        elif loss_type == 'denoise':
+            loss_params['ntypes'] = len(model_params['type_map'])
+            self.loss = DenoiseLoss(**loss_params)
+        else:
+            raise NotImplementedError
 
-    def get_data(self, data):
+    @staticmethod
+    def get_data(data):
         batch_data = next(iter(data))
         for key in batch_data.keys():
             batch_data[key] = batch_data[key].to(DEVICE)
@@ -67,6 +83,7 @@ class Trainer(object):
             "mapping",
             "shift",
             "selected",
+            "selected_loc",
             "selected_type",
             "box",
         ]:
@@ -75,7 +92,7 @@ class Trainer(object):
             else:
                 input_dict[item] = None
         label_dict = {}
-        for item in ["energy", "force", "virial"]:
+        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict
@@ -105,12 +122,12 @@ class Trainer(object):
                 except StopIteration:
                     break
                 model_pred, _, _ = self.wrapper(**input_dict)
-                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0) # TODO: lr here is useless
+                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0)  # TODO: lr here is useless
                 natoms = input_dict["natoms"][0, 0]
                 sum_natoms += natoms
                 for k, v in more_loss.items():
-                    if "rmse" in k:
-                        single_results[k] = single_results.get(k, 0.0) + v**2 * natoms
+                    # if "rmse" in k:
+                    single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
             results = {
                 k: math.sqrt(v / sum_natoms) for k, v in single_results.items()
             }

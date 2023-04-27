@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task.ener import EnergyFittingNetType
+from deepmd_pt.model.task import EnergyFittingNetType
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env

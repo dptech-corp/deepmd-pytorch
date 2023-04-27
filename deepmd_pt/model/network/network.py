@@ -106,8 +106,8 @@ class TypeFilter(torch.nn.Module):
         if self.return_G:
             return xyz_scatter
         else:
-            inputs_reshape = inputs_i.view(-1, self.length, 4).permute(0, 2,
-                                                                       1)  # shape is [nframes*natoms[0], 4, self.length]
+            # shape is [nframes*natoms[0], 4, self.length]
+            inputs_reshape = inputs_i.view(-1, self.length, 4).permute(0, 2, 1)
             return torch.matmul(inputs_reshape, xyz_scatter)
 
 

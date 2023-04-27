@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd_pt.model.descriptor import DescrptSeA, DescrptSeAtten
-from deepmd_pt.model.task.ener import EnergyFittingNet
-from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
+from deepmd_pt.model.descriptor import DescrptSeA
+from deepmd_pt.model.task import EnergyFittingNet
+from deepmd_pt.utils.stat import compute_output_stats
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 

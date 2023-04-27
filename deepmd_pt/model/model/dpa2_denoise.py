@@ -2,10 +2,9 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task.denoise import DenoiseNet
-from deepmd_pt.model.task.type_predict import TypePredictNet
+from deepmd_pt.model.task import DenoiseNet, TypePredictNet
 from deepmd_pt.model.network import TypeEmbedNet
-from deepmd_pt.model.backbone.evoformer2b import Evoformer2bBackBone
+from deepmd_pt.model.backbone import Evoformer2bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
@@ -13,7 +12,7 @@ from deepmd_pt.model.model import BaseModel
 
 class DenoiseModelDPA2(BaseModel):
 
-    def __init__(self, model_params, sampled):
+    def __init__(self, model_params, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -45,10 +44,11 @@ class DenoiseModelDPA2(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        for sys in sampled:
-            for key in sys:
-                sys[key] = sys[key].to(env.DEVICE)
-        self.descriptor.compute_input_stats(sampled)
+        if sampled is not None:
+            for sys in sampled:
+                for key in sys:
+                    sys[key] = sys[key].to(env.DEVICE)
+            self.descriptor.compute_input_stats(sampled)
 
         # BackBone
         backbone_param = model_params.pop('backbone')

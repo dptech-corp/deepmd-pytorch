@@ -5,19 +5,21 @@ import unittest
 import json
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 from deepmd.loss.ener import EnerStdLoss
 from deepmd.common import expand_sys_str
 
-from deepmd_pt.loss.ener import EnergyStdLoss
+from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.utils.env import TEST_CONFIG
 from deepmd_pt.utils.dataset import DeepmdDataSet
 
 CUR_DIR = os.path.dirname(__file__)
 
+
 def get_batch():
     with open(TEST_CONFIG, 'r') as fin:
-            content = fin.read()
+        content = fin.read()
     config = json.loads(content)
     model_config = config['model']
     rcut = model_config['descriptor']['rcut']
@@ -28,9 +30,10 @@ def get_batch():
     if isinstance(systems, str):
         systems = expand_sys_str(systems)
     dataset = DeepmdDataSet(systems,
-        batch_size, model_config['type_map'], rcut, sel)
+                            batch_size, model_config['type_map'], rcut, sel)
     np_batch, pt_batch = dataset.get_batch()
     return np_batch, pt_batch
+
 
 class TestLearningRate(unittest.TestCase):
 
@@ -51,9 +54,10 @@ class TestLearningRate(unittest.TestCase):
         nloc = natoms[0]
         batch_size = pt_batch['coord'].shape[0]
         atom_energy = np.zeros(shape=[batch_size, nloc])
-        atom_pref = np.zeros(shape=[batch_size, nloc*3])
+        atom_pref = np.zeros(shape=[batch_size, nloc * 3])
         # tf
-        base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f, self.start_pref_v, self.limit_pref_v)
+        base = EnerStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f,
+                           self.start_pref_v, self.limit_pref_v)
         self.g = tf.Graph()
         with self.g.as_default():
             t_cur_lr = tf.placeholder(shape=[], dtype=tf.float64)
@@ -97,28 +101,29 @@ class TestLearningRate(unittest.TestCase):
             t_natoms: natoms,
             t_penergy: p_energy,
             t_pforce: p_force,
-            t_pvirial: p_virial.reshape(-1,9),
+            t_pvirial: p_virial.reshape(-1, 9),
             t_patom_energy: atom_energy,
             t_lenergy: l_energy,
             t_lforce: l_force,
-            t_lvirial: l_virial.reshape(-1,9),
+            t_lvirial: l_virial.reshape(-1, 9),
             t_latom_energy: atom_energy,
             t_atom_pref: atom_pref
         }
         self.model_pred = {'energy': torch.from_numpy(p_energy),
-                      'force': torch.from_numpy(p_force),
-                      'virial': torch.from_numpy(p_virial),
-                      }
+                           'force': torch.from_numpy(p_force),
+                           'virial': torch.from_numpy(p_virial),
+                           }
         self.label = {'energy': torch.from_numpy(l_energy),
-                 'force': torch.from_numpy(l_force),
-                 'virial': torch.from_numpy(l_virial),
-                 }
+                      'force': torch.from_numpy(l_force),
+                      'virial': torch.from_numpy(l_virial),
+                      }
         self.natoms = pt_batch['natoms']
 
     def test_consistency(self):
         with tf.Session(graph=self.g) as sess:
             base_loss, base_more_loss = sess.run(self.base_loss_sess, feed_dict=self.feed_dict)
-        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f, self.start_pref_v, self.limit_pref_v)
+        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f,
+                             self.start_pref_v, self.limit_pref_v)
         my_loss, my_more_loss = mine(
             self.label,
             self.model_pred,
@@ -128,7 +133,8 @@ class TestLearningRate(unittest.TestCase):
         my_loss = my_loss.detach().cpu()
         self.assertTrue(np.allclose(base_loss, my_loss.numpy()))
         for key in ['ener', 'force', 'virial']:
-            self.assertTrue(np.allclose(base_more_loss['l2_%s_loss'%key], my_more_loss['l2_%s_loss'%key]))
+            self.assertTrue(np.allclose(base_more_loss['l2_%s_loss' % key], my_more_loss['l2_%s_loss' % key]))
+
 
 if __name__ == '__main__':
     unittest.main()

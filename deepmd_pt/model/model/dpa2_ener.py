@@ -2,19 +2,17 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task.denoise import DenoiseNet
-from deepmd_pt.model.task.type_predict import TypePredictNet
 from deepmd_pt.model.network import TypeEmbedNet
-from deepmd_pt.model.backbone.evoformer2b import Evoformer2bBackBone
+from deepmd_pt.model.backbone import Evoformer2bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
-from deepmd_pt.model.task.ener import EnergyFittingNetType
+from deepmd_pt.model.task import EnergyFittingNetType
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
 
 class EnergyModelDPA2(BaseModel):
 
-    def __init__(self, model_params, sampled):
+    def __init__(self, model_params, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -46,10 +44,11 @@ class EnergyModelDPA2(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        for sys in sampled:
-            for key in sys:
-                sys[key] = sys[key].to(env.DEVICE)
-        self.descriptor.compute_input_stats(sampled)
+        if sampled is not None:
+            for sys in sampled:
+                for key in sys:
+                    sys[key] = sys[key].to(env.DEVICE)
+            self.descriptor.compute_input_stats(sampled)
 
         # BackBone
         backbone_param = model_params.pop('backbone')
@@ -67,14 +66,17 @@ class EnergyModelDPA2(BaseModel):
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-        energy = [item['energy'] for item in sampled]
-        mixed_type = 'real_natoms_vec' in sampled[0]
-        if mixed_type:
-            input_natoms = [item['real_natoms_vec'] for item in sampled]
+        if sampled is not None:
+            energy = [item['energy'] for item in sampled]
+            mixed_type = 'real_natoms_vec' in sampled[0]
+            if mixed_type:
+                input_natoms = [item['real_natoms_vec'] for item in sampled]
+            else:
+                input_natoms = [item['natoms'] for item in sampled]
+            tmp = compute_output_stats(energy, input_natoms)
+            fitting_param['bias_atom_e'] = tmp[:, 0]
         else:
-            input_natoms = [item['natoms'] for item in sampled]
-        tmp = compute_output_stats(energy, input_natoms)
-        fitting_param['bias_atom_e'] = tmp[:, 0]
+            fitting_param['bias_atom_e'] = [0.0] * ntypes
         fitting_param['use_tebd'] = True
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 

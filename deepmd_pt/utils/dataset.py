@@ -16,12 +16,12 @@ from deepmd_pt.utils.cache import lru_cache
 class DeepmdDataSystem(object):
 
     def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True, noise_settings=None):
-        '''Construct DeePMD-style frame collection of one system.
+        """Construct DeePMD-style frame collection of one system.
 
         Args:
         - sys_path: Paths to the system.
         - type_map: Atom types.
-        '''
+        """
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
@@ -140,7 +140,7 @@ class DeepmdDataSystem(object):
             must: bool = False,
             high_prec: bool = False
             ):
-        '''Add a data item that to be loaded.
+        """Add a data item that to be loaded.
 
         Args:
         - key: The key of the item. The corresponding data is stored in `sys_path/set.*/key.npy`
@@ -148,7 +148,7 @@ class DeepmdDataSystem(object):
         - atomic: The item is an atomic property.
         - must: The data file `sys_path/set.*/key.npy` must exist. Otherwise, value is set to zero.
         - high_prec: Load the data and store in float64, otherwise in float32.
-        '''
+        """
         self._data_dict[key] = {
             'ndof': ndof,
             'atomic': atomic,
@@ -158,11 +158,11 @@ class DeepmdDataSystem(object):
 
     # deprecated TODO
     def get_batch_for_train(self, batch_size: int):
-        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        """Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
 
         Args:
         - batch_size: Frame count.
-        '''
+        """
         if not hasattr(self, '_frames'):
             self.set_size = 0
             self._set_count = 0
@@ -200,12 +200,11 @@ class DeepmdDataSystem(object):
         self._iterator += batch_size
         return self._get_subdata(idx)
 
-
     def get_batch(self, batch_size: int):
-        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        """Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
         Args:
         - batch_size: Frame count.
-        '''
+        """
         if not hasattr(self, '_frames'):
             self.set_size = 0
             self._set_count = 0
@@ -236,18 +235,18 @@ class DeepmdDataSystem(object):
         return self._get_subdata(idx)
 
     def get_ntypes(self):
-        '''Number of atom types in the system.'''
+        """Number of atom types in the system."""
         if self._type_map is not None:
             return len(self._type_map)
         else:
             return max(self._atom_type) + 1
 
     def get_natoms_vec(self, ntypes: int):
-        '''Get number of atoms and number of atoms in different types.
+        """Get number of atoms and number of atoms in different types.
 
         Args:
         - ntypes: Number of types (may be larger than the actual number of types in the system).
-        '''
+        """
         natoms = len(self._atom_type)
         natoms_vec = np.zeros(ntypes).astype(int)
         for ii in range(ntypes):
@@ -460,6 +459,7 @@ class DeepmdDataSystem(object):
             shift.append(d)
             mapping.append(e)
         selected = torch.stack(selected)
+        selected_loc = torch.stack(selected_loc)
         selected_type = torch.stack(selected_type)
         batch['selected'] = selected
         batch['selected_loc'] = selected_loc
@@ -624,7 +624,6 @@ class DeepmdDataSystem(object):
                 batch['mapping'] = mapping
                 return batch
 
-
     def _get_item(self, index):
         for i in range(0,
                        len(self._dirs) + 1):  # note: if different sets can be merged, prefix sum is unused to calculate
@@ -677,7 +676,7 @@ class DeepmdDataSetForLoader(Dataset):
         return self._data_system.nframes
 
     def __getitem__(self, index):
-        '''Get a frame from the selected system.'''
+        """Get a frame from the selected system."""
         b_data = self._data_system._get_item(index)
         b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
         return b_data
@@ -688,13 +687,13 @@ class DeepmdDataSet(Dataset):
 
     def __init__(self, systems: List[str], batch_size: int, type_map: List[str],
                  rcut=None, sel=None, weight=None, type_split=True):
-        '''Construct DeePMD-style dataset containing frames cross different systems.
+        """Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
         - systems: Paths to systems.
         - batch_size: Max frame count in a batch.
         - type_map: Atom types.
-        '''
+        """
         self._batch_size = batch_size
         self._type_map = type_map
         if sel is not None:
@@ -743,7 +742,7 @@ class DeepmdDataSet(Dataset):
 
     # deprecated TODO
     def get_training_batch(self, index=None):
-        '''Get a batch of frames from the selected system.'''
+        """Get a batch of frames from the selected system."""
         if index is None:
             index = dp_random.choice(np.arange(self.nsystems), self.probs)
         b_data = self._data_systems[index].get_batch_for_train(self._batch_size)

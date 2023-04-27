@@ -7,8 +7,7 @@ import math
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
-from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
-from deepmd_pt.optimizer.LKF import LKFOptimizer
+from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1

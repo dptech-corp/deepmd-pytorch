@@ -8,8 +8,8 @@ try:
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.network.network import ResidualDeep
-from deepmd_pt.model.task.task import TaskBaseMethod
+from deepmd_pt.model.network import ResidualDeep
+from deepmd_pt.model.task import TaskBaseMethod
 
 
 class EnergyFittingNet(TaskBaseMethod):

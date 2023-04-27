@@ -1,7 +1,7 @@
 import torch
 
 from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
-from deepmd_pt.loss.loss import TaskLoss
+from deepmd_pt.loss import TaskLoss
 import torch.nn.functional as F
 from deepmd_pt.utils import env
 

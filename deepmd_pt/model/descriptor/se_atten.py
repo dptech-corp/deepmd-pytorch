@@ -2,15 +2,14 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor.env_mat import prod_env_mat_se_a
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor
 
 try:
     from typing import Final
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.descriptor.descriptor import Descriptor
-from deepmd_pt.model.network.network import TypeFilter, NeighborWiseAttention
+from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
 
 class DescrptSeAtten(Descriptor):

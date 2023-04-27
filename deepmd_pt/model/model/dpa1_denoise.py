@@ -2,18 +2,15 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task.denoise import DenoiseNet
-from deepmd_pt.model.task.type_predict import TypePredictNet
+from deepmd_pt.model.task import DenoiseNet, TypePredictNet
 from deepmd_pt.model.network import TypeEmbedNet
-from deepmd_pt.model.backbone.evoformer2b import Evoformer2bBackBone
-from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
 
 class DenoiseModelDPA1(BaseModel):
 
-    def __init__(self, model_params, sampled):
+    def __init__(self, model_params, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -45,17 +42,18 @@ class DenoiseModelDPA1(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        for sys in sampled:
-            for key in sys:
-                sys[key] = sys[key].to(env.DEVICE)
-        self.descriptor.compute_input_stats(sampled)
+        if sampled is not None:
+            for sys in sampled:
+                for key in sys:
+                    sys[key] = sys[key].to(env.DEVICE)
+            self.descriptor.compute_input_stats(sampled)
 
         assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
         # Denoise and predict
         self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb)
         self.type_predict_net = TypePredictNet(self.descriptor.dim_out, self.ntypes - 1)
-                                               # last type is `MASKED_TOKEN`
-                                               # self.backbone.activation_function)
+        # last type is `MASKED_TOKEN`
+        # self.backbone.activation_function)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
         """Return total energy of the system.
@@ -79,7 +77,8 @@ class DenoiseModelDPA1(BaseModel):
         nlist_tebd = self.type_embedding(selected_type)
         nnei_mask = selected != -1
 
-        descriptor, env_mat, diff = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
+        descriptor, env_mat, diff = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd,
+                                                    nlist_tebd)
         updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
         logits = self.type_predict_net(descriptor)
         model_predict = {'updated_coord': updated_coord,

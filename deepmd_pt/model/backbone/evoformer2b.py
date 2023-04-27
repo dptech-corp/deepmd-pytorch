@@ -8,8 +8,8 @@ try:
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.backbone.backbone import BackBone
-from deepmd_pt.model.network.network import Evoformer2bEncoder
+from deepmd_pt.model.backbone import BackBone
+from deepmd_pt.model.network import Evoformer2bEncoder
 
 
 class Evoformer2bBackBone(BackBone):
