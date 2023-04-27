@@ -13,6 +13,7 @@ from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
+from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -287,13 +288,15 @@ class Trainer(object):
                     self.print_on_training(fout, _step_id, cur_lr, train_results, valid_results)
 
             if (
-                (_step_id % self.save_freq == 0 and _step_id != 0)
-                or _step_id == self.num_steps - 1
+                ((_step_id+1) % self.save_freq == 0 and _step_id != 0)
+                or (_step_id+1) == self.num_steps
             ) and (self.rank == 0 or dist.get_rank() == 0):
                 # Handle the case if rank 0 aborted and re-assigned
-                logging.info(f"Saving model to {self.save_ckpt}")
+                self.latest_model = Path(self.save_ckpt)
+                self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
+                logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.save_ckpt)
+                torch.save(module.state_dict(), self.latest_model)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -305,6 +308,13 @@ class Trainer(object):
         if (
             self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned
+            try: 
+                os.symlink(self.latest_model, self.save_ckpt)
+            except OSError:
+                module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                torch.save(module.state_dict(), self.save_ckpt)
+            logging.info(f"Trained model has been saved to: {self.save_ckpt}")
+
             if JIT:
                 self.wrapper.save("torchscript_model.pt")
         if fout:
