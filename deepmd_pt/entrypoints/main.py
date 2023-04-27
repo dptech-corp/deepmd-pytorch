@@ -14,10 +14,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from deepmd_pt.utils.stat import make_stat_input
 
 
-def train(FLAGS):
-    logging.info('Configuration path: %s', FLAGS.INPUT)
-    with open(FLAGS.INPUT, 'r') as fin:
-        config = json.load(fin)
+def get_trainer(config, ckpt=None):
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params.pop('training_data')
@@ -62,7 +59,15 @@ def train(FLAGS):
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split, noise_settings=noise_settings)
         sampled = None
-    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
+    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=ckpt)
+    return trainer
+
+
+def train(FLAGS):
+    logging.info('Configuration path: %s', FLAGS.INPUT)
+    with open(FLAGS.INPUT, 'r') as fin:
+        config = json.load(fin)
+    trainer = get_trainer(config, FLAGS.CKPT)
     trainer.run()
 
 
@@ -70,7 +75,7 @@ def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = inference.Trainer(config, FLAGS.CKPT, FLAGS.numb_test)
+    trainer = inference.Tester(config, FLAGS.CKPT, FLAGS.numb_test)
     trainer.run()
 
 
