@@ -48,7 +48,8 @@ class LKFOptimizer(Optimizer):
             for param in params:
                 param_num = param.data.nelement()
                 if param_sum + param_num > block_size:
-                    param_nums.append(param_sum)
+                    if param_sum > 0:
+                        param_nums.append(param_sum)
                     param_sum = param_num
                 else:
                     param_sum += param_num
