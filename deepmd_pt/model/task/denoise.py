@@ -35,8 +35,8 @@ class DenoiseNet(TaskBaseMethod):
         """Calculate the updated coord.
         Args:
         - coord: Input noisy coord with shape [nframes, nloc, 3].
-        - pair_weights: Input pair weights with shape [nframes, nloc, nnei, 3].
-        - diff: Input pair relative coord list with shape [nframes, nloc, nnei, head].
+        - pair_weights: Input pair weights with shape [nframes, nloc, nnei, head].
+        - diff: Input pair relative coord list with shape [nframes, nloc, nnei, 3].
         - nlist_mask: Input nlist mask with shape [nframes, nloc, nnei].
 
         Returns:

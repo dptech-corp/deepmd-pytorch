@@ -421,7 +421,8 @@ class LocalSelfMultiheadAttention(torch.nn.Module):
         assert feature_dim % attn_head == 0, f"feature_dim {feature_dim} must be divided by attn_head {attn_head}!"
         self.scaling = (self.head_dim * scaling_factor) ** -0.5
         self.in_proj = SimpleLinear(self.feature_dim, self.feature_dim * 3)
-        self.out_proj = SimpleLinear(self.feature_dim, self.feature_dim)
+        # TODO debug
+        # self.out_proj = SimpleLinear(self.feature_dim, self.feature_dim)
 
     def forward(self, query, attn_bias=None, nlist_mask=None, nlist=None, return_attn=True):
         nframes, nloc, feature_dim = query.size()
@@ -449,11 +450,11 @@ class LocalSelfMultiheadAttention(torch.nn.Module):
         v = torch.gather(v, dim=1, index=index)
         # [nframes * attn_head * nloc, nnei, head_dim]
         k = (k.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
-             .transpose(1, 3)
+             .permute(0, 3, 1, 2, 4)
              .contiguous()
              .view(nframes * self.attn_head * nloc, nnei, self.head_dim))
         v = (v.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
-             .transpose(1, 3)
+             .permute(0, 3, 1, 2, 4)
              .contiguous()
              .view(nframes * self.attn_head * nloc, nnei, self.head_dim))
         # [nframes * attn_head * nloc, 1, nnei]
@@ -479,7 +480,8 @@ class LocalSelfMultiheadAttention(torch.nn.Module):
              .view(nframes, nloc, self.feature_dim)
              )
         # out
-        o = self.out_proj(o)
+        ## TODO debug:
+        # o = self.out_proj(o)
         if not return_attn:
             return o
         else:
@@ -498,17 +500,16 @@ class EvoformerEncoderLayer(torch.nn.Module):
         self.ffn_dim = ffn_dim
         self.attn_head = attn_head
         self.activation_fn = get_activation_fn(activation_fn) if activation_fn is not None else None
+        self.post_ln = post_ln
+        self.self_attn_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
         self.self_attn = LocalSelfMultiheadAttention(
             self.feature_dim,
             self.attn_head,
         )
-
-        self.post_ln = post_ln
-        self.self_attn_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.final_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         self.fc1 = SimpleLinear(self.feature_dim, self.ffn_dim)
         self.fc2 = SimpleLinear(self.ffn_dim, self.feature_dim)
-        self.final_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
     def forward(self, x, attn_bias=None, nlist_mask=None, nlist=None, return_attn=True):
         residual = x
@@ -581,7 +582,9 @@ class Evoformer2bEncoder(torch.nn.Module):
                                      activate='tanh')
         if self._emb_layer_norm:
             self.emb_layer_norm = torch.nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.in_proj_pair = NonLinearHead(self.pair_dim, self.attn_head, activation_fn=None)
+
+        ## TODO debug : self.in_proj_pair = NonLinearHead(self.pair_dim, self.attn_head, activation_fn=None)
+        self.in_proj_pair = SimpleLinear(self.pair_dim, self.attn_head, activate=None)
         evoformer_encoder_layers = []
         for i in range(self.layer_num):
             evoformer_encoder_layers.append(EvoformerEncoderLayer(
@@ -616,8 +619,6 @@ class Evoformer2bEncoder(torch.nn.Module):
         - norm_delta_pair_rep: Normalization loss of delta_pair_rep.
         """
         # Global branch
-        # input_rep = atomic_rep.detach()
-        # in_pair = pair_rep.detach()
         nframes, nloc, _ = atomic_rep.size()
         nnei = pair_rep.shape[2]
         # [nframes, nloc, feature_dim]
@@ -629,28 +630,18 @@ class Evoformer2bEncoder(torch.nn.Module):
         if self._emb_layer_norm:
             atomic_rep = self.emb_layer_norm(atomic_rep)
 
-        # in_atomic_rep = atomic_rep.detach()
-
         # Local branch
         # [nframes, nloc, nnei, attn_head]
         pair_rep = self.in_proj_pair(pair_rep)
         # [nframes, attn_head, nloc, nnei]
         pair_rep = pair_rep.permute(0, 3, 1, 2).contiguous()
-        # input_pair_rep_2 = pair_rep.detach()
         input_pair_rep = pair_rep
         pair_rep = pair_rep.masked_fill(~nlist_mask.unsqueeze(1), float("-inf"))
-
-        pair_layer = []
-        atomic_layer = []
-        pair_layer.append(pair_rep)
-        atomic_layer.append(atomic_rep)
 
         for i in range(self.layer_num):
             atomic_rep, pair_rep, _ = self.evoformer_encoder_layers[i](
                 atomic_rep, attn_bias=pair_rep, nlist_mask=nlist_mask, nlist=nlist, return_attn=True
             )
-            pair_layer.append(pair_rep)
-            atomic_layer.append(atomic_rep)
 
         def norm_loss(x, eps=1e-10, tolerance=1.0):
             # x = x.float()

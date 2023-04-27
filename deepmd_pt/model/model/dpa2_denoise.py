@@ -84,7 +84,7 @@ class DenoiseModelDPA2(BaseModel):
         # coord nframes x nloc x 3
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
-        extended_coord.requires_grad_(True)
+        # extended_coord.requires_grad_(True)
         atype_tebd = self.type_embedding(atype)
         selected_type[selected_type == -1] = self.ntypes
         nlist_tebd = self.type_embedding(selected_type)
