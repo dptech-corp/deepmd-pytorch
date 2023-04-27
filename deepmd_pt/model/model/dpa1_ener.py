@@ -55,6 +55,8 @@ class EnergyModelDPA1(BaseModel):
                 stats = np.load(model_params.get("stat_file"))
                 sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
             self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
+        else:
+            sampled = None
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
