@@ -24,6 +24,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
         "natoms",
         "mapping",
         "selected",
+        "selected_loc",
         "selected_type",
         "shift",
     ]
@@ -83,7 +84,7 @@ def compute_output_stats(energy, natoms, rcond=1e-3):
     """
     for i in range(len(energy)):
         energy[i] = energy[i].mean(dim=0, keepdim=True)
-        natoms[i] = natoms[i][:1]
+        natoms[i] = natoms[i].double().mean(dim=0, keepdim=True)
     sys_ener = torch.cat(energy).cpu()
     sys_tynatom = torch.cat(natoms)[:, 2:].cpu()
     energy_coef, _, _, _ = np.linalg.lstsq(sys_tynatom, sys_ener, rcond)

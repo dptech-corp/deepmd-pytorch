@@ -6,16 +6,16 @@ import json
 import unittest
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 
 from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
 
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.descriptor.se_a import DescrptSeA
+from deepmd_pt.model.descriptor import DescrptSeA
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
 from deepmd.common import expand_sys_str
-
 
 CUR_DIR = os.path.dirname(__file__)
 
@@ -28,11 +28,11 @@ def base_se_a(descriptor, coord, atype, natoms, box):
     g = tf.Graph()
     with g.as_default():
         name_pfx = 'd_sea_'
-        t_coord = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None], name = name_pfx+'t_coord')
-        t_atype = tf.placeholder(tf.int32, [None, None], name=name_pfx+'t_type')
-        t_natoms = tf.placeholder(tf.int32, [descriptor.ntypes+2], name=name_pfx+'t_natoms')
-        t_box = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None], name = name_pfx+'t_box')
-        t_default_mesh = tf.placeholder(tf.int32, [None], name=name_pfx+'t_mesh')
+        t_coord = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None], name=name_pfx + 't_coord')
+        t_atype = tf.placeholder(tf.int32, [None, None], name=name_pfx + 't_type')
+        t_natoms = tf.placeholder(tf.int32, [descriptor.ntypes + 2], name=name_pfx + 't_natoms')
+        t_box = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None], name=name_pfx + 't_box')
+        t_default_mesh = tf.placeholder(tf.int32, [None], name=name_pfx + 't_mesh')
         t_embedding = descriptor.build(t_coord, t_atype, t_natoms, t_box, t_default_mesh, input_dict={})
         fake_energy = tf.reduce_sum(t_embedding)
         t_force = descriptor.prod_force_virial(fake_energy, t_natoms)[0]
@@ -103,7 +103,7 @@ class TestSeA(unittest.TestCase):
             ms = re.findall(r'(\d)\.deep_layers\.(\d)\.([a-z]+)', name)
             if len(ms) == 1:
                 m = ms[0]
-                key = gen_key(worb=m[2], depth=int(m[1])+1, elemid=int(m[0]))
+                key = gen_key(worb=m[2], depth=int(m[1]) + 1, elemid=int(m[0]))
                 var = dp_vars[key]
                 with torch.no_grad():
                     # Keep parameter value consistency between 2 implentations

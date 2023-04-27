@@ -2,15 +2,14 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor.env_mat import prod_env_mat_se_a
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor
 
 try:
     from typing import Final
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.descriptor.descriptor import Descriptor
-from deepmd_pt.model.network.network import TypeFilter, NeighborWiseAttention
+from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
 
 class DescrptSeAtten(Descriptor):
@@ -24,7 +23,8 @@ class DescrptSeAtten(Descriptor):
                  axis_neuron: int = 16,
                  tebd_dim: int = 8,
                  tebd_input_mode: str = 'concat',
-                 set_davg_zero: bool = False,
+                 # set_davg_zero: bool = False,
+                 set_davg_zero: bool = True, # TODO
                  attn: int = 128,
                  attn_layer: int = 2,
                  attn_dotr: bool = True,
@@ -101,6 +101,13 @@ class DescrptSeAtten(Descriptor):
         """
         return self.filter_neuron[-1] * self.axis_neuron
 
+    @property
+    def dim_emb(self):
+        """
+        Returns the output dimension of embedding
+        """
+        return self.filter_neuron[-1]
+
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
         """
@@ -114,7 +121,7 @@ class DescrptSeAtten(Descriptor):
             index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
-            env_mat = prod_env_mat_se_a(
+            env_mat, _ = prod_env_mat_se_a(
                 extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
@@ -141,17 +148,18 @@ class DescrptSeAtten(Descriptor):
         for type_i in range(self.ntypes):
             davgunit = [[sumr[type_i] / (sumn[type_i] + 1e-15), 0, 0, 0]]
             dstdunit = [[
-                compute_std(sumr2[type_i], sumr[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i])
+                compute_std(sumr2[type_i], sumr[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut)
             ]]
             davg = np.tile(davgunit, [self.nnei, 1])
             dstd = np.tile(dstdunit, [self.nnei, 1])
             all_davg.append(davg)
             all_dstd.append(dstd)
-        mean = np.stack(all_davg)
-        self.mean.copy_(torch.tensor(mean, device=env.DEVICE))
+        if not self.set_davg_zero:
+            mean = np.stack(all_davg)
+            self.mean.copy_(torch.tensor(mean, device=env.DEVICE))
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
@@ -165,28 +173,31 @@ class DescrptSeAtten(Descriptor):
         - box: Tell simulation box with shape [nframes, 9].
 
         Returns:
-        - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
+        - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
+        - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         nloc = selected.shape[1]
-        dmatrix = prod_env_mat_se_a(
+        dmatrix, diff = prod_env_mat_se_a(
             extended_coord, selected, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth, self.sec)
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
 
+
         ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
                                     nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
         nei_mask = selected_type != self.ntypes
-        ret = self.dpa1_attention(ret, nei_mask, input_r)
+        ret = self.dpa1_attention(ret, nei_mask, input_r)  # shape is [nframes*nloc, self.neei, out_size]
         inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
         xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
-        xyz_scatter /= self.nnei
+        xyz_scatter = xyz_scatter / self.nnei
         xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron)
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
+               ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):
@@ -245,10 +256,10 @@ def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None)
     return sysr, sysr2, sysa, sysa2, sysn
 
 
-def compute_std(sumv2, sumv, sumn):
+def compute_std(sumv2, sumv, sumn, rcut_r):
     """Compute standard deviation."""
     if sumn == 0:
-        return 1e-2
+        return 1.0 / rcut_r
     val = np.sqrt(sumv2 / sumn - np.multiply(sumv / sumn, sumv / sumn))
     if np.abs(val) < 1e-2:
         val = 1e-2

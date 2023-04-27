@@ -7,15 +7,15 @@ import math
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
-from deepmd_pt.optimizer.KFWrapper import KFOptimizerWrapper
-from deepmd_pt.optimizer.LKF import LKFOptimizer
+from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
-from deepmd_pt.loss.ener import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1
+from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+
 
 import wandb as wb
 
@@ -100,12 +100,22 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        if model_params["descriptor"]["type"] == "se_e2_a":
-            self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
-        elif model_params["descriptor"]["type"] == "se_atten":
-            self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+
+        if model_params.get("fitting_net", None) is not None:
+            if model_params.get("backbone", None) is None:
+                if model_params["descriptor"]["type"] == "se_e2_a":
+                    self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
+                elif model_params["descriptor"]["type"] == "se_atten":
+                    self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
+                else:
+                    raise NotImplementedError
+            else:
+                self.model = EnergyModelDPA2(model_params, sampled).to(DEVICE)
         else:
-            raise NotImplementedError
+            if model_params.get("backbone", None) is None:
+                self.model = DenoiseModelDPA1(model_params, sampled).to(DEVICE)
+            else:
+                self.model = DenoiseModelDPA2(model_params, sampled).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop("learning_rate")
@@ -115,9 +125,15 @@ class Trainer(object):
 
         # Loss
         loss_params = config.pop("loss")
-        assert loss_params.pop("type", "ener"), "Only loss `ener` is supported!"
-        loss_params["starter_learning_rate"] = lr_params["start_lr"]
-        self.loss = EnergyStdLoss(**loss_params)
+        loss_type = loss_params.pop("type", "ener")
+        if loss_type == 'ener':
+            loss_params["starter_learning_rate"] = lr_params["start_lr"]
+            self.loss = EnergyStdLoss(**loss_params)
+        elif loss_type == 'denoise':
+            loss_params['ntypes'] = len(model_params['type_map'])
+            self.loss = DenoiseLoss(**loss_params)
+        else:
+            raise NotImplementedError
 
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model, self.loss)
@@ -158,14 +174,11 @@ class Trainer(object):
         self.multi_task_mode = False
         self.task_keys = ["Default"]
 
-        if os.path.exists(self.disp_file):
-            self.lcurve_should_print_header = False
-        else:
-            self.lcurve_should_print_header = True
+        self.lcurve_should_print_header = True
 
     def run(self):
         fout = (
-            open(self.disp_file, mode="a", buffering=1) if self.rank == 0 else None
+            open(self.disp_file, mode="w", buffering=1) if self.rank == 0 else None
         )  # line buffered
         logging.info("Start to train %d steps.", self.num_steps)
         if dist.is_initialized():
@@ -183,20 +196,29 @@ class Trainer(object):
                 self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == "LKF":
-                KFOptWrapper = KFOptimizerWrapper(
-                    self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
-                )
-                _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
-                p_energy, p_force = KFOptWrapper.update_force(
-                    input_dict, label_dict["force"]
-                )
-                # [coord, atype, natoms, mapping, shift, selected, box]
-                model_pred = {"energy": p_energy, "force": p_force}
-                module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                loss, more_loss = module.loss[task_key](
+                if isinstance(self.loss, EnergyStdLoss):
+                    KFOptWrapper = KFOptimizerWrapper(
+                        self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
+                    )
+                    _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
+                    p_energy, p_force = KFOptWrapper.update_force(
+                        input_dict, label_dict["force"]
+                    )
+                    # [coord, atype, natoms, mapping, shift, selected, box]
+                    model_pred = {"energy": p_energy, "force": p_force}
+                    module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                    loss, more_loss = module.loss[task_key](
+                            model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                        )
+                elif isinstance(self.loss, DenoiseLoss):
+                    KFOptWrapper = KFOptimizerWrapper(
+                        self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
+                    )
+                    module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                    model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1, module.loss[task_key].mask_loss_coord, label_dict["coord_mask"])
+                    loss, more_loss = module.loss[task_key](
                         model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
                     )
-
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
@@ -205,14 +227,14 @@ class Trainer(object):
                 # training
                 train_time = time.time() - self.t0
 
-                train_results = {'rmse': math.sqrt(loss)}
+                train_results = {}
                 valid_results = {}
 
                 msg = f"step={_step_id}, lr={cur_lr:.4f}, loss={loss:.4f}"
                 rmse_val = {
-                    item: more_loss[item] for item in more_loss if "rmse" in item
+                    item: more_loss[item] for item in more_loss if 'l2_' not in item
                 }
-                for item in ["rmse_e", "rmse_f", "rmse_v"]:
+                for item in sorted(list(rmse_val.keys())):
                     if item in rmse_val:
                         msg += f", {item}_train={rmse_val[item]:.4f}"
                         train_results[item] = rmse_val[item]
@@ -236,11 +258,11 @@ class Trainer(object):
                             label=label_dict,
                             task_key=task_key,
                         )
-                        more_loss.update({"rmse": math.sqrt(loss)})
+                        # more_loss.update({"rmse": math.sqrt(loss)})
                         natoms = input_dict["natoms"][0, 0]
                         sum_natoms += natoms
                         for k, v in more_loss.items():
-                            if "rmse" in k:
+                            if 'l2_' not in k:
                                 single_results[k] = (
                                     single_results.get(k, 0.0) + v * natoms
                                 )
@@ -312,6 +334,7 @@ class Trainer(object):
             "mapping",
             "shift",
             "selected",
+            "selected_loc",
             "selected_type",
             "box",
         ]:
@@ -320,7 +343,7 @@ class Trainer(object):
             else:
                 input_dict[item] = None
         label_dict = {}
-        for item in ["energy", "force", "virial"]:
+        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict

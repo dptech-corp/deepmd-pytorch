@@ -2,6 +2,7 @@ import numpy as np
 import unittest
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 
 from deepmd.utils import learning_rate
@@ -33,9 +34,11 @@ class TestLearningRate(unittest.TestCase):
 
         my_lr = LearningRateExp(self.start_lr, self.stop_lr, self.decay_step, self.stop_step)
         with tf.Session(graph=g) as sess:
-            base_vals = [sess.run(t_lr, feed_dict={global_step: step_id}) for step_id in range(self.stop_step) if step_id%self.decay_step != 0]
-        my_vals = [my_lr.value(step_id) for step_id in range(self.stop_step) if step_id%self.decay_step != 0]
+            base_vals = [sess.run(t_lr, feed_dict={global_step: step_id}) for step_id in range(self.stop_step) if
+                         step_id % self.decay_step != 0]
+        my_vals = [my_lr.value(step_id) for step_id in range(self.stop_step) if step_id % self.decay_step != 0]
         self.assertTrue(np.allclose(base_vals, my_vals))
+
 
 if __name__ == '__main__':
     unittest.main()

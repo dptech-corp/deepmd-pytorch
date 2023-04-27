@@ -5,12 +5,14 @@ import unittest
 import json
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 
 from deepmd.fit.ener import EnerFitting
 
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
-from deepmd_pt.model.task.ener import EnergyFittingNet
+from deepmd_pt.model.task import EnergyFittingNet
+
 
 class FakeDescriptor(object):
 
@@ -64,7 +66,7 @@ class TestFittingNet(unittest.TestCase):
         nloc = 7
         self.embedding_width = 30
         self.natoms = np.array([nloc, nloc, 2, 5], dtype=np.int32)
-        self.embedding = np.random.uniform(size=[4, nloc*self.embedding_width])
+        self.embedding = np.random.uniform(size=[4, nloc * self.embedding_width])
         self.ntypes = self.natoms.size - 2
         self.n_neuron = [32, 32, 32]
 
@@ -95,11 +97,12 @@ class TestFittingNet(unittest.TestCase):
         natoms = torch.from_numpy(self.natoms)
         atype = torch.zeros(1, natoms[0], dtype=torch.long)
         cnt = 0
-        for i in range(natoms.shape[0]-2):
-            atype[:, cnt:cnt+natoms[i+2]] = i
-            cnt += natoms[i+2]
+        for i in range(natoms.shape[0] - 2):
+            atype[:, cnt:cnt + natoms[i + 2]] = i
+            cnt += natoms[i + 2]
         my_energy = my_fn(embedding, atype).detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
+
 
 if __name__ == '__main__':
     unittest.main()

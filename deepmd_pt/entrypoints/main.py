@@ -32,12 +32,36 @@ def train(FLAGS):
         assert dist.is_nccl_available()
         dist.init_process_group(backend='nccl')
 
-    training_systems=training_dataset_params['systems']
-    validation_systems=validation_dataset_params['systems']
-    train_data = DpLoaderSet(training_systems,training_dataset_params['batch_size'],model_params,type_split=type_split)
-    validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params,type_split=type_split)
-    data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+    training_systems = training_dataset_params['systems']
+    validation_systems = validation_dataset_params['systems']
+
+    # noise params
+    noise_settings = None
+    if config['loss'].get('type', 'ener') == 'denoise':
+        noise_settings = {"noise_type": config['loss'].pop("noise_type", "uniform"),
+                          "noise": config['loss'].pop("noise", 1.0),
+                          "noise_mode": config['loss'].pop("noise_mode", "fix_num"),
+                          "mask_num": config['loss'].pop("mask_num", 8),
+                          "same_mask": config['loss'].pop("same_mask", False),
+                          "mask_coord": config['loss'].pop("mask_coord", False),
+                          "mask_type": config['loss'].pop("mask_type", False),
+                          "mask_type_idx": len(model_params["type_map"]) - 1}
+    # noise_settings = None
+    validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
+                                  type_split=type_split, noise_settings=noise_settings)
+    skip_stat = False
+    if not skip_stat:  # not skip the stat
+        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+                                 type_split=type_split)
+        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
+        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+        if noise_settings is not None:
+            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+                                     type_split=type_split, noise_settings=noise_settings)
+    else:
+        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+                                 type_split=type_split, noise_settings=noise_settings)
+        sampled = None
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
