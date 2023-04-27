@@ -50,7 +50,11 @@ def train(FLAGS):
     validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
                                   type_split=type_split, noise_settings=noise_settings)
     skip_stat = False
-    if not skip_stat:  # not skip the stat
+    if FLAGS.CKPT or skip_stat:
+        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+                                 type_split=type_split, noise_settings=noise_settings)
+        sampled = None
+    else:
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split)
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
@@ -58,10 +62,6 @@ def train(FLAGS):
         if noise_settings is not None:
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)
-    else:
-        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
-                                 type_split=type_split, noise_settings=noise_settings)
-        sampled = None
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=FLAGS.CKPT)
     trainer.run()
 
