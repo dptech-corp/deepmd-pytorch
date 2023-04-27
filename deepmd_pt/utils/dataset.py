@@ -15,13 +15,13 @@ from deepmd_pt.utils.cache import lru_cache
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True):
-        '''Construct DeePMD-style frame collection of one system.
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True, noise_settings=None):
+        """Construct DeePMD-style frame collection of one system.
 
         Args:
         - sys_path: Paths to the system.
         - type_map: Atom types.
-        '''
+        """
         sys_path = sys_path.replace('#', '')
         if '.hdf5' in sys_path:
             tmp = sys_path.split("/")
@@ -38,12 +38,26 @@ class DeepmdDataSystem(object):
             self._dirs = glob.glob(os.path.join(sys_path, 'set.*'))
             self._dirs.sort()
         self.type_split = type_split
+        self.noise_settings = noise_settings
+        self._check_pbc(sys_path)
+        if noise_settings is not None:
+            self.noise_type = noise_settings.get("noise_type", "uniform")
+            self.noise = float(noise_settings.get("noise", 1.0))
+            self.noise_mode = noise_settings.get("noise_mode", "fix_num")
+            self.mask_num = int(noise_settings.get("mask_num", 1))
+            self.mask_prob = float(noise_settings.get("mask_prob", 0.15))
+            self.same_mask = noise_settings.get("same_mask", False)
+            self.mask_coord = noise_settings.get("mask_coord", False)
+            self.mask_type = noise_settings.get("mask_type", False)
+            self.mask_type_idx = int(noise_settings.get("mask_type_idx", 0))
+            self.max_fail_num = int(noise_settings.get("max_fail_num", 10))
+
         # check mixed type
         error_format_msg = (
             "if one of the set is of mixed_type format, "
             "then all of the sets in this system should be of mixed_type format!"
         )
-        if len(self._dirs)==0:
+        if len(self._dirs) == 0:
             raise RuntimeError(f"No set found in system {sys_path}.")
 
         self.mixed_type = self._check_mode(self._dirs[0])
@@ -76,7 +90,7 @@ class DeepmdDataSystem(object):
         self._idx_map = _make_idx_map(self._atom_type)
 
         self._data_dict = {}
-        self.add('box', 9, must=True)
+        self.add('box', 9, must=self.pbc)
         self.add('coord', 3, atomic=True, must=True)
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
@@ -89,12 +103,35 @@ class DeepmdDataSystem(object):
 
         self.nframes = 0
         i = 1
-        self.prefix_sum = [0] * (len(self._dirs) +1)
+        self.prefix_sum = [0] * (len(self._dirs) + 1)
         for item in self._dirs:
             frames = self._load_set(item, fast=True)
             self.prefix_sum[i] = self.prefix_sum[i - 1] + frames
             i += 1
             self.nframes += frames
+
+    def _check_pbc(self, sys_path):
+        pbc = True
+        if os.path.isfile(os.path.join(sys_path, 'nopbc')):
+            pbc = False
+        self.pbc = pbc
+
+    def set_noise(self, noise_settings):
+        # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
+        # noise_settings['noise'] # float, default 1.0
+        # noise_settings['noise_mode'] # "prob", "fix_num"
+        # noise_settings['mask_num'] # if "fix_num", int
+        # noise_settings['mask_prob'] # if "prob", float
+        # noise_settings['same_mask'] # coord and type same mask?
+        self.noise_settings = noise_settings
+        self.noise_type = noise_settings.get("noise_type", "uniform")
+        self.noise = float(noise_settings.get("noise", 1.0))
+        self.noise_mode = noise_settings.get("noise_mode", "fix_num")
+        self.mask_num = int(noise_settings.get("mask_num", 1))
+        self.mask_coord = noise_settings.get("mask_coord", False)
+        self.mask_type = noise_settings.get("mask_type", False)
+        self.mask_prob = float(noise_settings.get("mask_prob", 0.15))
+        self.same_mask = noise_settings.get("noise_type", False)
 
     def add(self,
             key: str,
@@ -103,7 +140,7 @@ class DeepmdDataSystem(object):
             must: bool = False,
             high_prec: bool = False
             ):
-        '''Add a data item that to be loaded.
+        """Add a data item that to be loaded.
 
         Args:
         - key: The key of the item. The corresponding data is stored in `sys_path/set.*/key.npy`
@@ -111,7 +148,7 @@ class DeepmdDataSystem(object):
         - atomic: The item is an atomic property.
         - must: The data file `sys_path/set.*/key.npy` must exist. Otherwise, value is set to zero.
         - high_prec: Load the data and store in float64, otherwise in float32.
-        '''
+        """
         self._data_dict[key] = {
             'ndof': ndof,
             'atomic': atomic,
@@ -119,12 +156,13 @@ class DeepmdDataSystem(object):
             'high_prec': high_prec
         }
 
+    # deprecated TODO
     def get_batch_for_train(self, batch_size: int):
-        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        """Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
 
         Args:
         - batch_size: Frame count.
-        '''
+        """
         if not hasattr(self, '_frames'):
             self.set_size = 0
             self._set_count = 0
@@ -163,10 +201,10 @@ class DeepmdDataSystem(object):
         return self._get_subdata(idx)
 
     def get_batch(self, batch_size: int):
-        '''Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
+        """Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
         Args:
         - batch_size: Frame count.
-        '''
+        """
         if not hasattr(self, '_frames'):
             self.set_size = 0
             self._set_count = 0
@@ -197,18 +235,18 @@ class DeepmdDataSystem(object):
         return self._get_subdata(idx)
 
     def get_ntypes(self):
-        '''Number of atom types in the system.'''
+        """Number of atom types in the system."""
         if self._type_map is not None:
             return len(self._type_map)
         else:
             return max(self._atom_type) + 1
 
     def get_natoms_vec(self, ntypes: int):
-        '''Get number of atoms and number of atoms in different types.
+        """Get number of atoms and number of atoms in different types.
 
         Args:
         - ntypes: Number of types (may be larger than the actual number of types in the system).
-        '''
+        """
         natoms = len(self._atom_type)
         natoms_vec = np.zeros(ntypes).astype(int)
         for ii in range(ntypes):
@@ -244,6 +282,7 @@ class DeepmdDataSystem(object):
         type_path = set_name + "/real_atom_types.npy"
         real_type = np.load(type_path).astype(np.int32).reshape([-1, self._natoms])
         return real_type
+
     @lru_cache(maxsize=16, copy=True)
     def _load_set(self, set_name, fast=False):
         if self.file is None:
@@ -362,7 +401,7 @@ class DeepmdDataSystem(object):
         if atomic:
             ndof *= self._natoms
         path = os.path.join(set_name, key + '.npy')
-        #logging.info('Loading data from: %s', path)
+        # logging.info('Loading data from: %s', path)
         if os.path.isfile(path):
             if high_prec:
                 data = np.load(path).astype(env.GLOBAL_ENER_FLOAT_PRECISION)
@@ -383,6 +422,7 @@ class DeepmdDataSystem(object):
                 data = np.zeros([nframes, ndof]).astype(env.GLOBAL_NP_FLOAT_PRECISION)
             return np.float32(0.0), data
 
+    # deprecated TODO
     def preprocess(self, batch):
         n_frames = batch['coord'].shape[0]
         for kk in self._data_dict.keys():
@@ -398,28 +438,31 @@ class DeepmdDataSystem(object):
                 batch[kk] = torch.tensor(batch[kk], dtype=torch.long, device=env.PREPROCESS_DEVICE)
         batch['atype'] = batch.pop('type')
 
-        keys = ['selected', 'shift', 'mapping', 'selected_type']
+        keys = ['selected', 'selected_loc', 'selected_type', 'shift', 'mapping']
         coord = batch['coord']
         atype = batch['atype']
         box = batch['box']
         rcut = self.rcut
         sec = self.sec
         assert batch['atype'].max() < len(self._type_map)
-        selected, selected_type, shift, mapping = [], [], [], []
+        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
 
         for sid in trange(n_frames, disable=None):
             region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
             _coord = normalize_coord(coord[sid], region, nloc)
             coord[sid] = _coord
-            a, b, c, d = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
+            a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
             selected.append(a)
-            selected_type.append(b)
-            shift.append(c)
-            mapping.append(d)
+            selected_loc.append(b)
+            selected_type.append(c)
+            shift.append(d)
+            mapping.append(e)
         selected = torch.stack(selected)
+        selected_loc = torch.stack(selected_loc)
         selected_type = torch.stack(selected_type)
         batch['selected'] = selected
+        batch['selected_loc'] = selected_loc
         batch['selected_type'] = selected_type
         natoms_extended = max([item.shape[0] for item in shift])
         batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION,
@@ -452,45 +495,142 @@ class DeepmdDataSystem(object):
                     new_data[ii] = dd
         return new_data
 
-#note: this function needs to be optimized for single frame process
+    # note: this function needs to be optimized for single frame process
     def single_preprocess(self, batch, sid):
         for kk in self._data_dict.keys():
             if "find_" in kk:
                 pass
             else:
-                batch[kk] = torch.tensor(batch[kk][sid], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
+                batch[kk] = torch.tensor(batch[kk][sid], dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                                         device=env.PREPROCESS_DEVICE)
                 if self._data_dict[kk]['atomic']:
                     batch[kk] = batch[kk].view(-1, self._data_dict[kk]['ndof'])
-
         for kk in ['type', 'real_natoms_vec']:
             if kk in batch.keys():
                 batch[kk] = torch.tensor(batch[kk][sid], dtype=torch.long, device=env.PREPROCESS_DEVICE)
-        batch['atype'] = batch.pop('type')
-
-        coord = batch['coord']
-        atype = batch['atype']
-        box = batch['box']
+        clean_coord = batch.pop('coord')
+        clean_type = batch.pop('type')
+        nloc = clean_type.shape[0]
         rcut = self.rcut
         sec = self.sec
-        selected, selected_type, shift, mapping = [], [], [], []
-        region = Region3D(box)
-        nloc = atype.shape[0]
-        _coord = normalize_coord(coord, region, nloc)
-        batch['coord'] = _coord
-        selected, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec, type_split=self.type_split)
-        batch['selected'] = selected
-        batch['selected_type'] = selected_type
+        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
+        if self.pbc:
+            box = batch['box']
+            region = Region3D(box)
+        else:
+            box = None
+            region = None
+        if self.noise_settings is None:
+            batch['atype'] = clean_type
+            batch['coord'] = clean_coord
+            coord = clean_coord
+            atype = batch['atype']
+            if self.pbc:
+                _coord = normalize_coord(coord, region, nloc)
 
-        batch['shift'] = shift
-        batch['mapping'] = mapping
-        return batch
+            else:
+                _coord = coord.clone()
+            batch['coord'] = _coord
+            selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec,
+                                                                                 pbc=self.pbc,
+                                                                                 type_split=self.type_split)
+            batch['selected'] = selected
+            batch['selected_loc'] = selected_loc
+            batch['selected_type'] = selected_type
+            batch['shift'] = shift
+            batch['mapping'] = mapping
+            return batch
+        else:
+            batch['clean_type'] = clean_type
+            batch['clean_coord'] = clean_coord
+            # add noise
+            for i in range(self.max_fail_num):
+                mask_num = 0
+                if self.noise_mode == "fix_num":
+                    mask_num = self.mask_num
+                elif self.noise_mode == "prob":
+                    mask_num = int(self.mask_prob * nloc)
+                else:
+                    NotImplementedError(f"Unknown noise mode {self.noise_mode}!")
+                coord_mask_res = np.random.choice(range(nloc), mask_num, replace=False).tolist()
+                coord_mask = np.isin(range(nloc), coord_mask_res)
+                if self.same_mask:
+                    type_mask = coord_mask.copy()
+                else:
+                    type_mask_res = np.random.choice(range(nloc), mask_num, replace=False).tolist()
+                    type_mask = np.isin(range(nloc), type_mask_res)
+
+                # add noise for coord
+                if self.mask_coord:
+                    noise_on_coord = 0.0
+                    if self.noise_type == "trunc_normal":
+                        noise_on_coord = np.clip(
+                            np.random.randn(mask_num, 3) * self.noise,
+                            a_min=-self.noise * 2.0,
+                            a_max=self.noise * 2.0,
+                        )
+                    elif self.noise_type == "normal":
+                        noise_on_coord = np.random.randn(mask_num, 3) * self.noise
+                    elif self.noise_type == "uniform":
+                        noise_on_coord = np.random.uniform(
+                            low=-self.noise, high=self.noise, size=(mask_num, 3)
+                        )
+                    else:
+                        NotImplementedError(f"Unknown noise type {self.noise_type}!")
+                    noised_coord = clean_coord.clone().detach()
+                    noised_coord[coord_mask] += noise_on_coord
+                    batch['coord_mask'] = torch.tensor(coord_mask,
+                                                       dtype=torch.bool,
+                                                       device=env.PREPROCESS_DEVICE)
+                else:
+                    noised_coord = clean_coord
+                    batch['coord_mask'] = torch.tensor(np.zeros_like(coord_mask, dtype=np.bool),
+                                                       dtype=torch.bool,
+                                                       device=env.PREPROCESS_DEVICE)
+
+                # add mask for type
+                if self.mask_type:
+                    masked_type = clean_type.clone().detach()
+                    masked_type[type_mask] = self.mask_type_idx
+                    batch['type_mask'] = torch.tensor(type_mask,
+                                                      dtype=torch.bool,
+                                                      device=env.PREPROCESS_DEVICE)
+                else:
+                    masked_type = clean_type
+                    batch['type_mask'] = torch.tensor(np.zeros_like(type_mask, dtype=np.bool),
+                                                      dtype=torch.bool,
+                                                      device=env.PREPROCESS_DEVICE)
+                if self.pbc:
+                    _coord = normalize_coord(noised_coord, region, nloc)
+                else:
+                    _coord = noised_coord.clone()
+                batch['coord'] = _coord
+                try:
+                    selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, masked_type, region,
+                                                                                         rcut, sec,
+                                                                                         pbc=self.pbc,
+                                                                                         type_split=self.type_split,
+                                                                                         min_check=True)
+                except RuntimeError as e:
+                    if i == self.max_fail_num - 1:
+                        RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
+                    continue
+                batch['atype'] = masked_type
+                batch['coord'] = noised_coord
+                batch['selected'] = selected
+                batch['selected_loc'] = selected_loc
+                batch['selected_type'] = selected_type
+                batch['shift'] = shift
+                batch['mapping'] = mapping
+                return batch
 
     def _get_item(self, index):
-        for i in range(0,len(self._dirs) + 1):#note: if different sets can be merged, prefix sum is unused to calculate
+        for i in range(0,
+                       len(self._dirs) + 1):  # note: if different sets can be merged, prefix sum is unused to calculate
             if index < self.prefix_sum[i]:
                 break
-        frames = self._load_set(self._dirs[i-1])
-        frame = self.single_preprocess(frames,index-self.prefix_sum[i-1])
+        frames = self._load_set(self._dirs[i - 1])
+        frame = self.single_preprocess(frames, index - self.prefix_sum[i - 1])
         return frame
 
 
@@ -501,17 +641,59 @@ def _make_idx_map(atom_type):
     return idx_map
 
 
-class DeepmdDataSet(Dataset):
+class DeepmdDataSetForLoader(Dataset):
 
-    def __init__(self, systems: List[str], batch_size: int, type_map: List[str],
-                 rcut=None, sel=None, weight=None, type_split=True):
-        '''Construct DeePMD-style dataset containing frames cross different systems.
+    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None, type_split=True,
+                 noise_settings=None):
+        """Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
         - systems: Paths to systems.
         - batch_size: Max frame count in a batch.
         - type_map: Atom types.
-        '''
+        """
+        self._type_map = type_map
+        if sel is not None:
+            if isinstance(sel, int):
+                sel = [sel]
+            sec = torch.cumsum(torch.tensor(sel), dim=0)
+        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,
+                                             type_split=type_split, noise_settings=noise_settings)
+        self.mixed_type = self._data_system.mixed_type
+        self._ntypes = self._data_system.get_ntypes()
+        self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
+
+    def set_noise(self, noise_settings):
+        # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
+        # noise_settings['noise'] # float, default 1.0
+        # noise_settings['noise_mode'] # "prob", "fix_num"
+        # noise_settings['mask_num'] # if "fix_num", int
+        # noise_settings['mask_prob'] # if "prob", float
+        # noise_settings['same_mask'] # coord and type same mask?
+        self._data_system.set_noise(noise_settings)
+
+    def __len__(self):
+        return self._data_system.nframes
+
+    def __getitem__(self, index):
+        """Get a frame from the selected system."""
+        b_data = self._data_system._get_item(index)
+        b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
+        return b_data
+
+
+# deprecated TODO
+class DeepmdDataSet(Dataset):
+
+    def __init__(self, systems: List[str], batch_size: int, type_map: List[str],
+                 rcut=None, sel=None, weight=None, type_split=True):
+        """Construct DeePMD-style dataset containing frames cross different systems.
+
+        Args:
+        - systems: Paths to systems.
+        - batch_size: Max frame count in a batch.
+        - type_map: Atom types.
+        """
         self._batch_size = batch_size
         self._type_map = type_map
         if sel is not None:
@@ -521,7 +703,8 @@ class DeepmdDataSet(Dataset):
         if isinstance(systems, str):
             with h5py.File(systems) as file:
                 systems = [os.path.join(systems, item) for item in file.keys()]
-        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map, type_split=type_split) for ii in systems]
+        self._data_systems = [DeepmdDataSystem(ii, rcut, sec, type_map=self._type_map, type_split=type_split) for ii in
+                              systems]
         # check mix_type format
         error_format_msg = (
             "if one of the system is of mixed_type format, "
@@ -557,8 +740,9 @@ class DeepmdDataSet(Dataset):
         b_data['natoms'] = b_data['natoms'].unsqueeze(0).expand(batch_size, -1)
         return b_data
 
+    # deprecated TODO
     def get_training_batch(self, index=None):
-        '''Get a batch of frames from the selected system.'''
+        """Get a batch of frames from the selected system."""
         if index is None:
             index = dp_random.choice(np.arange(self.nsystems), self.probs)
         b_data = self._data_systems[index].get_batch_for_train(self._batch_size)
@@ -584,33 +768,3 @@ class DeepmdDataSet(Dataset):
         np_batch['natoms'] = np_batch['natoms'][0]
         np_batch['force'] = np_batch['force'].reshape(batch_size, -1)
         return np_batch, pt_batch
-
-class DeepmdDataSetForLoader(Dataset):
-
-    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None, type_split=True):
-        '''Construct DeePMD-style dataset containing frames cross different systems.
-
-        Args:
-        - systems: Paths to systems.
-        - batch_size: Max frame count in a batch.
-        - type_map: Atom types.
-        '''
-        self._type_map = type_map
-        if sel is not None:
-            if isinstance(sel, int):
-                sel = [sel]
-            sec = torch.cumsum(torch.tensor(sel), dim=0)
-        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,type_split=type_split)
-        self.mixed_type = self._data_system.mixed_type
-        self._ntypes = self._data_system.get_ntypes()
-        self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
-
-
-    def __len__(self):
-        return self._data_system.nframes
-
-    def __getitem__(self, index):
-        '''Get a frame from the selected system.'''
-        b_data = self._data_system._get_item(index)
-        b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
-        return b_data

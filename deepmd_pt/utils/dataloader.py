@@ -12,16 +12,20 @@ from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 def setup_seed(seed):
-   torch.manual_seed(seed)
-   torch.cuda.manual_seed_all(seed)
-   torch.backends.cudnn.deterministic = True
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+
 
 class DpLoaderSet(Dataset):
     """A dataset for storing DataLoaders to multiple Systems."""
 
-    def __init__(self, systems, batch_size, model_params,seed = 10,type_split = True):
+    def __init__(self, systems, batch_size, model_params, seed=10, type_split=True, noise_settings=None):
         setup_seed(seed)
         if isinstance(systems, str):
             with h5py.File(systems) as file:
@@ -34,7 +38,8 @@ class DpLoaderSet(Dataset):
                 type_map=model_params["type_map"],
                 rcut=model_params["descriptor"]["rcut"],
                 sel=model_params["descriptor"]["sel"],
-                type_split=type_split
+                type_split=type_split,
+                noise_settings=noise_settings
             )
             self.systems.append(ds)
         self.sampler_list: List[DistributedSampler] = []
@@ -63,6 +68,16 @@ class DpLoaderSet(Dataset):
         self.iters = []
         for item in self.dataloaders:
             self.iters.append(iter(item))
+
+    def set_noise(self, noise_settings):
+        # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
+        # noise_settings['noise'] # float, default 1.0
+        # noise_settings['noise_mode'] # "prob", "fix_num"
+        # noise_settings['mask_num'] # if "fix_num", int
+        # noise_settings['mask_prob'] # if "prob", float
+        # noise_settings['same_mask'] # coord and type same mask?
+        for system in self.systems:
+            system.set_noise(noise_settings)
 
     def __len__(self):
         return len(self.index)
@@ -120,8 +135,8 @@ class BufferedIterator(object):
         if self._queue.qsize() < min(2, max(1, self._queue.maxsize // 2)):
             if time.time() - self.start_time > 5 * 60:
                 if (
-                    self.warning_time is None
-                    or time.time() - self.warning_time > 15 * 60
+                        self.warning_time is None
+                        or time.time() - self.warning_time > 15 * 60
                 ):
                     logging.warning(
                         "Data loading buffer is empty or nearly empty. This may "

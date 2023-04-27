@@ -2,15 +2,14 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor.env_mat import prod_env_mat_se_a
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor
 
 try:
     from typing import Final
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.descriptor.descriptor import Descriptor
-from deepmd_pt.model.network.network import TypeFilter
+from deepmd_pt.model.network import TypeFilter
 
 
 class DescrptSeA(Descriptor):
@@ -24,7 +23,7 @@ class DescrptSeA(Descriptor):
                  neuron=[25, 50, 100],
                  axis_neuron=16,
                  **kwargs):
-        '''Construct an embedding net of type `se_a`.
+        """Construct an embedding net of type `se_a`.
 
         Args:
         - rcut: Cut-off radius.
@@ -32,7 +31,7 @@ class DescrptSeA(Descriptor):
         - sel: For each element type, how many atoms is selected as neighbors.
         - filter_neuron: Number of neurons in each hidden layers of the embedding net.
         - axis_neuron: Number of columns of the sub-matrix of the embedding matrix.
-        '''
+        """
         super(DescrptSeA, self).__init__()
         self.rcut = rcut
         self.rcut_smth = rcut_smth
@@ -77,7 +76,7 @@ class DescrptSeA(Descriptor):
             index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
-            env_mat = prod_env_mat_se_a(
+            env_mat, _ = prod_env_mat_se_a(
                 extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth, self.sec
@@ -126,7 +125,7 @@ class DescrptSeA(Descriptor):
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
         nall = selected.shape[1]
-        dmatrix = prod_env_mat_se_a(
+        dmatrix, _ = prod_env_mat_se_a(
             extended_coord, selected, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth, self.sec)

@@ -1,7 +1,7 @@
 import torch
-
 from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
-from deepmd_pt.loss.loss import TaskLoss
+from deepmd_pt.loss import TaskLoss
+from deepmd_pt.utils import env
 
 
 class EnergyStdLoss(TaskLoss):
@@ -45,7 +45,7 @@ class EnergyStdLoss(TaskLoss):
         pref_e = self.limit_pref_e + (self.start_pref_e - self.limit_pref_e) * coef
         pref_f = self.limit_pref_f + (self.start_pref_f - self.limit_pref_f) * coef
         pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
-        loss = 0.
+        loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
         atom_norm = 1. / natoms[0, 0]
         if self.has_e and 'energy' in model_pred and 'energy' in label:
@@ -70,5 +70,5 @@ class EnergyStdLoss(TaskLoss):
             loss += atom_norm * (pref_v * l2_virial_loss)
             rmse_v = l2_virial_loss.sqrt() * atom_norm
             more_loss['rmse_v'] = rmse_v.detach()
-
+        more_loss['rmse'] = torch.sqrt(loss.detach())
         return loss, more_loss

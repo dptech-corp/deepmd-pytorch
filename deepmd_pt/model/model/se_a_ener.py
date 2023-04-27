@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd_pt.model.descriptor import DescrptSeA, DescrptSeAtten
-from deepmd_pt.model.task.ener import EnergyFittingNet
-from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
+from deepmd_pt.model.descriptor import DescrptSeA
+from deepmd_pt.model.task import EnergyFittingNet
+from deepmd_pt.utils.stat import compute_output_stats
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
@@ -50,7 +50,7 @@ class EnergyModelSeA(BaseModel):
             fitting_param['bias_atom_e'] = [0.0] * ntypes
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, box=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, selected_loc=None, box=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].

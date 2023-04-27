@@ -1,11 +1,9 @@
-import numpy as np
-import os
-import torch
 import collections
-import unittest
 import json
+import unittest
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 
 from deepmd import op
@@ -19,7 +17,7 @@ from deepmd.utils.learning_rate import LearningRateExp
 
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
-from deepmd_pt.loss.ener import EnergyStdLoss
+from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.model.model import EnergyModelSeA
 from deepmd_pt.utils.env import *
 
@@ -195,10 +193,10 @@ class DpTrainer(object):
             if kk == 'type':
                 continue
             prec = tf.float64
-            place_holders[kk] = tf.placeholder(prec, [None], name = 't_' + kk)
-            place_holders['find_'+kk] = tf.placeholder(tf.float32, name = 't_find_' + kk)
+            place_holders[kk] = tf.placeholder(prec, [None], name='t_' + kk)
+            place_holders['find_' + kk] = tf.placeholder(tf.float32, name='t_find_' + kk)
         place_holders['type'] = tf.placeholder(tf.int32, [None], name='t_type')
-        place_holders['natoms_vec'] = tf.placeholder(tf.int32, [self.ntypes+2], name='t_natoms')
+        place_holders['natoms_vec'] = tf.placeholder(tf.int32, [self.ntypes + 2], name='t_natoms')
         place_holders['default_mesh'] = tf.placeholder(tf.int32, [None], name='t_mesh')
         place_holders['is_training'] = tf.placeholder(tf.bool)
         return place_holders
@@ -233,14 +231,14 @@ class TestEnergy(unittest.TestCase):
     def test_consistency(self):
         batch, head_dict, stat_dict, vs_dict = self.dp_trainer.get_intermediate_state(self.wanted_step)
         # Build DeePMD graph
-        my_ds = DpLoaderSet(self.systems,self.batch_size,
-        model_params={
-                'descriptor': {
-                    'sel': self.sel,
-                    'rcut': self.rcut,
-                },
-                'type_map': self.type_map
-            })
+        my_ds = DpLoaderSet(self.systems, self.batch_size,
+                            model_params={
+                                'descriptor': {
+                                    'sel': self.sel,
+                                    'rcut': self.rcut,
+                                },
+                                'type_map': self.type_map
+                            })
         sampled = make_stat_input(my_ds.systems, my_ds.dataloaders, self.data_stat_nbatch)
         my_model = EnergyModelSeA(
             model_params={
@@ -294,7 +292,7 @@ class TestEnergy(unittest.TestCase):
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         model_predict = my_model(batch['coord'], batch['atype'], batch['natoms'],
-        batch['mapping'], batch['shift'], batch['selected'], batch['box'])
+                                 batch['mapping'], batch['shift'], batch['selected'], batch['box'])
         p_energy, p_force, p_virial = model_predict['energy'], model_predict['force'], model_predict['virial']
         cur_lr = my_lr.value(self.wanted_step)
         model_pred = {'energy': p_energy,
@@ -306,14 +304,18 @@ class TestEnergy(unittest.TestCase):
         loss, _ = my_loss(model_pred, label, batch['natoms'], cur_lr)
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
-        rtol= 1e-5; atol=1e-8
-        self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol,atol=atol))
-        self.assertTrue(np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
+        rtol = 1e-5;
+        atol = 1e-8
+        self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
+        self.assertTrue(
+            np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
+
         def step(step_id):
             bdata = self.training_data.get_trainning_batch()
             optimizer.zero_grad()
+
         # Compare gradient for consistency
         loss.backward()
 
@@ -323,5 +325,7 @@ class TestEnergy(unittest.TestCase):
             param_grad = param.grad.cpu()
             var_grad = torch.tensor(var_grad)
             assert np.allclose(var_grad, param_grad, rtol=rtol, atol=atol)
+
+
 if __name__ == '__main__':
     unittest.main()
