@@ -199,20 +199,29 @@ class Trainer(object):
                 self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == "LKF":
-                KFOptWrapper = KFOptimizerWrapper(
-                    self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
-                )
-                _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
-                p_energy, p_force = KFOptWrapper.update_force(
-                    input_dict, label_dict["force"]
-                )
-                # [coord, atype, natoms, mapping, shift, selected, box]
-                model_pred = {"energy": p_energy, "force": p_force}
-                module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                loss, more_loss = module.loss[task_key](
+                if isinstance(self.loss, EnergyStdLoss):
+                    KFOptWrapper = KFOptimizerWrapper(
+                        self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
+                    )
+                    _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
+                    p_energy, p_force = KFOptWrapper.update_force(
+                        input_dict, label_dict["force"]
+                    )
+                    # [coord, atype, natoms, mapping, shift, selected, box]
+                    model_pred = {"energy": p_energy, "force": p_force}
+                    module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                    loss, more_loss = module.loss[task_key](
+                            model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                        )
+                elif isinstance(self.loss, DenoiseLoss):
+                    KFOptWrapper = KFOptimizerWrapper(
+                        self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
+                    )
+                    module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                    model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1, module.loss[task_key].mask_loss_coord, label_dict["coord_mask"])
+                    loss, more_loss = module.loss[task_key](
                         model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
                     )
-
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
