@@ -34,8 +34,8 @@ def train(FLAGS):
 
     training_systems=training_dataset_params['systems']
     validation_systems=validation_dataset_params['systems']
-    train_data = DpLoaderSet(training_systems,training_dataset_params['batch_size'],model_params)
-    validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params)
+    train_data = DpLoaderSet(training_systems,training_dataset_params['batch_size'],model_params,type_split=type_split)
+    validation_data = DpLoaderSet(validation_systems,validation_dataset_params['batch_size'],model_params,type_split=type_split)
     data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
     sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch) \
         if FLAGS.CKPT is None and not FLAGS.skip_stat else None
@@ -47,7 +47,7 @@ def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = inference.Trainer(config, FLAGS.CKPT)
+    trainer = inference.Trainer(config, FLAGS.CKPT, FLAGS.numb_test)
     trainer.run()
 
 
@@ -55,7 +55,7 @@ def test(FLAGS):
 def main(args=None):
     logging.basicConfig(
         level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
-        format='%(asctime)-15s [%(filename)s:%(lineno)d] %(levelname)s %(message)s'
+        format=f"%(asctime)-15s {os.environ.get('RANK') or ''} [%(filename)s:%(lineno)d] %(levelname)s %(message)s"
     )
     parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
@@ -67,6 +67,7 @@ def main(args=None):
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+    test_parser.add_argument("-n", "--numb-test", default=100, type=int, help="The number of data for test")
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)

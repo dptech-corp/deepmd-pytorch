@@ -184,7 +184,7 @@ class Trainer(object):
                 self.scheduler.step()
             elif self.opt_type == "LKF":
                 KFOptWrapper = KFOptimizerWrapper(
-                    self.wrapper, self.optimizer, 24, 6, False
+                    self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                 )
                 _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
                 p_energy, p_force = KFOptWrapper.update_force(
@@ -192,9 +192,11 @@ class Trainer(object):
                 )
                 # [coord, atype, natoms, mapping, shift, selected, box]
                 model_pred = {"energy": p_energy, "force": p_force}
-                loss, more_loss = self.wrapper.loss[task_key](
-                    model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
-                )
+                module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                loss, more_loss = module.loss[task_key](
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                    )
+
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 

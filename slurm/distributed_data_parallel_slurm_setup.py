@@ -35,4 +35,9 @@ if __name__ == "__main__":
     world_rank = os.environ['SLURM_PROCID']
     output += " && export RANK='{}'".format(world_rank, world_rank)
 
+    # --- Set Local Rank ---
+    if world_size > 1:
+        local_rank = os.environ['SLURM_LOCALID']
+        output += " && export LOCAL_RANK='{}'".format(local_rank, local_rank)
+
     print(output)

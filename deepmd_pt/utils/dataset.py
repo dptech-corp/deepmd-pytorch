@@ -43,6 +43,9 @@ class DeepmdDataSystem(object):
             "if one of the set is of mixed_type format, "
             "then all of the sets in this system should be of mixed_type format!"
         )
+        if len(self._dirs)==0:
+            raise RuntimeError(f"No set found in system {sys_path}.")
+
         self.mixed_type = self._check_mode(self._dirs[0])
         for set_item in self._dirs[1:]:
             assert self._check_mode(set_item) == self.mixed_type, error_format_msg
@@ -584,7 +587,7 @@ class DeepmdDataSet(Dataset):
 
 class DeepmdDataSetForLoader(Dataset):
 
-    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None):
+    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None, type_split=True):
         '''Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -597,7 +600,7 @@ class DeepmdDataSetForLoader(Dataset):
             if isinstance(sel, int):
                 sel = [sel]
             sec = torch.cumsum(torch.tensor(sel), dim=0)
-        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map)
+        self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,type_split=type_split)
         self.mixed_type = self._data_system.mixed_type
         self._ntypes = self._data_system.get_ntypes()
         self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
