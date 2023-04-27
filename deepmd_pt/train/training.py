@@ -101,7 +101,8 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-
+        model_params["stat_file"] = config["training"].get("stat_file", "stat.npz")
+        model_params["resuming"]: bool = (resume_from is not None)
         if model_params.get("fitting_net", None) is not None:
             if model_params.get("backbone", None) is None:
                 if model_params["descriptor"]["type"] == "se_e2_a":

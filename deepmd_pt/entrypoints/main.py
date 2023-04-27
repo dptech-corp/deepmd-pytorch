@@ -50,7 +50,7 @@ def train(FLAGS):
     validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
                                   type_split=type_split, noise_settings=noise_settings)
     skip_stat = False
-    if FLAGS.CKPT or skip_stat:
+    if FLAGS.CKPT or os.path.exists(config["training"].get("stat_file", "stat.npz")):
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split, noise_settings=noise_settings)
         sampled = None

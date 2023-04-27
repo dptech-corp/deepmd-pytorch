@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import torch
 from typing import Optional, List
@@ -43,11 +44,17 @@ class EnergyModelDPA1(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        if sampled is not None:
-            for sys in sampled:
-                for key in sys:
-                    sys[key] = sys[key].to(env.DEVICE)
-            self.descriptor.compute_input_stats(sampled)
+        if not model_params["resuming"]:
+            if sampled is not None:
+                for sys in sampled:
+                    for key in sys:
+                        sys[key] = sys[key].to(env.DEVICE)
+                sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
+            else:
+                logging.info(f"Loading stat file from {model_params.get('stat_file')}")
+                stats = np.load(model_params.get("stat_file"))
+                sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
+            self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
@@ -63,10 +70,16 @@ class EnergyModelDPA1(BaseModel):
                 input_natoms = [item['natoms'] for item in sampled]
             tmp = compute_output_stats(energy, input_natoms)
             fitting_param['bias_atom_e'] = tmp[:, 0]
+        elif not model_params["resuming"]:
+            fitting_param['bias_atom_e'] = stats["bias_atom_e"]
         else:
             fitting_param['bias_atom_e'] = [0.0] * ntypes
         fitting_param['use_tebd'] = True
         self.fitting_net = EnergyFittingNetType(**fitting_param)
+
+        if sampled is not None:
+            logging.info(f"Saving stat file to {model_params.get('stat_file')}")
+            np.savez_compressed(model_params.get("stat_file"), sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2, bias_atom_e=fitting_param['bias_atom_e'])
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
         """Return total energy of the system.
