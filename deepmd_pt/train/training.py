@@ -101,8 +101,7 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        model_params["stat_file"] = config["training"].get("stat_file", "stat.npz")
-        model_params["resuming"]: bool = (resume_from is not None)
+        model_params["resuming"] = (resume_from is not None)
         if model_params.get("fitting_net", None) is not None:
             if model_params.get("backbone", None) is None:
                 if model_params["descriptor"]["type"] == "se_e2_a":
@@ -306,7 +305,7 @@ class Trainer(object):
         if (
             self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned
-            try: 
+            try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper

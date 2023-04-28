@@ -1,4 +1,5 @@
 import logging
+import os
 import numpy as np
 import torch
 from typing import Optional, List
@@ -67,13 +68,15 @@ class EnergyModelDPA1(BaseModel):
                 tmp = compute_output_stats(energy, input_natoms)
                 fitting_param['bias_atom_e'] = tmp[:, 0]
 
-                logging.info(f"Saving stat file to {model_params.get('stat_file')}")
-                np.savez_compressed(model_params.get("stat_file"),
+                logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
+                if not os.path.exists(model_params["stat_file_dir"]):
+                    os.mkdir(model_params["stat_file_dir"])
+                np.savez_compressed(model_params["stat_file_path"],
                                     sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
                                     bias_atom_e=fitting_param['bias_atom_e'])
             else: # load stat
-                logging.info(f"Loading stat file from {model_params.get('stat_file')}")
-                stats = np.load(model_params.get("stat_file"))
+                logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
+                stats = np.load(model_params["stat_file_path"])
                 sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
                 fitting_param['bias_atom_e'] = stats["bias_atom_e"]
             self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
