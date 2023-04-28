@@ -63,12 +63,22 @@ class Tester(object):
         self.wrapper.load_state_dict(state_dict)
 
         # Loss
+        self.noise_settings = None
         loss_params = config.pop("loss")
         loss_type = loss_params.pop("type", "ener")
         if loss_type == 'ener':
             loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
             self.loss = EnergyStdLoss(**loss_params)
         elif loss_type == 'denoise':
+            if loss_type == 'denoise':
+                self.noise_settings = {"noise_type": loss_params.pop("noise_type", "uniform"),
+                                       "noise": loss_params.pop("noise", 1.0),
+                                       "noise_mode": loss_params.pop("noise_mode", "fix_num"),
+                                       "mask_num": loss_params.pop("mask_num", 8),
+                                       "same_mask": loss_params.pop("same_mask", False),
+                                       "mask_coord": loss_params.pop("mask_coord", False),
+                                       "mask_type": loss_params.pop("mask_type", False),
+                                       "mask_type_idx": len(model_params["type_map"]) - 1}
             loss_params['ntypes'] = len(model_params['type_map'])
             self.loss = DenoiseLoss(**loss_params)
         else:
@@ -108,7 +118,8 @@ class Tester(object):
         for system in systems:
             logging.info("# ---------------output of dp test--------------- ")
             logging.info(f"# testing system : {system}")
-            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params, type_split=self.type_split)
+            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params,
+                                  type_split=self.type_split, noise_settings=self.noise_settings)
             dataloader = DataLoader(
                 dataset,
                 sampler=torch.utils.data.RandomSampler(dataset),
