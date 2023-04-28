@@ -17,10 +17,10 @@ if torch.__version__.startswith("2"):
     import torch._dynamo
 
 
-class Trainer(object):
+class Tester(object):
 
     def __init__(self, config: Dict[str, Any], ckpt, numb_test=100):
-        """Construct a DeePMD trainer.
+        """Construct a DeePMD tester.
 
         Args:
         - config: The Dict-like configuration with training options.
@@ -149,3 +149,4 @@ class Trainer(object):
         for item in sorted(list(global_results.keys())):
             logging.info(f"{item}: {global_results[item]:.4f}")
         logging.info("# ----------------------------------------------- ")
+        return global_results
