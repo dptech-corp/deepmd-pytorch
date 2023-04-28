@@ -37,11 +37,11 @@ jobs:
 
     - name: Sync image
       run: >-
-        wget https://dlc-cli.oss-cn-zhangjiakou.aliyuncs.com/light/binary/linux/amd64/dlc
-        chmod +x dlc
-        ./dlc config --access_id ${{ secrets.DLC_ACCESS_ID }} --endpoint ${{ secrets.DLC_ENDPOINT }} --access_key ${{ secrets.DLC_ACCESS_KEY }} --protocol http
+        wget https://dlc-cli.oss-cn-zhangjiakou.aliyuncs.com/light/binary/linux/amd64/dlc &&
+        chmod +x dlc &&
+        ./dlc config --access_id ${{ secrets.DLC_ACCESS_ID }} --endpoint ${{ secrets.DLC_ENDPOINT }} --access_key ${{ secrets.DLC_ACCESS_KEY }} --protocol http &&
         for i in ${{ steps.meta.outputs.tags }}; do
-          ./dlc sync-image --image-tag ${i##*/}
+          ./dlc sync-image --image-tag ${i##*/};
         done
 
     - name: send email
