@@ -558,6 +558,7 @@ class Evoformer2bEncoder(torch.nn.Module):
                  final_head_layer_norm: bool = False,
                  emb_layer_norm: bool = False,
                  atomic_residual: bool = False,
+                 evo_residual: bool = False,
                  activation_function: str = "gelu"):
         super(Evoformer2bEncoder, self).__init__()
         self.nnei = nnei
@@ -572,6 +573,7 @@ class Evoformer2bEncoder(torch.nn.Module):
         self._final_head_layer_norm = final_head_layer_norm
         self._emb_layer_norm = emb_layer_norm
         self.activation_function = activation_function
+        self.evo_residual = evo_residual
         if atomic_residual and atomic_dim == feature_dim:
             self.atomic_residual = True
         else:
@@ -621,6 +623,7 @@ class Evoformer2bEncoder(torch.nn.Module):
         # Global branch
         nframes, nloc, _ = atomic_rep.size()
         nnei = pair_rep.shape[2]
+        input_atomic_rep = atomic_rep
         # [nframes, nloc, feature_dim]
         if self.atomic_residual:
             atomic_rep = atomic_rep + self.in_proj(atomic_rep)
@@ -679,5 +682,8 @@ class Evoformer2bEncoder(torch.nn.Module):
             transformed_atomic_rep = atomic_rep + self.out_proj(atomic_rep)
         else:
             transformed_atomic_rep = self.out_proj(atomic_rep)
+
+        if self.evo_residual:
+            transformed_atomic_rep = (transformed_atomic_rep + input_atomic_rep) * (1/np.sqrt(2))
 
         return atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep
