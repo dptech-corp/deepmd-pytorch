@@ -50,7 +50,7 @@ class EnergyModelSeA(BaseModel):
             fitting_param['bias_atom_e'] = [0.0] * ntypes
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type=None, selected_loc=None, box=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].

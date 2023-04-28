@@ -80,7 +80,7 @@ class EnergyModelDPA2(BaseModel):
         fitting_param['use_tebd'] = True
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].

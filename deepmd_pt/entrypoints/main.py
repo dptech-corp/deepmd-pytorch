@@ -85,6 +85,15 @@ def test(FLAGS):
     trainer.run()
 
 
+def freeze(FLAGS):
+    with open(FLAGS.INPUT, 'r') as fin:
+        config = json.load(fin)
+    model = torch.jit.script(inference.Tester(config, FLAGS.CKPT, 1).model)
+    torch.jit.save(model, 'frozen_model.pt', {
+        # TODO: _extra_files
+    })
+
+
 @record
 def main(args=None):
     logging.basicConfig(
@@ -101,11 +110,18 @@ def main(args=None):
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
     test_parser.add_argument("-n", "--numb-test", default=100, type=int, help="The number of data for test")
+
+    freeze_parser = subparsers.add_parser('freeze', help='Freeze a model.')
+    freeze_parser.add_argument('INPUT', help='A Json-format configuration file.')
+    freeze_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)
     elif FLAGS.command == 'test':
         test(FLAGS)
+    elif FLAGS.command == 'freeze':
+        freeze(FLAGS)
     else:
         logging.error('Invalid command!')
         parser.print_help()
