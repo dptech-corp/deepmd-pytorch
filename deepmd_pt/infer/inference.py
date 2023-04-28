@@ -17,10 +17,10 @@ if torch.__version__.startswith("2"):
     import torch._dynamo
 
 
-class Trainer(object):
+class Tester(object):
 
     def __init__(self, config: Dict[str, Any], ckpt, numb_test=100):
-        """Construct a DeePMD trainer.
+        """Construct a DeePMD tester.
 
         Args:
         - config: The Dict-like configuration with training options.
@@ -32,6 +32,9 @@ class Trainer(object):
         # Data + Model
         dp_random.seed(training_params['seed'])
         self.dataset_params = training_params.pop('validation_data')
+        self.type_split = True
+        if model_params['descriptor']['type'] in ['se_atten']:
+            self.type_split = False
         self.model_params = deepcopy(model_params)
 
         if model_params.get("fitting_net", None) is not None:
@@ -104,7 +107,7 @@ class Trainer(object):
         for system in systems:
             logging.info("# ---------------output of dp test--------------- ")
             logging.info(f"# testing system : {system}")
-            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params)
+            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params, type_split=self.type_split)
             dataloader = DataLoader(
                 dataset,
                 sampler=torch.utils.data.RandomSampler(dataset),
@@ -146,3 +149,4 @@ class Trainer(object):
         for item in sorted(list(global_results.keys())):
             logging.info(f"{item}: {global_results[item]:.4f}")
         logging.info("# ----------------------------------------------- ")
+        return global_results
