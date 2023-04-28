@@ -32,7 +32,7 @@ def get_data(batch):
     inputs['natoms'] = None
     return inputs
 
-class TestRotation(unittest.TestCase):
+class TestForceGrad(unittest.TestCase):
     def setUp(self):
         np.random.seed(20)
         with open(env.TEST_CONFIG, 'r') as fin:
@@ -59,7 +59,7 @@ class TestRotation(unittest.TestCase):
         self.dpdatasystem = CheckSymmetry(sys_path=systems[system_index], rcut=rcut, sec=sec, type_map=type_map)
         self.origin_batch = self.dpdatasystem._get_item(batch_index)
 
-    def test_rotation(self, threshold=1E-3, delta0=1E-6, seed=20):
+    def test_force_grad(self, threshold=1E-3, delta0=1E-6, seed=20):
         result0 = self.model(**get_data(self.origin_batch))
         np.random.seed(seed)
         errors = np.zeros((self.dpdatasystem._natoms, 3))

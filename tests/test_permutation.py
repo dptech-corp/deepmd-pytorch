@@ -2,7 +2,6 @@ from typing import List
 import unittest
 import torch
 import json
-from scipy.stats import special_ortho_group
 import numpy as np
 import copy
 
@@ -49,12 +48,11 @@ def get_data(batch):
     inputs['natoms'] = None
     return inputs
 
-class TestRotation(unittest.TestCase):
+class TestPermutation(unittest.TestCase):
     def setUp(self):
         np.random.seed(20)
         with open(env.TEST_CONFIG, 'r') as fin:
             self.config = json.load(fin)
-        self.rotation = special_ortho_group.rvs(3)
         self.get_dataset(0)
         self.get_model()
 
@@ -76,7 +74,7 @@ class TestRotation(unittest.TestCase):
         self.origin_batch = dpdatasystem._get_item(batch_index)
         self.permutate_batch, self.ei, self.ej = dpdatasystem.get_permutation(batch_index)
 
-    def test_rotation(self):
+    def test_permutation(self):
         result1 = self.model(**get_data(self.origin_batch))
         result2 = self.model(**get_data(self.permutate_batch))
         self.assertTrue(result1['energy']==result2['energy'])

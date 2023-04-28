@@ -22,7 +22,6 @@ class CheckSymmetry(DeepmdDataSystem):
         frames['coord'] = np.dot(rotation_matrix, frames['coord'].reshape(-1, 3).T).T.reshape(self.nframes, -1)
         frames['box'] = np.dot(rotation_matrix, frames['box'].reshape(-1, 3).T).T.reshape(self.nframes, -1)
         frames['force'] = np.dot(rotation_matrix, frames['force'].reshape(-1, 3).T).T.reshape(self.nframes, -1)
-        frames['virial'] = np.dot(rotation_matrix, frames['virial'].reshape(-1, 3).T).T.reshape(self.nframes, -1)
         frame = self.single_preprocess(frames,index-self.prefix_sum[i-1])
         return frame
 
