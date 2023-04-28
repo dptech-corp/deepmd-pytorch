@@ -37,6 +37,7 @@ class Tester(object):
             self.type_split = False
         self.model_params = deepcopy(model_params)
 
+        model_params["resuming"] = (ckpt is not None) # should always be True for inferencing
         if model_params.get("fitting_net", None) is not None:
             if model_params.get("backbone", None) is None:
                 if model_params["descriptor"]["type"] == "se_e2_a":
