@@ -26,7 +26,7 @@ class EnergyModelSeA(BaseModel):
         if self.descriptor_type == 'se_e2_a':
             self.descriptor = DescrptSeA(**descriptor_param)
         else:
-            NotImplementedError('Only descriptor `se_e2_a` is supported for se_a model!')
+            raise NotImplementedError(f'Only descriptor `se_e2_a` is supported for se_a model, got {self.descriptor_type}')
 
         # Statistics
         if sampled is not None:

@@ -1,3 +1,5 @@
+import logging
+import os
 import numpy as np
 import torch
 from typing import Optional, List
@@ -42,30 +44,45 @@ class EnergyModelDPA1(BaseModel):
         assert self.descriptor_type == 'se_atten', 'Only descriptor `se_atten` is supported for DPA-1!'
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
-        # Statistics
-        if sampled is not None:
-            for sys in sampled:
-                for key in sys:
-                    sys[key] = sys[key].to(env.DEVICE)
-            self.descriptor.compute_input_stats(sampled)
-
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-        if sampled is not None:
-            energy = [item['energy'] for item in sampled]
-            mixed_type = 'real_natoms_vec' in sampled[0]
-            if mixed_type:
-                input_natoms = [item['real_natoms_vec'] for item in sampled]
-            else:
-                input_natoms = [item['natoms'] for item in sampled]
-            tmp = compute_output_stats(energy, input_natoms)
-            fitting_param['bias_atom_e'] = tmp[:, 0]
-        else:
-            fitting_param['bias_atom_e'] = [0.0] * ntypes
         fitting_param['use_tebd'] = True
+
+        # Statistics
+        if not model_params["resuming"]:
+            if sampled is not None: # compute stat
+                for sys in sampled:
+                    for key in sys:
+                        sys[key] = sys[key].to(env.DEVICE)
+                sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
+
+                energy = [item['energy'] for item in sampled]
+                mixed_type = 'real_natoms_vec' in sampled[0]
+                if mixed_type:
+                    input_natoms = [item['real_natoms_vec'] for item in sampled]
+                else:
+                    input_natoms = [item['natoms'] for item in sampled]
+                tmp = compute_output_stats(energy, input_natoms)
+                fitting_param['bias_atom_e'] = tmp[:, 0]
+
+                logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
+                if not os.path.exists(model_params["stat_file_dir"]):
+                    os.mkdir(model_params["stat_file_dir"])
+                np.savez_compressed(model_params["stat_file_path"],
+                                    sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
+                                    bias_atom_e=fitting_param['bias_atom_e'])
+            else: # load stat
+                logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
+                stats = np.load(model_params["stat_file_path"])
+                sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
+                fitting_param['bias_atom_e'] = stats["bias_atom_e"]
+            self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
+        else: # resuming for checkpoint; init model params from scratch
+            fitting_param['bias_atom_e'] = [0.0] * ntypes
+
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):

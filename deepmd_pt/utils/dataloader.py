@@ -4,6 +4,7 @@ import queue
 import time
 from threading import Thread
 from typing import Callable, Dict, List, Tuple, Type, Union
+from multiprocessing.dummy import Pool
 
 import h5py
 import torch
@@ -12,6 +13,7 @@ from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
+from tqdm import tqdm
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -32,16 +34,19 @@ class DpLoaderSet(Dataset):
                 systems = [os.path.join(systems, item) for item in file.keys()]
 
         self.systems: List[DeepmdDataSetForLoader] = []
-        for system in systems:
-            ds = DeepmdDataSetForLoader(
+        logging.info(f"Constructing DataLoaders from {len(systems)} systems")
+        def construct_dataset(system):
+            return DeepmdDataSetForLoader(
                 system=system,
                 type_map=model_params["type_map"],
                 rcut=model_params["descriptor"]["rcut"],
                 sel=model_params["descriptor"]["sel"],
                 type_split=type_split,
-                noise_settings=noise_settings
+                noise_settings=noise_settings,
             )
-            self.systems.append(ds)
+        with Pool(os.cpu_count()) as pool:
+            self.systems = pool.map(construct_dataset,systems)
+        
         self.sampler_list: List[DistributedSampler] = []
         self.index = []
 

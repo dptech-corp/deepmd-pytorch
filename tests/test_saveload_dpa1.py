@@ -59,7 +59,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
         self.start_lr = self.config['learning_rate']['start_lr']
 
     def get_model_result(self, read=False, model_file='tmp_model.pt'):
-        wrapper = self.create_wrapper()
+        wrapper = self.create_wrapper(read)
         optimizer = torch.optim.Adam(wrapper.parameters(), lr=self.start_lr)
         optimizer.zero_grad()
         if read:
@@ -70,9 +70,13 @@ class TestSaveLoadDPA1(unittest.TestCase):
         result = wrapper(**self.input_dict, cur_lr=self.cur_lr, label=self.label_dict, task_key=self.task_key)[0]
         return result
 
-    def create_wrapper(self):
+    def create_wrapper(self, read: bool):
         model_config = copy.deepcopy(self.config['model'])
         sampled = copy.deepcopy(self.sampled)
+        model_config["resuming"] = read
+        model_config["stat_file_dir"] = "stat_files"
+        model_config["stat_file"] = "stat.npz"
+        model_config["stat_file_path"] = os.path.join(model_config["stat_file_dir"], model_config["stat_file"])
         model = EnergyModelDPA1(model_config, sampled).to(env.DEVICE)
         return ModelWrapper(model, self.loss)
 

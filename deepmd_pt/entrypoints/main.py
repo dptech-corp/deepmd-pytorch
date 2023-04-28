@@ -46,8 +46,18 @@ def get_trainer(config, ckpt=None):
     # noise_settings = None
     validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
                                   type_split=type_split, noise_settings=noise_settings)
-    skip_stat = False
-    if not skip_stat:  # not skip the stat
+
+    default_stat_file_name = f'stat_file_rcut{model_params["descriptor"]["rcut"]:.2f}_'\
+        f'smth{model_params["descriptor"]["rcut_smth"]:.2f}_'\
+        f'sel{model_params["descriptor"]["sel"]}.npz'
+    model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
+    model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
+    model_params["stat_file_path"] = os.path.join(model_params["stat_file_dir"], model_params["stat_file"])
+    if ckpt or os.path.exists(model_params["stat_file_path"]):
+        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+                                 type_split=type_split, noise_settings=noise_settings)
+        sampled = None
+    else:
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split)
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
@@ -55,10 +65,6 @@ def get_trainer(config, ckpt=None):
         if noise_settings is not None:
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)
-    else:
-        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
-                                 type_split=type_split, noise_settings=noise_settings)
-        sampled = None
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=ckpt)
     return trainer
 

@@ -13,6 +13,7 @@ from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
+from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -100,7 +101,7 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-
+        model_params["resuming"] = (resume_from is not None)
         if model_params.get("fitting_net", None) is not None:
             if model_params.get("backbone", None) is None:
                 if model_params["descriptor"]["type"] == "se_e2_a":
@@ -143,9 +144,9 @@ class Trainer(object):
         self.rank = dist.get_rank() if dist.is_initialized() else 0
 
         if (resume_from is not None) and (self.rank == 0):
+            logging.info(f"Resuming from {resume_from}.")
             state_dict = torch.load(resume_from)
             self.wrapper.load_state_dict(state_dict)
-            logging.info(f"Resuming from {resume_from}.")
 
         if dist.is_initialized():
             # DDP will guarantee the model parameters are identical across all processes
@@ -225,8 +226,6 @@ class Trainer(object):
             # Log and persist
             if _step_id % self.disp_freq == 0:
                 # training
-                train_time = time.time() - self.t0
-
                 train_results = {}
                 valid_results = {}
 
@@ -273,7 +272,9 @@ class Trainer(object):
                         msg += f", {item}_valid={valid_results[item]:.4f}"
                         self.wandb_log({item: valid_results[item]}, _step_id, "_valid")
 
-                msg += f", speed={train_time:.2f} s/{self.disp_freq} batches"
+                train_time = time.time() - self.t0
+                self.t0 = time.time()
+                msg += f", speed={train_time:.2f} s/{self.disp_freq if _step_id else 1} batches"
                 logging.info(msg)
                 self.wandb_log({"lr": cur_lr}, step_id)
 
@@ -282,16 +283,17 @@ class Trainer(object):
                         self.print_header(fout, train_results, valid_results)
                         self.lcurve_should_print_header = False
                     self.print_on_training(fout, _step_id, cur_lr, train_results, valid_results)
-                self.t0 = time.time()
 
             if (
-                (_step_id % self.save_freq == 0 and _step_id != 0)
-                or _step_id == self.num_steps - 1
+                ((_step_id+1) % self.save_freq == 0 and _step_id != 0)
+                or (_step_id+1) == self.num_steps
             ) and (self.rank == 0 or dist.get_rank() == 0):
                 # Handle the case if rank 0 aborted and re-assigned
-                logging.info(f"Saving model to {self.save_ckpt}")
+                self.latest_model = Path(self.save_ckpt)
+                self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
+                logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.save_ckpt)
+                torch.save(module.state_dict(), self.latest_model)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -303,6 +305,13 @@ class Trainer(object):
         if (
             self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned
+            try:
+                os.symlink(self.latest_model, self.save_ckpt)
+            except OSError:
+                module = self.wrapper.module if dist.is_initialized() else self.wrapper
+                torch.save(module.state_dict(), self.save_ckpt)
+            logging.info(f"Trained model has been saved to: {self.save_ckpt}")
+
             if JIT:
                 self.wrapper.save("torchscript_model.pt")
         if fout:
