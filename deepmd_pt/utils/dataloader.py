@@ -15,7 +15,8 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def setup_seed(seed):
@@ -27,7 +28,15 @@ def setup_seed(seed):
 class DpLoaderSet(Dataset):
     """A dataset for storing DataLoaders to multiple Systems."""
 
-    def __init__(self, systems, batch_size, model_params, seed=10, type_split=True, noise_settings=None):
+    def __init__(
+        self,
+        systems,
+        batch_size,
+        model_params,
+        seed=10,
+        type_split=True,
+        noise_settings=None,
+    ):
         setup_seed(seed)
         if isinstance(systems, str):
             with h5py.File(systems) as file:
@@ -35,6 +44,7 @@ class DpLoaderSet(Dataset):
 
         self.systems: List[DeepmdDataSetForLoader] = []
         logging.info(f"Constructing DataLoaders from {len(systems)} systems")
+
         def construct_dataset(system):
             return DeepmdDataSetForLoader(
                 system=system,
@@ -44,9 +54,13 @@ class DpLoaderSet(Dataset):
                 type_split=type_split,
                 noise_settings=noise_settings,
             )
-        with Pool(os.cpu_count()) as pool:
-            self.systems = pool.map(construct_dataset,systems)
-        
+
+        with Pool(
+            os.cpu_count()
+            // (os.environ["LOCAL_WORLD_SIZE"] if dist.is_initialized() else 1)
+        ) as pool:
+            self.systems = pool.map(construct_dataset, systems)
+
         self.sampler_list: List[DistributedSampler] = []
         self.index = []
 
@@ -140,8 +154,8 @@ class BufferedIterator(object):
         if self._queue.qsize() < min(2, max(1, self._queue.maxsize // 2)):
             if time.time() - self.start_time > 5 * 60:
                 if (
-                        self.warning_time is None
-                        or time.time() - self.warning_time > 15 * 60
+                    self.warning_time is None
+                    or time.time() - self.warning_time > 15 * 60
                 ):
                     logging.warning(
                         "Data loading buffer is empty or nearly empty. This may "
