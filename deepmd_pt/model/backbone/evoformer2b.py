@@ -27,6 +27,7 @@ class Evoformer2bBackBone(BackBone):
                  emb_layer_norm=False,
                  atomic_residual=False,
                  evo_residual=False,
+                 residual_factor=1.0,
                  activation_function="gelu",
                  **kwargs):
         """Construct an evoformer backBone.
@@ -49,6 +50,7 @@ class Evoformer2bBackBone(BackBone):
         self.activation_function = activation_function
         self.atomic_residual = atomic_residual
         self.evo_residual = evo_residual
+        self.residual_factor = float(residual_factor)
         self.encoder = Evoformer2bEncoder(
             nnei=self.nnei,
             layer_num=self.layer_num,
@@ -63,6 +65,7 @@ class Evoformer2bBackBone(BackBone):
             emb_layer_norm=self.emb_layer_norm,
             atomic_residual=self.atomic_residual,
             evo_residual=self.evo_residual,
+            residual_factor=self.residual_factor,
             activation_function=self.activation_function)
 
     def forward(self, atomic_rep, pair_rep, nlist, nlist_type, nlist_mask):

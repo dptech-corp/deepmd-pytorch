@@ -35,7 +35,7 @@ class EnergyFittingNet(TaskBaseMethod):
 
         filter_layers = []
         for type_i in range(self.ntypes):
-            one = ResidualDeep(type_i, embedding_width, neuron, bias_atom_e[type_i], resnet_dt)
+            one = ResidualDeep(type_i, embedding_width, neuron, bias_atom_e[type_i], resnet_dt=resnet_dt)
             filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
 
@@ -83,7 +83,7 @@ class EnergyFittingNetType(TaskBaseMethod):
         self.register_buffer('bias_atom_e', bias_atom_e)
 
         filter_layers = []
-        one = ResidualDeep(0, embedding_width, neuron, 0.0, resnet_dt)
+        one = ResidualDeep(0, embedding_width, neuron, 0.0, resnet_dt=resnet_dt)
         filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
 
