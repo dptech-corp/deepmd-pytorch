@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 import torch
 
@@ -8,7 +9,7 @@ try:
 except:
     from torch.jit import Final
 
-from deepmd_pt.utils.utils import get_activation_fn
+from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
 
 
 def Tensor(*shape):
@@ -81,7 +82,7 @@ class TypeFilter(torch.nn.Module):
         self.deep_layers = torch.nn.ModuleList(deep_layers)
         self.return_G = return_G
 
-    def forward(self, inputs, atype_tebd=None, nlist_tebd=None):
+    def forward(self, inputs, atype_tebd: Optional[torch.Tensor]=None, nlist_tebd: Optional[torch.Tensor]=None):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -94,6 +95,7 @@ class TypeFilter(torch.nn.Module):
         inputs_reshape = inputs_i.reshape(-1, 4)  # shape is [nframes*natoms[0]*self.length, 4]
         xyz_scatter = inputs_reshape[:, 0:1]
         if self.use_tebd and self.tebd_mode == 'concat':
+            assert nlist_tebd is not None and atype_tebd is not None
             nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
             atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
             # [nframes * nloc * nnei, 17]
@@ -133,7 +135,7 @@ class SimpleLinear(torch.nn.Module):
         self.num_in = num_in
         self.num_out = num_out
         self.use_timestep = use_timestep
-        self.activate = get_activation_fn(activate) if activate is not None else None
+        self.activate = ActivationFn(activate)
 
         self.matrix = torch.nn.Parameter(data=Tensor(num_in, num_out))
         torch.nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
@@ -146,8 +148,7 @@ class SimpleLinear(torch.nn.Module):
     def forward(self, inputs):
         """Return X*W+b."""
         hidden = torch.matmul(inputs, self.matrix) + self.bias
-        if self.activate is not None:
-            hidden = self.activate(hidden)
+        hidden = self.activate(hidden)
         if self.use_timestep:
             hidden = hidden * self.idt
         return hidden
@@ -184,7 +185,7 @@ class MaskLMHead(torch.nn.Module):
         self.weight = weight
         self.bias = torch.nn.Parameter(torch.zeros(output_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION))
 
-    def forward(self, features, masked_tokens=None, **kwargs):
+    def forward(self, features, masked_tokens: Optional[torch.Tensor]=None, **kwargs):
         # Only project the masked tokens while training,
         # saves both memory and computation
         if masked_tokens is not None:
@@ -291,7 +292,7 @@ class NeighborWiseAttention(torch.nn.Module):
                                                                temperature=temperature))
         self.attention_layers = torch.nn.ModuleList(attention_layers)
 
-    def forward(self, input_G, nei_mask, input_r=None):
+    def forward(self, input_G, nei_mask, input_r: Optional[torch.Tensor]=None):
         """
 
         Args:
@@ -304,8 +305,9 @@ class NeighborWiseAttention(torch.nn.Module):
 
         """
         out = input_G
-        for i in range(self.layer_num):
-            out = self.attention_layers[i](out, nei_mask, input_r=input_r)
+        # https://github.com/pytorch/pytorch/issues/39165#issuecomment-635472592
+        for layer in self.attention_layers:
+            out = layer(out, nei_mask, input_r=input_r)
         return out
 
 
@@ -334,7 +336,7 @@ class NeighborWiseAttentionLayer(torch.nn.Module):
             self.fc2 = torch.nn.Linear(self.ffn_embed_dim, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
             self.final_layer_norm = torch.nn.LayerNorm(self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
-    def forward(self, x, nei_mask, input_r=None):
+    def forward(self, x, nei_mask, input_r: Optional[torch.Tensor]=None):
         residual = x
         if not self.post_ln:
             x = self.attn_layer_norm(x)
@@ -375,7 +377,7 @@ class GatedSelfAttetion(torch.nn.Module):
         self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False)
         self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False)
 
-    def forward(self, query, nei_mask, input_r=None):
+    def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
         """
 
         Args:
@@ -425,7 +427,7 @@ class LocalSelfMultiheadAttention(torch.nn.Module):
         # TODO debug
         # self.out_proj = SimpleLinear(self.feature_dim, self.feature_dim)
 
-    def forward(self, query, attn_bias=None, nlist_mask=None, nlist=None, return_attn=True):
+    def forward(self, query, attn_bias: Optional[torch.Tensor]=None, nlist_mask: Optional[torch.Tensor]=None, nlist: Optional[torch.Tensor]=None, return_attn=True):
         nframes, nloc, feature_dim = query.size()
         _, _, nnei = nlist.size()
         assert feature_dim == self.feature_dim
@@ -512,7 +514,7 @@ class EvoformerEncoderLayer(torch.nn.Module):
         self.fc1 = SimpleLinear(self.feature_dim, self.ffn_dim)
         self.fc2 = SimpleLinear(self.ffn_dim, self.feature_dim)
 
-    def forward(self, x, attn_bias=None, nlist_mask=None, nlist=None, return_attn=True):
+    def forward(self, x, attn_bias: Optional[torch.Tensor]=None, nlist_mask: Optional[torch.Tensor]=None, nlist: Optional[torch.Tensor]=None, return_attn=True):
         residual = x
         if not self.post_ln:
             x = self.self_attn_layer_norm(x)

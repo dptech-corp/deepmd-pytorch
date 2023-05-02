@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 import numpy as np
 import torch
 
@@ -36,7 +37,7 @@ class TypePredictNet(TaskBaseMethod):
                 weight=None,
             )
 
-    def forward(self, features, masked_tokens=None):
+    def forward(self, features, masked_tokens: Optional[torch.Tensor]=None):
         """Calculate the predicted logits.
         Args:
         - features: Input features with shape [nframes, nloc, feature_dim].

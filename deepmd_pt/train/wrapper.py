@@ -1,7 +1,7 @@
 import logging
 import os
 import torch
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 if torch.__version__.startswith("2"):
     import torch._dynamo
@@ -45,8 +45,8 @@ class ModelWrapper(torch.nn.Module):
     def shared_params(self):  # TODO ZD:multitask share params
         pass
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None,
-                cur_lr=None, label=None, task_key=None, inference_only=False):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None,
+                cur_lr: Optional[torch.Tensor]=None, label: Optional[torch.Tensor]=None, task_key: Optional[torch.Tensor]=None, inference_only=False):
         if not self.multi_task:
             task_key = "Default"
         else:

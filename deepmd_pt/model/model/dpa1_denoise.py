@@ -55,7 +55,7 @@ class DenoiseModelDPA1(BaseModel):
         # last type is `MASKED_TOKEN`
         # self.backbone.activation_function)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
