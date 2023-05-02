@@ -43,7 +43,8 @@ class DpLoaderSet(Dataset):
                 systems = [os.path.join(systems, item) for item in file.keys()]
 
         self.systems: List[DeepmdDataSetForLoader] = []
-        logging.info(f"Constructing DataLoaders from {len(systems)} systems")
+        if len(systems) >= 100:
+            logging.info(f"Constructing DataLoaders from {len(systems)} systems")
 
         def construct_dataset(system):
             return DeepmdDataSetForLoader(
