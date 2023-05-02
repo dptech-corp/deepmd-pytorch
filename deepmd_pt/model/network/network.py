@@ -200,7 +200,7 @@ class MaskLMHead(torch.nn.Module):
 
 class ResidualDeep(torch.nn.Module):
 
-    def __init__(self, type_id, embedding_width, neuron, bias_atom_e, resnet_dt=False):
+    def __init__(self, type_id, embedding_width, neuron, bias_atom_e, out_dim=1, resnet_dt=False):
         """Construct a filter on the given element as neighbor.
 
         Args:
@@ -212,6 +212,7 @@ class ResidualDeep(torch.nn.Module):
         super(ResidualDeep, self).__init__()
         self.type_id = type_id
         self.neuron = [embedding_width] + neuron
+        self.out_dim = out_dim
 
         deep_layers = []
         for ii in range(1, len(self.neuron)):
@@ -225,7 +226,7 @@ class ResidualDeep(torch.nn.Module):
         self.deep_layers = torch.nn.ModuleList(deep_layers)
         if not env.ENERGY_BIAS_TRAINABLE:
             bias_atom_e = 0
-        self.final_layer = SimpleLinear(self.neuron[-1], 1, bias_atom_e)
+        self.final_layer = SimpleLinear(self.neuron[-1], self.out_dim, bias_atom_e)
 
     def forward(self, inputs):
         """Calculate decoded embedding for each atom.
@@ -559,6 +560,7 @@ class Evoformer2bEncoder(torch.nn.Module):
                  emb_layer_norm: bool = False,
                  atomic_residual: bool = False,
                  evo_residual: bool = False,
+                 residual_factor: float = 1.0,
                  activation_function: str = "gelu"):
         super(Evoformer2bEncoder, self).__init__()
         self.nnei = nnei
@@ -574,6 +576,7 @@ class Evoformer2bEncoder(torch.nn.Module):
         self._emb_layer_norm = emb_layer_norm
         self.activation_function = activation_function
         self.evo_residual = evo_residual
+        self.residual_factor = residual_factor
         if atomic_residual and atomic_dim == feature_dim:
             self.atomic_residual = True
         else:
@@ -684,6 +687,6 @@ class Evoformer2bEncoder(torch.nn.Module):
             transformed_atomic_rep = self.out_proj(atomic_rep)
 
         if self.evo_residual:
-            transformed_atomic_rep = (transformed_atomic_rep + input_atomic_rep) * (1/np.sqrt(2))
+            transformed_atomic_rep = (self.residual_factor * transformed_atomic_rep + input_atomic_rep) * (1/np.sqrt(2))
 
         return atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep
