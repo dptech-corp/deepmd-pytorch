@@ -57,7 +57,7 @@ class DpLoaderSet(Dataset):
 
         with Pool(
             os.cpu_count()
-            // (os.environ["LOCAL_WORLD_SIZE"] if dist.is_initialized() else 1)
+            // (int(os.environ["LOCAL_WORLD_SIZE"]) if dist.is_initialized() else 1)
         ) as pool:
             self.systems = pool.map(construct_dataset, systems)
 
