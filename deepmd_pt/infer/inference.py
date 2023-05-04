@@ -127,7 +127,7 @@ class Tester(object):
                 num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
             )
-            data = BufferedIterator(iter(dataloader))
+            data = iter(dataloader)
 
             single_results = {}
             sum_natoms = 0
