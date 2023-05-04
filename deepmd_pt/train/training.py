@@ -10,7 +10,7 @@ from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
 from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, DenoiseModelDPA2, EnergyModelDPA2, DenoiseModelDPA1
+from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
 from pathlib import Path
@@ -35,6 +35,7 @@ class Trainer(object):
         sampled,
         validation_data=None,
         resume_from=None,
+        force_load=False,
     ):
         """Construct a DeePMD trainer.
 
@@ -102,21 +103,7 @@ class Trainer(object):
         else:
             self.valid_numb_batch = 1
         model_params["resuming"] = (resume_from is not None)
-        if model_params.get("fitting_net", None) is not None:
-            if model_params.get("backbone", None) is None:
-                if model_params["descriptor"]["type"] == "se_e2_a":
-                    self.model = EnergyModelSeA(model_params, sampled).to(DEVICE)
-                elif model_params["descriptor"]["type"] == "se_atten":
-                    self.model = EnergyModelDPA1(model_params, sampled).to(DEVICE)
-                else:
-                    raise NotImplementedError
-            else:
-                self.model = EnergyModelDPA2(model_params, sampled).to(DEVICE)
-        else:
-            if model_params.get("backbone", None) is None:
-                self.model = DenoiseModelDPA1(model_params, sampled).to(DEVICE)
-            else:
-                self.model = DenoiseModelDPA2(model_params, sampled).to(DEVICE)
+        self.model = get_model(model_params, sampled).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop("learning_rate")
@@ -146,6 +133,25 @@ class Trainer(object):
         if (resume_from is not None) and (self.rank == 0):
             logging.info(f"Resuming from {resume_from}.")
             state_dict = torch.load(resume_from)
+            if force_load:
+                input_keys = list(state_dict.keys())
+                target_keys = list(self.wrapper.state_dict().keys())
+                missing_keys = [item for item in target_keys if item not in input_keys]
+                if missing_keys:
+                    target_state_dict = self.wrapper.state_dict()
+                    slim_keys = []
+                    for item in missing_keys:
+                        state_dict[item] = target_state_dict[item].clone().detach()
+                        new_key = True
+                        for slim_key in slim_keys:
+                            if slim_key in item:
+                                new_key = False
+                                break
+                        if new_key:
+                            tmp_keys = '.'.join(item.split('.')[:3])
+                            slim_keys.append(tmp_keys)
+                    slim_keys = [i + '.*' for i in slim_keys]
+                    logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
 
         if dist.is_initialized():

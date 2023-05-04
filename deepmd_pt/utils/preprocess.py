@@ -237,7 +237,8 @@ def make_env_mat(coord,
     if pbc:
         merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
         merged_coord = coord[merged_mapping] - merged_coord_shift
-        assert merged_coord.shape[0] > coord.shape[0], 'No ghost atom is added!'
+        if merged_coord.shape[0] <= coord.shape[0]:
+            logging.warning('No ghost atom is added for system ')
     else:
         merged_coord_shift = torch.zeros_like(coord)
         merged_atype = atype.clone()

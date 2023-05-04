@@ -25,14 +25,15 @@ class DenoiseModelDPA2(BaseModel):
         self.ntypes = ntypes
         descriptor_param = model_params.pop('descriptor')
         descriptor_param['ntypes'] = ntypes
-        if descriptor_param.get('type_embedding', None) is None:
+        type_embedding_param = model_params.pop('type_embedding', None)
+        if type_embedding_param is None:
             self.type_embedding = TypeEmbedNet(ntypes, 8)
             descriptor_param['tebd_dim'] = 8
             descriptor_param['tebd_input_mode'] = 'concat'
             self.tebd_dim = 8
         else:
-            tebd_dim = descriptor_param['type_embedding']['neuron'][-1]
-            tebd_input_mode = descriptor_param['type_embedding'].get('tebd_input_mode', 'concat')
+            tebd_dim = type_embedding_param['neuron'][-1]
+            tebd_input_mode = type_embedding_param.get('tebd_input_mode', 'concat')
             self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
             descriptor_param['tebd_dim'] = tebd_dim
             descriptor_param['tebd_input_mode'] = tebd_input_mode
