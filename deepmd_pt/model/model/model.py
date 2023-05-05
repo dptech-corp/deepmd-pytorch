@@ -19,7 +19,8 @@ class BaseModel(torch.nn.Module):
         raise NotImplementedError
 
     def compute_or_load_stat(self, model_params, fitting_param, ntypes, sampled=None):
-        if not model_params["resuming"]:
+        resuming = model_params.get("resuming", False)
+        if not resuming:
             if sampled is not None:  # compute stat
                 for sys in sampled:
                     for key in sys:
@@ -34,13 +35,13 @@ class BaseModel(torch.nn.Module):
                     input_natoms = [item['natoms'] for item in sampled]
                 tmp = compute_output_stats(energy, input_natoms)
                 fitting_param['bias_atom_e'] = tmp[:, 0]
-
-                logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
-                if not os.path.exists(model_params["stat_file_dir"]):
-                    os.mkdir(model_params["stat_file_dir"])
-                np.savez_compressed(model_params["stat_file_path"],
-                                    sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
-                                    bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
+                if model_params.get("stat_file_path", None) is not None:
+                    logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
+                    if not os.path.exists(model_params["stat_file_dir"]):
+                        os.mkdir(model_params["stat_file_dir"])
+                    np.savez_compressed(model_params["stat_file_path"],
+                                        sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
+                                        bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
             else:  # load stat
                 logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
                 stats = np.load(model_params["stat_file_path"])
