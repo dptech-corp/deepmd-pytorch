@@ -57,36 +57,7 @@ class ForceModelDPA1(BaseModel):
         self.fitting_net_force = DipoleFittingNetType(**fitting_param)
 
         # Statistics
-        if not model_params["resuming"]:
-            if sampled is not None:  # compute stat
-                for sys in sampled:
-                    for key in sys:
-                        sys[key] = sys[key].to(env.DEVICE)
-                sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
-
-                energy = [item['energy'] for item in sampled]
-                mixed_type = 'real_natoms_vec' in sampled[0]
-                if mixed_type:
-                    input_natoms = [item['real_natoms_vec'] for item in sampled]
-                else:
-                    input_natoms = [item['natoms'] for item in sampled]
-                tmp = compute_output_stats(energy, input_natoms)
-                fitting_param['bias_atom_e'] = tmp[:, 0]
-
-                logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
-                if not os.path.exists(model_params["stat_file_dir"]):
-                    os.mkdir(model_params["stat_file_dir"])
-                np.savez_compressed(model_params["stat_file_path"],
-                                    sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
-                                    bias_atom_e=fitting_param['bias_atom_e'])
-            else: # load stat
-                logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
-                stats = np.load(model_params["stat_file_path"])
-                sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
-                fitting_param['bias_atom_e'] = stats["bias_atom_e"]
-            self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
-        else: # resuming for checkpoint; init model params from scratch
-            fitting_param['bias_atom_e'] = [0.0] * ntypes
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
         if fitting_type == 'direct_force_ener':
             self.fitting_net_ener = EnergyFittingNetType(**fitting_param)

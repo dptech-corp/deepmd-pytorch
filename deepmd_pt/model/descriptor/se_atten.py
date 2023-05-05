@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 
 try:
     from typing import Final
@@ -265,13 +265,3 @@ def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None)
                 sysa2[type_i] += suma2
 
     return sysr, sysr2, sysa, sysa2, sysn
-
-
-def compute_std(sumv2, sumv, sumn, rcut_r):
-    """Compute standard deviation."""
-    if sumn == 0:
-        return 1.0 / rcut_r
-    val = np.sqrt(sumv2 / sumn - np.multiply(sumv / sumn, sumv / sumn))
-    if np.abs(val) < 1e-2:
-        val = 1e-2
-    return val

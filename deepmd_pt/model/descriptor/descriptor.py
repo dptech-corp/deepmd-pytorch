@@ -32,3 +32,13 @@ class Descriptor(torch.nn.Module):
         """Calculate descriptor.
         """
         raise NotImplementedError
+
+
+def compute_std(sumv2, sumv, sumn, rcut_r):
+    """Compute standard deviation."""
+    if sumn == 0:
+        return 1.0 / rcut_r
+    val = np.sqrt(sumv2 / sumn - np.multiply(sumv / sumn, sumv / sumn))
+    if np.abs(val) < 1e-2:
+        val = 1e-2
+    return val
