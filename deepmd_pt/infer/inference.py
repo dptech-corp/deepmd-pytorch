@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import torch
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
-from deepmd_pt.model.model import EnergyModelDPA1, EnergyModelSeA, EnergyModelDPA2, DenoiseModelDPA1, DenoiseModelDPA2
+from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
@@ -37,22 +37,8 @@ class Tester(object):
             self.type_split = False
         self.model_params = deepcopy(model_params)
 
-        model_params["resuming"] = (ckpt is not None) # should always be True for inferencing
-        if model_params.get("fitting_net", None) is not None:
-            if model_params.get("backbone", None) is None:
-                if model_params["descriptor"]["type"] == "se_e2_a":
-                    self.model = EnergyModelSeA(model_params).to(DEVICE)
-                elif model_params["descriptor"]["type"] == "se_atten":
-                    self.model = EnergyModelDPA1(model_params).to(DEVICE)
-                else:
-                    raise NotImplementedError
-            else:
-                self.model = EnergyModelDPA2(model_params).to(DEVICE)
-        else:
-            if model_params.get("backbone", None) is None:
-                self.model = DenoiseModelDPA1(model_params).to(DEVICE)
-            else:
-                self.model = DenoiseModelDPA2(model_params).to(DEVICE)
+        model_params["resuming"] = (ckpt is not None)  # should always be True for inferencing
+        self.model = get_model(model_params).to(DEVICE)
 
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model)  # inference only

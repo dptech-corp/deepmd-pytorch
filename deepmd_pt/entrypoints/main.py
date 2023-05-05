@@ -14,7 +14,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from deepmd_pt.utils.stat import make_stat_input
 
 
-def get_trainer(config, ckpt=None):
+def get_trainer(config, ckpt=None, force_load=False):
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params.pop('training_data')
@@ -39,9 +39,11 @@ def get_trainer(config, ckpt=None):
                           "noise": config['loss'].pop("noise", 1.0),
                           "noise_mode": config['loss'].pop("noise_mode", "fix_num"),
                           "mask_num": config['loss'].pop("mask_num", 8),
+                          "mask_prob": config['loss'].pop("mask_prob", 0.15),
                           "same_mask": config['loss'].pop("same_mask", False),
                           "mask_coord": config['loss'].pop("mask_coord", False),
                           "mask_type": config['loss'].pop("mask_type", False),
+                          "max_fail_num": config['loss'].pop("max_fail_num", 10),
                           "mask_type_idx": len(model_params["type_map"]) - 1}
     # noise_settings = None
     validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
@@ -65,7 +67,8 @@ def get_trainer(config, ckpt=None):
         if noise_settings is not None:
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)
-    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, resume_from=ckpt)
+    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data,
+                               resume_from=ckpt, force_load=force_load)
     return trainer
 
 
@@ -73,7 +76,7 @@ def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = get_trainer(config, FLAGS.CKPT)
+    trainer = get_trainer(config, FLAGS.CKPT, FLAGS.force_load)
     trainer.run()
 
 
@@ -105,6 +108,8 @@ def main(args=None):
     train_parser = subparsers.add_parser('train', help='Train a model.')
     train_parser.add_argument('INPUT', help='A Json-format configuration file.')
     train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
+    train_parser.add_argument("--force-load", action="store_true",
+                              help='Force load from ckpt, other missing tensors will init from scratch')
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')

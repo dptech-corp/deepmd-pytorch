@@ -70,6 +70,8 @@ class TypeFilter(torch.nn.Module):
         self.tebd_dim = tebd_dim
         self.use_tebd = use_tebd
         self.tebd_mode = tebd_mode
+        supported_tebd_mode = ['concat', 'dot', 'dot_residual_s', 'dot_residual_t']
+        assert tebd_mode in supported_tebd_mode, f'Unknown tebd_mode {tebd_mode}! Supported are {supported_tebd_mode}.'
         if use_tebd and tebd_mode == 'concat':
             self.neuron = [1 + tebd_dim * 2] + neuron
         else:
@@ -80,6 +82,15 @@ class TypeFilter(torch.nn.Module):
             one = ResidualLinear(self.neuron[ii - 1], self.neuron[ii])
             deep_layers.append(one)
         self.deep_layers = torch.nn.ModuleList(deep_layers)
+
+        if use_tebd and tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
+            self.neuron_t = [tebd_dim * 2] + neuron
+            deep_layers_t = []
+            for ii in range(1, len(self.neuron_t)):
+                one = ResidualLinear(self.neuron_t[ii - 1], self.neuron_t[ii])
+                deep_layers_t.append(one)
+            self.deep_layers_t = torch.nn.ModuleList(deep_layers_t)
+
         self.return_G = return_G
 
     def forward(self, inputs, atype_tebd: Optional[torch.Tensor]=None, nlist_tebd: Optional[torch.Tensor]=None):
@@ -94,15 +105,35 @@ class TypeFilter(torch.nn.Module):
         inputs_i = inputs[:, self.offset * 4:(self.offset + self.length) * 4]
         inputs_reshape = inputs_i.reshape(-1, 4)  # shape is [nframes*natoms[0]*self.length, 4]
         xyz_scatter = inputs_reshape[:, 0:1]
+
+        # concat the tebd as input
         if self.use_tebd and self.tebd_mode == 'concat':
             assert nlist_tebd is not None and atype_tebd is not None
             nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
             atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
-            # [nframes * nloc * nnei, 17]
+            # [nframes * nloc * nnei, 1 + tebd_dim * 2]
             xyz_scatter = torch.concat([xyz_scatter, nlist_tebd, atype_tebd], dim=1)
 
         for linear in self.deep_layers:
             xyz_scatter = linear(xyz_scatter)
+            # [nframes * nloc * nnei, out_size]
+
+        # dot the tebd output
+        if self.use_tebd and self.tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
+            nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
+            atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
+            # [nframes * nloc * nnei, tebd_dim * 2]
+            two_side_tebd = torch.concat([nlist_tebd, atype_tebd], dim=1)
+            for linear in self.deep_layers_t:
+                two_side_tebd = linear(two_side_tebd)
+                # [nframes * nloc * nnei, out_size]
+            if self.tebd_mode == 'dot':
+                xyz_scatter = xyz_scatter * two_side_tebd
+            elif self.tebd_mode == 'dot_residual_s':
+                xyz_scatter = xyz_scatter * two_side_tebd + xyz_scatter
+            elif self.tebd_mode == 'dot_residual_t':
+                xyz_scatter = xyz_scatter * two_side_tebd + two_side_tebd
+
         xyz_scatter = xyz_scatter.view(-1, self.length,
                                        self.neuron[-1])  # shape is [nframes*natoms[0], self.length, self.neuron[-1]]
         if self.return_G:
