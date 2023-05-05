@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 
 try:
     from typing import Final
@@ -22,6 +22,7 @@ class DescrptSeA(Descriptor):
                  sel,
                  neuron=[25, 50, 100],
                  axis_neuron=16,
+                 set_davg_zero: bool = False,
                  **kwargs):
         """Construct an embedding net of type `se_a`.
 
@@ -37,6 +38,7 @@ class DescrptSeA(Descriptor):
         self.rcut_smth = rcut_smth
         self.filter_neuron = neuron
         self.axis_neuron = axis_neuron
+        self.set_davg_zero = set_davg_zero
 
         self.ntypes = len(sel)  # 元素数量
         self.sec = torch.cumsum(torch.tensor(sel), dim=0)  # 每种元素在邻居中的位移
@@ -93,22 +95,26 @@ class DescrptSeA(Descriptor):
         sumn = np.sum(sumn, axis=0)
         sumr2 = np.sum(sumr2, axis=0)
         suma2 = np.sum(suma2, axis=0)
+        return sumr, suma, sumn, sumr2, suma2
+
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
         all_davg = []
         all_dstd = []
         for type_i in range(self.ntypes):
             davgunit = [[sumr[type_i] / (sumn[type_i] + 1e-15), 0, 0, 0]]
             dstdunit = [[
-                compute_std(sumr2[type_i], sumr[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i]),
-                compute_std(suma2[type_i], suma[type_i], sumn[type_i])
+                compute_std(sumr2[type_i], sumr[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut),
+                compute_std(suma2[type_i], suma[type_i], sumn[type_i], self.rcut)
             ]]
             davg = np.tile(davgunit, [self.nnei, 1])
             dstd = np.tile(dstdunit, [self.nnei, 1])
             all_davg.append(davg)
             all_dstd.append(dstd)
-        mean = np.stack(all_davg)
-        self.mean.copy_(torch.tensor(mean, device=env.DEVICE))
+        if not self.set_davg_zero:
+            mean = np.stack(all_davg)
+            self.mean.copy_(torch.tensor(mean, device=env.DEVICE))
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
@@ -175,13 +181,3 @@ def analyze_descrpt(matrix, ndescrpt, natoms):
         sysr2.append(sumr2)
         sysa2.append(suma2)
     return sysr, sysr2, sysa, sysa2, sysn
-
-
-def compute_std(sumv2, sumv, sumn):
-    """Compute standard deviation."""
-    if sumn == 0:
-        return 1e-2
-    val = np.sqrt(sumv2 / sumn - np.multiply(sumv / sumn, sumv / sumn))
-    if np.abs(val) < 1e-2:
-        val = 1e-2
-    return val

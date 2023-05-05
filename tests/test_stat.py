@@ -128,7 +128,8 @@ class TestDataset(unittest.TestCase):
                         'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
-        my_en.compute_input_stats(sampled)
+        sumr, suma, sumn, sumr2, suma2 = my_en.compute_input_stats(sampled)
+        my_en.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
         my_en.mean = my_en.mean
         my_en.stddev = my_en.stddev
         self.assertTrue(np.allclose(self.dp_d.davg.reshape([-1]), my_en.mean.cpu().reshape([-1]), rtol=0.01))

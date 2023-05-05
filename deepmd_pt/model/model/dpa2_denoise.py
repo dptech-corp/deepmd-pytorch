@@ -45,11 +45,7 @@ class DenoiseModelDPA2(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        if sampled is not None:
-            for sys in sampled:
-                for key in sys:
-                    sys[key] = sys[key].to(env.DEVICE)
-            self.descriptor.compute_input_stats(sampled)
+        self.compute_or_load_stat(model_params, {}, ntypes, sampled=sampled)
 
         # BackBone
         backbone_param = model_params.pop('backbone')

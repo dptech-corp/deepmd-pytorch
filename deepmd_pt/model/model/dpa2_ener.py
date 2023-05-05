@@ -44,13 +44,6 @@ class EnergyModelDPA2(BaseModel):
         assert self.descriptor_type == 'se_atten', 'Only descriptor `se_atten` is supported for DPA-2!'
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
-        # Statistics
-        if sampled is not None:
-            for sys in sampled:
-                for key in sys:
-                    sys[key] = sys[key].to(env.DEVICE)
-            self.descriptor.compute_input_stats(sampled)
-
         # BackBone
         backbone_param = model_params.pop('backbone')
         backbone_type = backbone_param.pop('type')
@@ -67,18 +60,11 @@ class EnergyModelDPA2(BaseModel):
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-        if sampled is not None:
-            energy = [item['energy'] for item in sampled]
-            mixed_type = 'real_natoms_vec' in sampled[0]
-            if mixed_type:
-                input_natoms = [item['real_natoms_vec'] for item in sampled]
-            else:
-                input_natoms = [item['natoms'] for item in sampled]
-            tmp = compute_output_stats(energy, input_natoms)
-            fitting_param['bias_atom_e'] = tmp[:, 0]
-        else:
-            fitting_param['bias_atom_e'] = [0.0] * ntypes
         fitting_param['use_tebd'] = True
+
+        # Statistics
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):

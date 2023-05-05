@@ -43,11 +43,7 @@ class DenoiseModelDPA1(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        if sampled is not None:
-            for sys in sampled:
-                for key in sys:
-                    sys[key] = sys[key].to(env.DEVICE)
-            self.descriptor.compute_input_stats(sampled)
+        self.compute_or_load_stat(model_params, {}, ntypes, sampled=sampled)
 
         assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
         # Denoise and predict
