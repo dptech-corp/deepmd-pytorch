@@ -54,7 +54,7 @@ class EnergyModelDPA1(BaseModel):
 
         # Statistics
         if not model_params["resuming"]:
-            if sampled is not None: # compute stat
+            if sampled is not None:  # compute stat
                 for sys in sampled:
                     for key in sys:
                         sys[key] = sys[key].to(env.DEVICE)
@@ -74,19 +74,28 @@ class EnergyModelDPA1(BaseModel):
                     os.mkdir(model_params["stat_file_dir"])
                 np.savez_compressed(model_params["stat_file_path"],
                                     sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
-                                    bias_atom_e=fitting_param['bias_atom_e'])
-            else: # load stat
+                                    bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
+            else:  # load stat
                 logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
                 stats = np.load(model_params["stat_file_path"])
-                sumr, suma, sumn, sumr2, suma2=stats["sumr"], stats["suma"], stats["sumn"], stats["sumr2"], stats["suma2"]
-                fitting_param['bias_atom_e'] = stats["bias_atom_e"]
+                stat_type_map = list(stats["type_map"])
+                target_type_map = model_params['type_map']
+                missing_type = [i for i in target_type_map if i not in stat_type_map]
+                assert not missing_type, \
+                    f"These type are not in stat file: {missing_type}! Please change the stat file path!"
+                idx_map = [stat_type_map.index(i) for i in target_type_map]
+                sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
+                                                 stats["sumn"][idx_map], stats["sumr2"][idx_map], \
+                                                 stats["suma2"][idx_map]
+                fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
             self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
-        else: # resuming for checkpoint; init model params from scratch
+        else:  # resuming for checkpoint; init model params from scratch
             fitting_param['bias_atom_e'] = [0.0] * ntypes
 
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type,
+                selected_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -114,7 +123,7 @@ class EnergyModelDPA1(BaseModel):
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
         assert extended_force is not None
-        virial = -torch.transpose(extended_coord, 1, 2)@extended_force
+        virial = -torch.transpose(extended_coord, 1, 2) @ extended_force
         mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
         force = torch.zeros_like(coord)
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
