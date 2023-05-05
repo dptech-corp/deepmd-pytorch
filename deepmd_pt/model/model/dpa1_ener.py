@@ -33,7 +33,7 @@ class EnergyModelDPA1(BaseModel):
             descriptor_param['tebd_input_mode'] = 'concat'
             self.tebd_dim = 8
         else:
-            tebd_dim = type_embedding_param['neuron'][-1]
+            tebd_dim = type_embedding_param.get('neuron', [8])[-1]
             tebd_input_mode = type_embedding_param.get('tebd_input_mode', 'concat')
             self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
             descriptor_param['tebd_dim'] = tebd_dim
