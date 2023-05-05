@@ -44,6 +44,7 @@ class Trainer(object):
         """
         model_params = config["model"]
         training_params = config["training"]
+        self.rank = dist.get_rank() if dist.is_initialized() else 0
 
         # Iteration config
         self.num_steps = training_params["numb_steps"]
@@ -68,13 +69,14 @@ class Trainer(object):
             if job_name is None:
                 name_path = os.path.abspath(".").split("/")
                 job_name = name_path[-2] + "/" + name_path[-1]
-            wb.init(
-                project=project,
-                entity=entity,
-                config=training_params,
-                name=job_name,
-                settings=wb.Settings(start_method="fork"),
-            )
+            if self.rank == 0:
+                wb.init(
+                    project=project,
+                    entity=entity,
+                    config=training_params,
+                    name=job_name,
+                    settings=wb.Settings(start_method="fork"),
+                )
 
         # Data + Model
         dp_random.seed(training_params["seed"])
@@ -128,8 +130,6 @@ class Trainer(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-        self.rank = dist.get_rank() if dist.is_initialized() else 0
-
         if (resume_from is not None) and (self.rank == 0):
             logging.info(f"Resuming from {resume_from}.")
             state_dict = torch.load(resume_from)
@@ -159,8 +159,7 @@ class Trainer(object):
             self.wrapper = DDP(
                 self.wrapper,
                 device_ids=[LOCAL_RANK],
-                output_device=LOCAL_RANK,
-                find_unused_parameters=True, # TODO: otherwise the model might throw an error for attention layers
+                output_device=LOCAL_RANK
             )
 
         if self.opt_type == "Adam":
@@ -364,7 +363,7 @@ class Trainer(object):
         return input_dict, label_dict
 
     def wandb_log(self, data: dict, step, type_suffix=""):
-        if not self.wandb_enabled:
+        if not self.wandb_enabled or self.rank != 0:
             return
         for k, v in data.items():
             wb.log({k + type_suffix: v}, step=step)
