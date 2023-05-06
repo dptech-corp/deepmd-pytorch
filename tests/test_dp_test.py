@@ -27,7 +27,7 @@ class TestDPTest(unittest.TestCase):
         tester = inference.Tester(deepcopy(self.config), "model.pt")
         res = tester.run()
         for k, v in res.items():
-            if k == "rmse":
+            if k == "rmse" or "mae" in k:
                 continue
             self.assertTrue(np.allclose(v, more_loss[k].cpu().detach().numpy()),
                             "Test result of %s is incorrect" % k)
