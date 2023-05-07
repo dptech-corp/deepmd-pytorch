@@ -123,14 +123,16 @@ class Tester(object):
                 except StopIteration:
                     break
                 model_pred, _, _ = self.wrapper(**input_dict)
-                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0)  # TODO: lr here is useless
+                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0, mae=True)  # TODO: lr here is useless
                 natoms = input_dict["natoms"][0, 0]
                 sum_natoms += natoms
                 for k, v in more_loss.items():
-                    # if "rmse" in k:
-                    single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
+                    if "mae" in k:
+                        single_results[k] = single_results.get(k, 0.0) + v * natoms
+                    else:
+                        single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
             results = {
-                k: math.sqrt(v / sum_natoms) for k, v in single_results.items()
+                k: v / sum_natoms if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
             }
             for item in sorted(list(results.keys())):
                 logging.info(f"{item}: {results[item]:.4f}")
@@ -140,7 +142,7 @@ class Tester(object):
             global_sum_natoms += sum_natoms
 
         global_results = {
-            k: math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
+            k: v / global_sum_natoms if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
         }
         logging.info("# ----------weighted average of errors----------- ")
         logging.info(f"# number of systems : {len(systems)}")

@@ -28,7 +28,7 @@ class EnergyStdLoss(TaskLoss):
         self.start_pref_v = start_pref_v
         self.limit_pref_v = limit_pref_v
 
-    def forward(self, model_pred, label, natoms, learning_rate):
+    def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on loss and force.
 
         Args:
@@ -54,6 +54,9 @@ class EnergyStdLoss(TaskLoss):
             loss += atom_norm * (pref_e * l2_ener_loss)
             rmse_e = l2_ener_loss.sqrt() * atom_norm
             more_loss['rmse_e'] = rmse_e.detach()
+            if mae:
+                mae_e = torch.mean(torch.abs(model_pred['energy'] - label['energy'])) * atom_norm
+                more_loss['mae_e'] = mae_e.detach()
 
         if self.has_f and 'force' in model_pred and 'force' in label:
             diff_f = label['force'] - model_pred['force']
@@ -62,6 +65,9 @@ class EnergyStdLoss(TaskLoss):
             loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
             rmse_f = l2_force_loss.sqrt()
             more_loss['rmse_f'] = rmse_f.detach()
+            if mae:
+                mae_f = torch.mean(torch.abs(diff_f))
+                more_loss['mae_f'] = mae_f.detach()
 
         if self.has_v and 'virial' in model_pred and 'virial' in label:
             diff_v = label['virial'] - model_pred['virial'].reshape(-1, 9)
@@ -70,5 +76,8 @@ class EnergyStdLoss(TaskLoss):
             loss += atom_norm * (pref_v * l2_virial_loss)
             rmse_v = l2_virial_loss.sqrt() * atom_norm
             more_loss['rmse_v'] = rmse_v.detach()
+            if mae:
+                mae_v = torch.mean(torch.abs(diff_v)) * atom_norm
+                more_loss['mae_v'] = mae_v.detach()
         more_loss['rmse'] = torch.sqrt(loss.detach())
         return loss, more_loss
