@@ -155,6 +155,7 @@ class Trainer(object):
             self.wrapper.load_state_dict(state_dict)
 
         if dist.is_initialized():
+            torch.cuda.set_device(LOCAL_RANK)
             # DDP will guarantee the model parameters are identical across all processes
             self.wrapper = DDP(
                 self.wrapper,
