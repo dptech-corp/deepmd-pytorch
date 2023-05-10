@@ -44,7 +44,7 @@ class KFOptimizerWrapper:
             error /= dist.get_world_size()
 
         Etot_predict = update_prefactor * Etot_predict
-        Etot_predict[mask] = -update_prefactor * Etot_predict[mask]
+        Etot_predict[mask] = -Etot_predict[mask]
 
         Etot_predict.sum().backward()
         error = error * math.sqrt(bs)
@@ -77,7 +77,7 @@ class KFOptimizerWrapper:
                 error /= dist.get_world_size()
 
             tmp_force_predict = force_predict[:, index[i]] * update_prefactor
-            tmp_force_predict[mask] = -update_prefactor * tmp_force_predict[mask]
+            tmp_force_predict[mask] = -tmp_force_predict[mask]
 
             # In order to solve a pytorch bug, reference: https://github.com/pytorch/pytorch/issues/43259
             (tmp_force_predict.sum() + Etot_predict.sum() * 0).backward()

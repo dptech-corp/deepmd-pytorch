@@ -54,6 +54,10 @@ class Trainer(object):
         self.save_freq = training_params.get("save_freq", 1000)
         self.opt_type = training_params.get("opt_type", "Adam")
         self.kf_blocksize = training_params.get("kf_blocksize", 5120)
+        self.kf_start_pref_e = training_params.get("kf_start_pref_e", 1)
+        self.kf_limit_pref_e = training_params.get("kf_limit_pref_e", 1)
+        self.kf_start_pref_f = training_params.get("kf_start_pref_f", 1)
+        self.kf_limit_pref_f = training_params.get("kf_limit_pref_f", 1)
         self.wandb_config = training_params.get("wandb_config", {})
         self.wandb_enabled = self.wandb_config.get("wandb_enabled", False)
         if self.wandb_enabled:
@@ -207,9 +211,11 @@ class Trainer(object):
                     KFOptWrapper = KFOptimizerWrapper(
                         self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                     )
-                    _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"])
+                    pref_e = self.kf_start_pref_e * (self.kf_limit_pref_e/self.kf_start_pref_e)**(_step_id/self.num_steps)
+                    _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"], pref_e)
+                    pref_f = self.kf_start_pref_f * (self.kf_limit_pref_f/self.kf_start_pref_f)**(_step_id/self.num_steps)
                     p_energy, p_force = KFOptWrapper.update_force(
-                        input_dict, label_dict["force"]
+                        input_dict, label_dict["force"], pref_f
                     )
                     # [coord, atype, natoms, mapping, shift, selected, box]
                     model_pred = {"energy": p_energy, "force": p_force}
