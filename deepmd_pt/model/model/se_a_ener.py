@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeA
@@ -18,6 +19,7 @@ class EnergyModelSeA(BaseModel):
         - training_data: The training dataset.
         """
         super(EnergyModelSeA, self).__init__()
+        model_params = copy.deepcopy(model_params)
         ntypes = len(model_params['type_map'])
         # Descriptor + Embedding Net
         descriptor_param = model_params.pop('descriptor')

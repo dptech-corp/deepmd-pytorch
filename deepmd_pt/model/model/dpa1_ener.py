@@ -1,5 +1,6 @@
 import logging
 import os
+import copy
 import numpy as np
 import torch
 from typing import Optional, List
@@ -21,6 +22,7 @@ class EnergyModelDPA1(BaseModel):
         - sampled: The sampled dataset for stat.
         """
         super(EnergyModelDPA1, self).__init__()
+        model_params = copy.deepcopy(model_params)
         # Descriptor + Type Embedding Net
         ntypes = len(model_params['type_map'])
         self.ntypes = ntypes
