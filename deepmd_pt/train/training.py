@@ -44,7 +44,6 @@ class Trainer(object):
         Args:
         - config: The Dict-like configuration with training options.
         """
-        self.config = config
         model_params = config["model"]
         training_params = config["training"]
         self.rank = dist.get_rank() if dist.is_initialized() else 0
@@ -202,12 +201,13 @@ class Trainer(object):
             origin_type_map, full_type_map = get_model_type_map(origin_config, model_params)
             ntest = model_params.get("data_bias_nsample", 10)
             self.model.fitting_net.change_energy_bias(
-                self.config,
+                config,
                 self.model,
                 origin_type_map,
                 full_type_map,
                 ntest=ntest
             )
+        self.model_params = model_params
             
     def run(self):
         fout = (
@@ -353,7 +353,7 @@ class Trainer(object):
     def save_model(self, save_path):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
         save_infos = module.state_dict()
-        save_infos['origin_config'] = self.config
+        save_infos['origin_config'] = self.model_params
         torch.save(save_infos, save_path)
         
     def get_data(self, is_train=True):

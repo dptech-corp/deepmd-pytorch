@@ -2,7 +2,7 @@ import logging
 
 def get_model_type_map(origin_config, model_params):
     assert origin_config != {}, "Finetune model need to contain the config information."
-    pretrained_type_map = origin_config["model"]["type_map"]
+    pretrained_type_map = origin_config["type_map"]
     cur_type_map = model_params["type_map"]
     out_line_type = []
     for i in cur_type_map:
