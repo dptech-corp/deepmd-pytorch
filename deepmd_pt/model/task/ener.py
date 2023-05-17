@@ -174,12 +174,13 @@ class EnergyFittingNetType(TaskBaseMethod):
             if bias_shift == "delta":
                 coord = test_data["coord"].to(DEVICE)
                 atype = test_data['atype'].to(DEVICE)
-                natoms = test_data["coord"].shape[1]
+                natoms = test_data["natoms"].to(DEVICE)
                 mapping = test_data['mapping'].to(DEVICE)
                 shift = test_data['shift'].to(DEVICE)
                 selected = test_data['selected'].to(DEVICE)
                 selected_type = test_data['selected_type'].to(DEVICE)
-                ret = model(coord, atype, natoms, mapping, shift, selected, selected_type)
+                selected_loc = test_data['selected_loc'].to(DEVICE)
+                ret = model(coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc)
                 energy_predict.append(ret['energy'].reshape([ntest, 1]).detach().cpu().numpy())
         type_numbs = np.concatenate(type_numbs)
         energy_ground_truth = np.concatenate(energy_ground_truth)
