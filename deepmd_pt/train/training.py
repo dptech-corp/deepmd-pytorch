@@ -109,22 +109,6 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-            
-        # resuming info
-        model_params["resuming"] = False
-        ntest = model_params.get("data_bias_nsample", 10)
-        if ((resume_from is not None) or (finetune is not None)) and (self.rank == 0):
-            origin_model = finetune if finetune is not None else resume_from
-            logging.info(f"Resuming from {origin_model}.")
-            state_dict = torch.load(origin_model)
-            if 'other_info' in state_dict:
-                origin_config = state_dict.pop('other_info', {})
-                last_model_params, train_infos = origin_config['model_params'], origin_config['train_infos']
-                old_type_map, new_type_map = last_model_params['type_map'], model_params['type_map']
-                assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."
-                model_params = last_model_params
-            model_params["resuming"] = True
-
         self.model = get_model(model_params, sampled).to(DEVICE)
 
         # Learning rate
@@ -149,8 +133,15 @@ class Trainer(object):
         self.wrapper = ModelWrapper(self.model, self.loss)
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
-            
-        if model_params["resuming"]:
+        # resuming and finetune
+        if model_params["resuming"] and (self.rank == 0):
+            ntest = model_params.get("data_bias_nsample", 10)
+            origin_model = finetune if finetune is not None else resume_from
+            logging.info(f"Resuming from {origin_model}.")
+            state_dict = torch.load(origin_model)
+            if 'other_info' in state_dict:
+                origin_config = state_dict.pop('other_info', {})
+                # train_infos = origin_config['train_infos']
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -178,12 +169,13 @@ class Trainer(object):
                 ] and model_params["fitting_net"].get("type", "ener") in [
                     "ener"
                 ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+                old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
                 self.model.fitting_net.change_energy_bias(
                     config,
                     self.model,
                     old_type_map,
                     new_type_map,
-                    ntest=ntest
+                    ntest=ntest,
                 )
         self.model_params = model_params
 

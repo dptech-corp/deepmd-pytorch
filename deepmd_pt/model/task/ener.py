@@ -148,9 +148,9 @@ class EnergyFittingNetType(TaskBaseMethod):
         type_numbs, energy_ground_truth, energy_predict = [], [], []
         for test_data in sampled:
             if mixed_type:
-                atype = test_data["atype"]
+                atype = test_data["atype"].detach().cpu().numpy()
             else:
-                atype = test_data["atype"][0]
+                atype = test_data["atype"][0].detach().cpu().numpy()
             assert np.array(
                 [i.item() in idx_type_map for i in list(set(atype.reshape(-1)))]
             ).all(), "Some types are not in 'type_map'!"
@@ -167,7 +167,7 @@ class EnergyFittingNetType(TaskBaseMethod):
             else:
                 type_numbs.append(
                     np.tile(
-                        np.bincount(atype.detach().cpu().numpy(), minlength=numb_type)[idx_type_map],
+                        np.bincount(atype, minlength=numb_type)[idx_type_map],
                         (ntest, 1),
                     )
                 )
@@ -204,7 +204,7 @@ class EnergyFittingNetType(TaskBaseMethod):
             statistic_bias = np.linalg.lstsq(
                 type_numbs, energy_ground_truth, rcond=None
             )[0]
-            self.bias_atom_e[idx_type_map] = torch.from_numpy(statistic_bias.reshape(-1)).to(DEVICE)
+            self.bias_atom_e[idx_type_map] = torch.from_numpy(statistic_bias.reshape(-1)).type_as(self.bias_atom_e[idx_type_map]).to(DEVICE)
         else:
             raise RuntimeError("Unknown bias_shift mode: " + bias_shift)
         logging.info(

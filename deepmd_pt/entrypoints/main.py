@@ -11,10 +11,12 @@ from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
 
+from deepmd_pt.utils.finetune import get_model_params
 from deepmd_pt.utils.stat import make_stat_input
 
 
 def get_trainer(config, ckpt=None, force_load=False, finetune=None):
+    config = get_model_params(ckpt, finetune, config)
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params['training_data']
