@@ -90,6 +90,7 @@ class Trainer(object):
             batch_size=None,
             num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
             drop_last=False,
+            pin_memory=True,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
         self.training_data = iter(self.training_dataloader)
@@ -99,6 +100,7 @@ class Trainer(object):
             batch_size=None,
             num_workers=1,
             drop_last=False,
+            pin_memory=True,
         )
 
         self.validation_data = BufferedIterator(iter(self.validation_dataloader))
