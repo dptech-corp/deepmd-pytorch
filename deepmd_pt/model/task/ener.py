@@ -109,7 +109,7 @@ class EnergyFittingNetType(TaskBaseMethod):
         outs = outs + atom_energy  # Shape is [nframes, natoms[0], 1]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
 
-    def change_energy_bias(self, config, model, origin_type_map, full_type_map, bias_shift='delta', ntest=10):
+    def change_energy_bias(self, config, model, old_type_map, new_type_map, bias_shift='delta', ntest=10):
         """Change the energy bias according to the input data and the pretrained model.
 
         Parameters
@@ -118,9 +118,9 @@ class EnergyFittingNetType(TaskBaseMethod):
             The configuration.
         model : EnergyModel
             Energy model loaded pre-trained model.
-        origin_type_map : list
+        new_type_map : list
             The original type_map in dataset, they are targets to change the energy bias.
-        full_type_map : str
+        old_type_map : str
             The full type_map in pretrained model
         bias_shift : str
             The mode for changing energy bias : ['delta', 'statistic']
@@ -132,19 +132,19 @@ class EnergyFittingNetType(TaskBaseMethod):
         """
         logging.info(
             "Changing energy bias in pretrained model for types {}... "
-            "(this step may take long time)".format(str(origin_type_map))
+            "(this step may take long time)".format(str(new_type_map))
         )
         # data
         systems = config['training']['training_data']['systems']
         finetune_data = DpLoaderSet(systems, ntest, config["model"], type_split=False, noise_settings=None)
         sampled = make_stat_input(finetune_data.systems, finetune_data.dataloaders, 1)
         # map
-        sorter = np.argsort(full_type_map)
+        sorter = np.argsort(old_type_map)
         idx_type_map = sorter[
-            np.searchsorted(full_type_map, origin_type_map, sorter=sorter)
+            np.searchsorted(old_type_map, new_type_map, sorter=sorter)
         ]
         mixed_type = np.all([i.mixed_type for i in finetune_data.systems])
-        numb_type = len(full_type_map)
+        numb_type = len(old_type_map)
         type_numbs, energy_ground_truth, energy_predict = [], [], []
         for test_data in sampled:
             if mixed_type:
@@ -209,7 +209,7 @@ class EnergyFittingNetType(TaskBaseMethod):
             raise RuntimeError("Unknown bias_shift mode: " + bias_shift)
         logging.info(
             "Change energy bias of {} from {} to {}.".format(
-                str(origin_type_map), str(old_bias.detach().cpu().numpy()), str(self.bias_atom_e[idx_type_map].detach().cpu().numpy())
+                str(new_type_map), str(old_bias.detach().cpu().numpy()), str(self.bias_atom_e[idx_type_map].detach().cpu().numpy())
             )
         )
         return None

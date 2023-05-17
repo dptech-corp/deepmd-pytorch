@@ -13,7 +13,6 @@ from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
-from deepmd_pt.utils.finetune import get_model_type_map
 from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -37,7 +36,7 @@ class Trainer(object):
         validation_data=None,
         resume_from=None,
         force_load=False,
-        finetune='',
+        finetune=None,
     ):
         """Construct a DeePMD trainer.
 
@@ -110,7 +109,22 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        model_params["resuming"] = (resume_from is not None)
+            
+        # resuming info
+        model_params["resuming"] = False
+        ntest = model_params.get("data_bias_nsample", 10)
+        if ((resume_from is not None) or (finetune is not None)) and (self.rank == 0):
+            origin_model = finetune if finetune is not None else resume_from
+            logging.info(f"Resuming from {origin_model}.")
+            state_dict = torch.load(origin_model)
+            if 'other_info' in state_dict:
+                origin_config = state_dict.pop('other_info', {})
+                last_model_params, train_infos = origin_config['model_params'], origin_config['train_infos']
+                old_type_map, new_type_map = last_model_params['type_map'], model_params['type_map']
+                assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."
+                model_params = last_model_params
+            model_params["resuming"] = True
+
         self.model = get_model(model_params, sampled).to(DEVICE)
 
         # Learning rate
@@ -135,12 +149,8 @@ class Trainer(object):
         self.wrapper = ModelWrapper(self.model, self.loss)
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
-
-        if ((resume_from is not None) or (finetune != "")) and (self.rank == 0):
-            origin_model = finetune if finetune != "" else resume_from
-            logging.info(f"Resuming from {origin_model}.")
-            state_dict = torch.load(origin_model)
-            origin_config = state_dict.pop('origin_config', {})
+            
+        if model_params["resuming"]:
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -161,6 +171,21 @@ class Trainer(object):
                     slim_keys = [i + '.*' for i in slim_keys]
                     logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
+            # finetune
+            if finetune is not None:
+                assert model_params["descriptor"]["type"] in [
+                    "se_atten"
+                ] and model_params["fitting_net"].get("type", "ener") in [
+                    "ener"
+                ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+                self.model.fitting_net.change_energy_bias(
+                    config,
+                    self.model,
+                    old_type_map,
+                    new_type_map,
+                    ntest=ntest
+                )
+        self.model_params = model_params
 
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)
@@ -190,24 +215,6 @@ class Trainer(object):
         self.task_keys = ["Default"]
 
         self.lcurve_should_print_header = True
-
-        # finetune
-        if finetune:
-            assert config["model"]["descriptor"]["type"] in [
-                "se_atten"
-            ] and loss_type in [
-                "ener"
-            ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' loss!"
-            origin_type_map, full_type_map = get_model_type_map(origin_config, model_params)
-            ntest = model_params.get("data_bias_nsample", 10)
-            self.model.fitting_net.change_energy_bias(
-                config,
-                self.model,
-                origin_type_map,
-                full_type_map,
-                ntest=ntest
-            )
-        self.model_params = model_params
             
     def run(self):
         fout = (
@@ -327,7 +334,7 @@ class Trainer(object):
                 self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
                 logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                self.save_model(self.latest_model)
+                self.save_model(self.latest_model, lr=cur_lr, step=_step_id)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -342,7 +349,7 @@ class Trainer(object):
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
-                self.save_model(self.save_ckpt)
+                self.save_model(self.save_ckpt, lr=0, step=self.num_steps)
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
             if JIT:
@@ -350,10 +357,16 @@ class Trainer(object):
         if fout:
             fout.close()
 
-    def save_model(self, save_path):
+    def save_model(self, save_path, lr=0, step=0):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
         save_infos = module.state_dict()
-        save_infos['origin_config'] = self.model_params
+        save_infos['other_info'] = {
+            "model_params": self.model_params,
+            "train_infos": {
+                "lr": lr,
+                "step": step,
+            }
+        }
         torch.save(save_infos, save_path)
         
     def get_data(self, is_train=True):

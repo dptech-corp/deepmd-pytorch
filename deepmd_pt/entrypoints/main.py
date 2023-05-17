@@ -14,7 +14,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from deepmd_pt.utils.stat import make_stat_input
 
 
-def get_trainer(config, ckpt=None, force_load=False, finetune=''):
+def get_trainer(config, ckpt=None, force_load=False, finetune=None):
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params['training_data']
@@ -110,7 +110,7 @@ def main(args=None):
     train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
     train_parser.add_argument("--force-load", action="store_true",
                               help='Force load from ckpt, other missing tensors will init from scratch')
-    train_parser.add_argument("--finetune", default='', type=str, help="The Finetune model.")
+    train_parser.add_argument("--finetune", help="The Finetune model.")
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
