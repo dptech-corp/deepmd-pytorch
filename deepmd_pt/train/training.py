@@ -90,15 +90,16 @@ class Trainer(object):
             batch_size=None,
             num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
             drop_last=False,
+            pin_memory=True,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
-        self.training_data = iter(self.training_dataloader)
         self.validation_dataloader = DataLoader(
             validation_data,
             sampler=torch.utils.data.RandomSampler(validation_data),
             batch_size=None,
             num_workers=1,
             drop_last=False,
+            pin_memory=True,
         )
 
         self.validation_data = BufferedIterator(iter(self.validation_dataloader))
@@ -197,7 +198,7 @@ class Trainer(object):
 
         def step(_step_id, task_key="Default"):
             cur_lr = self.lr_exp.value(_step_id)
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             input_dict, label_dict = self.get_data(is_train=True)
             if self.opt_type == "Adam":
                 model_pred, loss, more_loss = self.wrapper(
