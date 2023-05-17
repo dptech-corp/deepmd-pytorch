@@ -3,6 +3,7 @@ import os
 import torch
 import time
 import math
+from copy import deepcopy
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
@@ -109,7 +110,7 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        self.model = get_model(model_params, sampled).to(DEVICE)
+        self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop("learning_rate")
