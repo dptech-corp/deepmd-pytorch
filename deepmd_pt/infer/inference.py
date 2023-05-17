@@ -46,6 +46,8 @@ class Tester(object):
             self.wrapper = torch.jit.script(self.wrapper)
 
         state_dict = torch.load(ckpt)
+        if 'origin_config' in state_dict:
+            del state_dict['origin_config']
         self.wrapper.load_state_dict(state_dict)
 
         # Loss
