@@ -93,7 +93,6 @@ class Trainer(object):
             pin_memory=True,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
-        self.training_data = iter(self.training_dataloader)
         self.validation_dataloader = DataLoader(
             validation_data,
             sampler=torch.utils.data.RandomSampler(validation_data),
