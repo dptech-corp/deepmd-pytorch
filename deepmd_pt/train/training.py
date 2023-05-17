@@ -198,7 +198,7 @@ class Trainer(object):
 
         def step(_step_id, task_key="Default"):
             cur_lr = self.lr_exp.value(_step_id)
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             input_dict, label_dict = self.get_data(is_train=True)
             if self.opt_type == "Adam":
                 model_pred, loss, more_loss = self.wrapper(
