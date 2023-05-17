@@ -164,7 +164,7 @@ class Trainer(object):
                     logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
             # finetune
-            if finetune is not None:
+            if finetune is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
                 assert model_params["descriptor"]["type"] in [
                     "se_atten"
                 ] and model_params["fitting_net"].get("type", "ener") in [
