@@ -13,6 +13,7 @@ from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator
+from deepmd_pt.utils.finetune import get_model_type_map
 from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -36,12 +37,14 @@ class Trainer(object):
         validation_data=None,
         resume_from=None,
         force_load=False,
+        finetune='',
     ):
         """Construct a DeePMD trainer.
 
         Args:
         - config: The Dict-like configuration with training options.
         """
+        self.config = config
         model_params = config["model"]
         training_params = config["training"]
         self.rank = dist.get_rank() if dist.is_initialized() else 0
@@ -134,9 +137,11 @@ class Trainer(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-        if (resume_from is not None) and (self.rank == 0):
-            logging.info(f"Resuming from {resume_from}.")
-            state_dict = torch.load(resume_from)
+        if ((resume_from is not None) or (finetune != "")) and (self.rank == 0):
+            origin_model = finetune if finetune != "" else resume_from
+            logging.info(f"Resuming from {origin_model}.")
+            save_infos = torch.load(origin_model)
+            state_dict, origin_config = save_infos["model_state_dict"], save_infos["config"]
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -187,6 +192,23 @@ class Trainer(object):
 
         self.lcurve_should_print_header = True
 
+        # finetune
+        if finetune:
+            assert config["model"]["descriptor"]["type"] in [
+                "se_atten"
+            ] and loss_type in [
+                "ener"
+            ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' loss!"
+            origin_type_map, full_type_map = get_model_type_map(origin_config, model_params)
+            ntest = model_params.get("data_bias_nsample", 10)
+            self.model.fitting_net.change_energy_bias(
+                self.config,
+                self.model,
+                origin_type_map,
+                full_type_map,
+                ntest=ntest
+            )
+            
     def run(self):
         fout = (
             open(self.disp_file, mode="w", buffering=1) if self.rank == 0 else None
@@ -305,7 +327,7 @@ class Trainer(object):
                 self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
                 logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.latest_model)
+                self.save_model(self.latest_model)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -320,8 +342,7 @@ class Trainer(object):
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
-                module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.save_ckpt)
+                self.save_model(self.save_ckpt)
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
             if JIT:
@@ -329,6 +350,11 @@ class Trainer(object):
         if fout:
             fout.close()
 
+    def save_model(self, save_path):
+        module = self.wrapper.module if dist.is_initialized() else self.wrapper
+        save_infos = {'model_state_dict': module.state_dict(), 'config': self.config}
+        torch.save(save_infos, save_path)
+        
     def get_data(self, is_train=True):
         if is_train:
             try:
