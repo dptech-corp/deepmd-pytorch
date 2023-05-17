@@ -140,8 +140,8 @@ class Trainer(object):
         if ((resume_from is not None) or (finetune != "")) and (self.rank == 0):
             origin_model = finetune if finetune != "" else resume_from
             logging.info(f"Resuming from {origin_model}.")
-            save_infos = torch.load(origin_model)
-            state_dict, origin_config = save_infos["model_state_dict"], save_infos["config"]
+            state_dict = torch.load(origin_model)
+            origin_config = state_dict.pop('origin_config', {})
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -352,7 +352,8 @@ class Trainer(object):
 
     def save_model(self, save_path):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
-        save_infos = {'model_state_dict': module.state_dict(), 'config': self.config}
+        save_infos = module.state_dict()
+        save_infos['origin_config'] = self.config
         torch.save(save_infos, save_path)
         
     def get_data(self, is_train=True):
