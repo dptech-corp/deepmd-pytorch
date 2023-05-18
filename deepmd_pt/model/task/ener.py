@@ -147,6 +147,7 @@ class EnergyFittingNetType(TaskBaseMethod):
         numb_type = len(old_type_map)
         type_numbs, energy_ground_truth, energy_predict = [], [], []
         for test_data in sampled:
+            nframes = test_data['energy'].shape[0]
             if mixed_type:
                 atype = test_data["atype"].detach().cpu().numpy()
             else:
@@ -168,7 +169,7 @@ class EnergyFittingNetType(TaskBaseMethod):
                 type_numbs.append(
                     np.tile(
                         np.bincount(atype, minlength=numb_type)[idx_type_map],
-                        (ntest, 1),
+                        (nframes, 1),
                     )
                 )
             if bias_shift == "delta":
@@ -181,7 +182,7 @@ class EnergyFittingNetType(TaskBaseMethod):
                 selected_type = test_data['selected_type'].to(DEVICE)
                 selected_loc = test_data['selected_loc'].to(DEVICE)
                 ret = model(coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc)
-                energy_predict.append(ret['energy'].reshape([ntest, 1]).detach().cpu().numpy())
+                energy_predict.append(ret['energy'].reshape([nframes, 1]).detach().cpu().numpy())
         type_numbs = np.concatenate(type_numbs)
         energy_ground_truth = np.concatenate(energy_ground_truth)
         old_bias = self.bias_atom_e[idx_type_map]
