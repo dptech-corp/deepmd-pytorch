@@ -3,6 +3,7 @@ import os
 import torch
 import time
 import math
+from copy import deepcopy
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
@@ -36,6 +37,7 @@ class Trainer(object):
         validation_data=None,
         resume_from=None,
         force_load=False,
+        finetune_model=None,
     ):
         """Construct a DeePMD trainer.
 
@@ -109,8 +111,7 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        model_params["resuming"] = (resume_from is not None)
-        self.model = get_model(model_params, sampled).to(DEVICE)
+        self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
 
         # Learning rate
         lr_params = config.pop("learning_rate")
@@ -131,13 +132,15 @@ class Trainer(object):
             raise NotImplementedError
 
         # Model Wrapper
-        self.wrapper = ModelWrapper(self.model, self.loss)
+        self.wrapper = ModelWrapper(self.model, self.loss, model_params=model_params)
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
-
-        if (resume_from is not None) and (self.rank == 0):
-            logging.info(f"Resuming from {resume_from}.")
-            state_dict = torch.load(resume_from)
+        # resuming and finetune
+        if model_params["resuming"] and (self.rank == 0):
+            ntest = model_params.get("data_bias_nsample", 10)
+            origin_model = finetune_model if finetune_model is not None else resume_from
+            logging.info(f"Resuming from {origin_model}.")
+            state_dict = torch.load(origin_model)
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -158,6 +161,21 @@ class Trainer(object):
                     slim_keys = [i + '.*' for i in slim_keys]
                     logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
+            # finetune
+            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
+                assert model_params["descriptor"]["type"] in [
+                    "se_atten"
+                ] and model_params["fitting_net"].get("type", "ener") in [
+                    "ener"
+                ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+                old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
+                self.model.fitting_net.change_energy_bias(
+                    config,
+                    self.model,
+                    old_type_map,
+                    new_type_map,
+                    ntest=ntest,
+                )
 
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)
@@ -306,7 +324,7 @@ class Trainer(object):
                 self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
                 logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.latest_model)
+                self.save_model(self.latest_model, lr=cur_lr, step=_step_id)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -321,8 +339,7 @@ class Trainer(object):
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
-                module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.save_ckpt)
+                self.save_model(self.save_ckpt, lr=0, step=self.num_steps)
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
             if JIT:
@@ -330,6 +347,12 @@ class Trainer(object):
         if fout:
             fout.close()
 
+    def save_model(self, save_path, lr=0, step=0):
+        self.wrapper.train_infos['lr'] = lr
+        self.wrapper.train_infos['step'] = step
+        module = self.wrapper.module if dist.is_initialized() else self.wrapper
+        torch.save(module.state_dict(), save_path)
+        
     def get_data(self, is_train=True):
         if is_train:
             try:
