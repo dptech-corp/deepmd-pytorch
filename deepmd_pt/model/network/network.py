@@ -396,7 +396,7 @@ class NeighborWiseAttentionLayer(torch.nn.Module):
 
 class GatedSelfAttetion(torch.nn.Module):
     def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None):
+                 head_num=1, normalize=True, temperature=None, include_bias=True):
         """Construct a neighbor-wise attention net.
         """
         super(GatedSelfAttetion, self).__init__()
@@ -411,8 +411,8 @@ class GatedSelfAttetion(torch.nn.Module):
         else:
             self.scaling = temperature
         self.normalize = normalize
-        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, include_bias=False)
-        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, include_bias=False)
+        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, include_bias=include_bias)
+        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, include_bias=include_bias)
 
     def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
         """
