@@ -200,4 +200,22 @@ sbatch distributed_data_parallel_slurm_setup.sbatch
 
 These files are modified from: https://github.com/lkskstlr/distributed_data_parallel_slurm_setup
 
+# Track runs using W&B
+
+`wandb` is automatically installed as a requirement for deepmd-pytorch.
+
+First setup with `wandb login`, and set the corresponding fields under the "training" part in your input file (typically `input.json`) as follows:
+
+```jsonc
+// "training": {
+    "wandb_config": {
+        "job_name": "Cu-dpa_adam_bz1_at2",
+        "wandb_enabled": true,
+        "entity": "dp_model_engineering", // a username or team name
+        "project": "DPA-2"
+    },
+```
+
+To disable logging temporarily, set env var `WANDB_MODE=disabled`.
+
 # Known Problems & TODO
