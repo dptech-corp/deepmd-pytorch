@@ -126,7 +126,7 @@ class DescrptSeAtten(Descriptor):
             env_mat, _ = prod_env_mat_se_a(
                 extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
-                self.rcut, self.rcut_smth
+                self.rcut, self.rcut_smth,
             )
             if not mixed_type:
                 sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(env_mat.detach().cpu().numpy(), self.ndescrpt,
@@ -185,7 +185,8 @@ class DescrptSeAtten(Descriptor):
         dmatrix, diff = prod_env_mat_se_a(
             extended_coord, selected, atype,
             self.mean, self.stddev,
-            self.rcut, self.rcut_smth)
+            self.rcut, self.rcut_smth,
+        )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
 
 

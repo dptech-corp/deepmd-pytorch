@@ -81,7 +81,7 @@ class DescrptSeA(Descriptor):
             env_mat, _ = prod_env_mat_se_a(
                 extended_coord, system['selected'], system['atype'],
                 self.mean, self.stddev,
-                self.rcut, self.rcut_smth
+                self.rcut, self.rcut_smth,
             )
             sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(env_mat.detach().cpu().numpy(), self.ndescrpt,
                                                              system['natoms'])
@@ -134,7 +134,8 @@ class DescrptSeA(Descriptor):
         dmatrix, _ = prod_env_mat_se_a(
             extended_coord, selected, atype,
             self.mean, self.stddev,
-            self.rcut, self.rcut_smth)
+            self.rcut, self.rcut_smth,
+        )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         xyz_scatter = torch.empty(1, )
 
