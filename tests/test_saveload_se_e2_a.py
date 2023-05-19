@@ -64,12 +64,10 @@ class TestSaveLoadDPA1(unittest.TestCase):
         optimizer = torch.optim.Adam(wrapper.parameters(), lr=self.start_lr)
         optimizer.zero_grad()
         if read:
-            state_dict = torch.load(model_file)
-            wrapper.load_state_dict(state_dict)
+            wrapper.load_state_dict(torch.load(model_file))
             os.remove(model_file)
         else:
-            save_infos = wrapper.state_dict()
-            torch.save(save_infos, model_file)
+            torch.save(wrapper.state_dict(), model_file)
         result = wrapper(**self.input_dict, cur_lr=self.cur_lr, label=self.label_dict, task_key=self.task_key)[0]
         return result
 

@@ -204,7 +204,7 @@ class Trainer(object):
         self.task_keys = ["Default"]
 
         self.lcurve_should_print_header = True
-            
+
     def run(self):
         fout = (
             open(self.disp_file, mode="w", buffering=1) if self.rank == 0 else None
