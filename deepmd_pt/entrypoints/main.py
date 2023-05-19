@@ -11,12 +11,12 @@ from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
 
-from deepmd_pt.utils.finetune import get_model_params
+from deepmd_pt.utils.finetune import load_model_params
 from deepmd_pt.utils.stat import make_stat_input
 
 
-def get_trainer(config, ckpt=None, force_load=False, finetune=None):
-    config = get_model_params(ckpt, finetune, config)
+def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
+    config = load_model_params(ckpt, finetune_model, config)
     training_params = config['training']
     model_params = config['model']
     training_dataset_params = training_params['training_data']
@@ -70,7 +70,7 @@ def get_trainer(config, ckpt=None, force_load=False, finetune=None):
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data,
-                               resume_from=ckpt, force_load=force_load, finetune=finetune)
+                               resume_from=ckpt, force_load=force_load, finetune_model=finetune_model)
     return trainer
 
 

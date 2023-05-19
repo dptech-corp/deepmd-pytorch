@@ -46,8 +46,6 @@ class Tester(object):
             self.wrapper = torch.jit.script(self.wrapper)
 
         state_dict = torch.load(ckpt)
-        if 'other_info' in state_dict:
-            del state_dict['other_info']
         self.wrapper.load_state_dict(state_dict)
 
         # Loss

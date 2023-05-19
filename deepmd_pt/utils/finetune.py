@@ -1,27 +1,22 @@
 import logging
 import torch
 
-def get_model_params(ckpt, finetune, config):
-    """Update model_params.
+def load_model_params(ckpt, finetune_model, config):
+    """Load model_params according to the pretrained one.
 
     Args:
-    - origin_model: ckpt.
+    - ckpt & finetune_model: origin model.
     - config: Read from json file.
     """
     model_params = config['model']
-    model_params["resuming"] = False
-    if finetune is not None:
-        origin_model = finetune if finetune is not None else ckpt
-        state_dict = torch.load(origin_model)
-        if 'other_info' in state_dict:
-            origin_config = state_dict.pop('other_info', {})
-            last_model_params = origin_config['model_params']
-            old_type_map, new_type_map = last_model_params['type_map'], model_params['type_map']
-            assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."
-            model_params = last_model_params
-            model_params["new_type_map"] = new_type_map
-        model_params["resuming"] = True
-    elif ckpt is not None:
-        model_params["resuming"] = True
+    if finetune_model is not None:
+        state_dict = torch.load(finetune_model)
+        last_model_params = state_dict['_extra_state']['model_params']
+        old_type_map, new_type_map = last_model_params['type_map'], model_params['type_map']
+        assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."
+        model_params = last_model_params
+        logging.info("Change the model configurations according to the pretrained one...")
+        model_params["new_type_map"] = new_type_map
+    model_params["resuming"] = (finetune_model is not None) or (ckpt is not None)
     config['model'] = model_params
     return config

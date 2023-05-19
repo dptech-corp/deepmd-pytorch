@@ -65,12 +65,10 @@ class TestSaveLoadDPA1(unittest.TestCase):
         optimizer.zero_grad()
         if read:
             state_dict = torch.load(model_file)
-            origin_config = state_dict.pop('other_info', {})
             wrapper.load_state_dict(state_dict)
             os.remove(model_file)
         else:
             save_infos = wrapper.state_dict()
-            save_infos['other_info'] = self.config
             torch.save(save_infos, model_file)
         result = wrapper(**self.input_dict, cur_lr=self.cur_lr, label=self.label_dict, task_key=self.task_key)[0]
         return result
