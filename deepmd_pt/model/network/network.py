@@ -154,7 +154,7 @@ class SimpleLinear(torch.nn.Module):
                  stddev=1.,
                  use_timestep=False,
                  activate=None,
-                 include_bias: bool = True,
+                 bias: bool = True,
                  ):
         """Construct a linear layer.
 
@@ -172,7 +172,7 @@ class SimpleLinear(torch.nn.Module):
 
         self.matrix = torch.nn.Parameter(data=Tensor(num_in, num_out))
         torch.nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
-        if include_bias:
+        if bias:
           self.bias = torch.nn.Parameter(data=Tensor(1, num_out))
           torch.nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
         else:
@@ -411,8 +411,8 @@ class GatedSelfAttetion(torch.nn.Module):
         else:
             self.scaling = temperature
         self.normalize = normalize
-        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, include_bias=False)
-        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, include_bias=False)
+        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=False)
+        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=False)
 
     def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
         """
