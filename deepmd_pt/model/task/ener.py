@@ -91,7 +91,7 @@ class EnergyFittingNetType(TaskBaseMethod):
             logging.info('Set seed to %d in fitting net.', kwargs['seed'])
             torch.manual_seed(kwargs['seed'])
 
-    def forward(self, inputs, atype, atype_tebd):
+    def forward(self, inputs, atype, atype_tebd = None):
         """Based on embedding net output, alculate total energy.
 
         Args:
@@ -102,7 +102,8 @@ class EnergyFittingNetType(TaskBaseMethod):
         - `torch.Tensor`: Total energy with shape [nframes, natoms[0]].
         """
         outs = 0
-        inputs = torch.concat([inputs, atype_tebd], dim=-1)
+        if atype_tebd is not None:
+          inputs = torch.concat([inputs, atype_tebd], dim=-1)
         atom_energy = self.filter_layers[0](inputs) + self.bias_atom_e[atype].unsqueeze(-1)
         outs = outs + atom_energy  # Shape is [nframes, natoms[0], 1]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
