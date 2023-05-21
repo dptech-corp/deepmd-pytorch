@@ -147,6 +147,7 @@ class DescrptSeUni(Descriptor):
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
+      update_h2: bool = False,
       attn_dotr: bool = True,
       activation: str = "tanh",
       set_davg_zero: bool = True, # TODO
@@ -171,6 +172,7 @@ class DescrptSeUni(Descriptor):
     self.g2_embd = mylinear(1, g2_hiddens[0])
     self.act = get_activation_fn(activation)
     self.use_attn2 = attn2_nhead > 0 and attn2_hidden > 0
+    self.update_h2 = update_h2
 
     cal_1_dim = lambda g1d, g2d, ax: g1d + g2d*ax
     g1_in_dims = [cal_1_dim(d1,d2,self.axis_dim) \
@@ -238,6 +240,7 @@ class DescrptSeUni(Descriptor):
         nlist_mask, 
         update_chnnl_2=(ll!=self.nlayers-1),
         use_attn2=self.use_attn2,
+        update_h2=self.update_h2,
       )
 
     return g1, None, None
@@ -264,6 +267,7 @@ class DescrptSeUni(Descriptor):
       nlist_mask,
       update_chnnl_2: bool=True,
       use_attn2: bool=True,
+      update_h2: bool=False,
   ):
     nb, nloc, nnei, _ = g2.shape
     assert (nb, nloc) == g1.shape[:2]
@@ -290,14 +294,15 @@ class DescrptSeUni(Descriptor):
         g2_2 = self.attn2_mh_apply[ll](AAg, g2)
         g2_update.append(g2_2)
 
-        # # nb x nloc x nnei x nh2
-        # h2_1 = self.attn2_ev_apply[ll](AA, h2)
-        # h2_update.append(h2_1)
-        # nb x nloc x nnei x nnei x nh
-        AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
-        # nb x nloc x nnei x nh2
-        h2_1 = self.attn2_ev_apply[ll](AAh, h2)
-        h2_update.append(h2_1)
+        if update_h2:
+          # # nb x nloc x nnei x nh2
+          # h2_1 = self.attn2_ev_apply[ll](AA, h2)
+          # h2_update.append(h2_1)        
+          # nb x nloc x nnei x nnei x nh
+          AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
+          # nb x nloc x nnei x nh2
+          h2_1 = self.attn2_ev_apply[ll](AAh, h2)
+          h2_update.append(h2_1)
 
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
