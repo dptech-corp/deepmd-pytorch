@@ -148,6 +148,7 @@ class DescrptSeUni(Descriptor):
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
       update_g1_has_conv: bool = True,
+      update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
       update_h2: bool = False,
       attn_dotr: bool = True,
@@ -177,12 +178,15 @@ class DescrptSeUni(Descriptor):
     self.use_attn2 = attn2_nhead > 0 and attn2_hidden > 0
     self.update_h2 = update_h2
     self.update_g1_has_grrg = update_g1_has_grrg
+    self.update_g1_has_drrd = update_g1_has_drrd
     self.update_g1_has_conv = update_g1_has_conv
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
       if self.update_g1_has_grrg:
         ret += g2d * ax
+      if self.update_g1_has_drrd:
+        ret += g1d * ax
       if self.update_g1_has_conv:
         ret += g2d
       return ret
@@ -278,10 +282,9 @@ class DescrptSeUni(Descriptor):
     h2_1 = self.attn2_ev_apply[ll](AAh, h2)
     return h2_1
 
-  def _update_g1_conv(self, ll, g1, g2, nlist, nlist_mask):
-    nb, nloc, nnei, _ = g2.shape
+  def _make_nei_g1(self, g1, nlist):
+    nb, nloc, nnei = nlist.shape
     ng1 = g1.shape[-1]
-    ng2 = g2.shape[-1]
     # nlist: nb x nloc x nnei
     # g1   : nb x nloc x ng1
     # index: nb x (nloc x nnei) x ng1
@@ -290,6 +293,12 @@ class DescrptSeUni(Descriptor):
     gg1 = torch.gather(g1, dim=1, index=index)
     # gg1  : nb x nloc x nnei x ng1
     gg1 = gg1.view(nb, nloc, nnei, ng1)
+    return gg1
+
+  def _update_g1_conv(self, ll, gg1, g2, nlist, nlist_mask):
+    nb, nloc, nnei, _ = g2.shape
+    ng1 = gg1.shape[-1]
+    ng2 = g2.shape[-1]
     # gg1  : nb x nloc x nnei x ng2
     gg1 = self.proj_g1g2[ll](gg1).view(nb, nloc, nnei, ng2)
     # nb x nloc x nnei x ng2
@@ -301,6 +310,8 @@ class DescrptSeUni(Descriptor):
     return g1_11
 
   def _update_g1_grrg(self, ll, g2, h2):
+    # g2:  nf x nloc x nnei x ng2
+    # h2:  nf x nloc x nnei x 3
     nb, nloc, nnei, _ = g2.shape
     ng2 = g2.shape[-1]
     # nb x nloc x 3 x ng2
@@ -327,8 +338,10 @@ class DescrptSeUni(Descriptor):
   ):
     use_attn2 = self.use_attn2,
     update_g1_has_conv = self.update_g1_has_conv
+    update_g1_has_drrd = self.update_g1_has_drrd
     update_g1_has_grrg = self.update_g1_has_grrg
     update_h2 = self.update_h2
+    cal_gg1 = update_g1_has_drrd or update_g1_has_conv
 
     nb, nloc, nnei, _ = g2.shape
     assert (nb, nloc) == g1.shape[:2]
@@ -360,13 +373,20 @@ class DescrptSeUni(Descriptor):
       if update_h2:
         h2_update.append(self._update_h2(ll, g2, h2, nlist_mask))
 
+    if cal_gg1:
+      gg1 = self._make_nei_g1(g1, nlist)
+
     if update_g1_has_conv:
-      g1_mlp.append(self._update_g1_conv(ll, g1, g2, nlist, nlist_mask))
+      g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask))
 
     if update_g1_has_grrg:
       g1_mlp.append(self._update_g1_grrg(ll, g2, h2))
 
-    # nb x nloc x [ng1+ng2+(axisxng2)]
+    if update_g1_has_drrd:
+      g1_mlp.append(self._update_g1_grrg(ll, gg1, h2))
+    
+    # nb x nloc x [ng1+ng2+(axisxng2)+(axisxng1)]
+    #                  conv   grrg      drrd
     g1_1 = self.act(self.linear1[ll](
       torch.cat(g1_mlp, dim=-1)
     ))
