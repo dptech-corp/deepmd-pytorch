@@ -147,6 +147,8 @@ class DescrptSeUni(Descriptor):
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
+      update_g1_has_conv: bool = True,
+      update_g1_has_grrg: bool = True,
       update_h2: bool = False,
       attn_dotr: bool = True,
       activation: str = "tanh",
@@ -154,6 +156,7 @@ class DescrptSeUni(Descriptor):
       **kwargs,
   ):
     super(DescrptSeUni, self).__init__()
+    self.epsilon = 1e-4 # protection of 1./nnei
     self.rcut = rcut
     self.rcut_smth = rcut_smth
     self.ntypes = ntypes
@@ -173,12 +176,21 @@ class DescrptSeUni(Descriptor):
     self.act = get_activation_fn(activation)
     self.use_attn2 = attn2_nhead > 0 and attn2_hidden > 0
     self.update_h2 = update_h2
+    self.update_g1_has_grrg = update_g1_has_grrg
+    self.update_g1_has_conv = update_g1_has_conv
 
-    cal_1_dim = lambda g1d, g2d, ax: g1d + g2d*ax
+    def cal_1_dim(g1d, g2d, ax):
+      ret = g1d
+      if self.update_g1_has_grrg:
+        ret += g2d * ax
+      if self.update_g1_has_conv:
+        ret += g2d
+      return ret
     g1_in_dims = [cal_1_dim(d1,d2,self.axis_dim) \
                   for d1,d2 in zip(g1_hiddens, g2_hiddens)]
     self.linear1 = self._linear_layers(g1_in_dims, g1_hiddens)
     self.linear2 = self._linear_layers(g2_hiddens, g2_hiddens)
+    self.proj_g1g2 = self._linear_layers(g1_hiddens, g2_hiddens, bias=False)
     self.attn2g_map = torch.nn.ModuleList(
       [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
     self.attn2h_map = torch.nn.ModuleList(
@@ -239,8 +251,6 @@ class DescrptSeUni(Descriptor):
         masked_nlist_loc, 
         nlist_mask, 
         update_chnnl_2=(ll!=self.nlayers-1),
-        use_attn2=self.use_attn2,
-        update_h2=self.update_h2,
       )
 
     return g1, None, None
@@ -257,6 +267,54 @@ class DescrptSeUni(Descriptor):
         mylinear(ii, oo, bias=bias))
     return torch.nn.ModuleList(ret)
 
+  def _update_h2(self, ll, g2, h2, nlist_mask):
+    nb, nloc, nnei, _ = g2.shape
+    # # nb x nloc x nnei x nh2
+    # h2_1 = self.attn2_ev_apply[ll](AA, h2)
+    # h2_update.append(h2_1)        
+    # nb x nloc x nnei x nnei x nh
+    AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
+    # nb x nloc x nnei x nh2
+    h2_1 = self.attn2_ev_apply[ll](AAh, h2)
+    return h2_1
+
+  def _update_g1_conv(self, ll, g1, g2, nlist, nlist_mask):
+    nb, nloc, nnei, _ = g2.shape
+    ng1 = g1.shape[-1]
+    ng2 = g2.shape[-1]
+    # nlist: nb x nloc x nnei
+    # g1   : nb x nloc x ng1
+    # index: nb x (nloc x nnei) x ng1
+    index = nlist.view(nb, nloc*nnei).unsqueeze(-1).expand(-1, -1, ng1)
+    # gg1  : nb x (nloc x nnei) x ng1
+    gg1 = torch.gather(g1, dim=1, index=index)
+    # gg1  : nb x nloc x nnei x ng1
+    gg1 = gg1.view(nb, nloc, nnei, ng1)
+    # gg1  : nb x nloc x nnei x ng2
+    gg1 = self.proj_g1g2[ll](gg1).view(nb, nloc, nnei, ng2)
+    # nb x nloc x nnei x ng2
+    gg1 = gg1 * nlist_mask.unsqueeze(-1)
+    # nb x nloc
+    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
+    # nb x nloc x ng2
+    g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei.unsqueeze(-1)
+    return g1_11
+
+  def _update_g1_grrg(self, ll, g2, h2):
+    nb, nloc, nnei, _ = g2.shape
+    ng2 = g2.shape[-1]
+    # nb x nloc x 3 x ng2
+    h2g2 = torch.matmul(
+      torch.transpose(h2, -1, -2), g2) / (float(nnei)**1)
+    # nb x nloc x 3 x axis
+    h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]    
+    # nb x nloc x axis x ng2
+    g1_13 = torch.matmul(
+      torch.transpose(h2g2m, -1, -2), h2g2) / (float(3.)**1)
+    # nb x nloc x (axisxng2)
+    g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
+    return g1_13
+
   def _one_layer(
       self,
       ll,       # 
@@ -266,9 +324,12 @@ class DescrptSeUni(Descriptor):
       nlist,    # nf x nloc x nnei
       nlist_mask,
       update_chnnl_2: bool=True,
-      use_attn2: bool=True,
-      update_h2: bool=False,
   ):
+    use_attn2 = self.use_attn2,
+    update_g1_has_conv = self.update_g1_has_conv
+    update_g1_has_grrg = self.update_g1_has_grrg
+    update_h2 = self.update_h2
+
     nb, nloc, nnei, _ = g2.shape
     assert (nb, nloc) == g1.shape[:2]
     assert (nb, nloc, nnei) == h2.shape[:3]
@@ -282,11 +343,13 @@ class DescrptSeUni(Descriptor):
     g2_update = [g2]
     h2_update = [h2]
     g1_update = [g1]
+    g1_mlp = [g1]
 
     if update_chnnl_2:
       # nb x nloc x nnei x ng2
       g2_1 = self.act(self.linear2[ll](g2))
       g2_update.append(g2_1)
+
       if use_attn2:
         # nb x nloc x nnei x nnei x nh
         AAg = self.attn2g_map[ll](g2, h2, nlist_mask)
@@ -294,29 +357,18 @@ class DescrptSeUni(Descriptor):
         g2_2 = self.attn2_mh_apply[ll](AAg, g2)
         g2_update.append(g2_2)
 
-        if update_h2:
-          # # nb x nloc x nnei x nh2
-          # h2_1 = self.attn2_ev_apply[ll](AA, h2)
-          # h2_update.append(h2_1)        
-          # nb x nloc x nnei x nnei x nh
-          AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
-          # nb x nloc x nnei x nh2
-          h2_1 = self.attn2_ev_apply[ll](AAh, h2)
-          h2_update.append(h2_1)
+      if update_h2:
+        h2_update.append(self._update_h2(ll, g2, h2, nlist_mask))
 
-    # nb x nloc x 3 x ng2
-    h2g2 = torch.matmul(
-      torch.transpose(h2, -1, -2), g2) / (float(nnei)**1)
-    # nb x nloc x 3 x axis
-    h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]
-    # nb x nloc x axis x ng2
-    g1_13 = torch.matmul(
-      torch.transpose(h2g2m, -1, -2), h2g2) / (float(3.)**1)
-    # nb x nloc x (axisxng2)
-    g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
-    # nb x nloc x [ng1+(axisxng2)]
+    if update_g1_has_conv:
+      g1_mlp.append(self._update_g1_conv(ll, g1, g2, nlist, nlist_mask))
+
+    if update_g1_has_grrg:
+      g1_mlp.append(self._update_g1_grrg(ll, g2, h2))
+
+    # nb x nloc x [ng1+ng2+(axisxng2)]
     g1_1 = self.act(self.linear1[ll](
-      torch.cat((g1, g1_13), dim=-1)
+      torch.cat(g1_mlp, dim=-1)
     ))
     g1_update.append(g1_1)
 
