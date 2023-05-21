@@ -177,7 +177,9 @@ class DescrptSeUni(Descriptor):
                   for d1,d2 in zip(g1_hiddens, g2_hiddens)]
     self.linear1 = self._linear_layers(g1_in_dims, g1_hiddens)
     self.linear2 = self._linear_layers(g2_hiddens, g2_hiddens)
-    self.attn2_map = torch.nn.ModuleList(
+    self.attn2g_map = torch.nn.ModuleList(
+      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
+    self.attn2h_map = torch.nn.ModuleList(
       [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
     self.attn2_mh_apply = torch.nn.ModuleList(
       [Atten2MultiHeadApply(ii, attn2_nhead) for ii in g2_hiddens])
@@ -283,13 +285,20 @@ class DescrptSeUni(Descriptor):
       g2_update.append(g2_1)
       if use_attn2:
         # nb x nloc x nnei x nnei x nh
-        AA = self.attn2_map[ll](g2, h2, nlist_mask)
+        AAg = self.attn2g_map[ll](g2, h2, nlist_mask)
         # nb x nloc x nnei x ng2
-        g2_2 = self.attn2_mh_apply[ll](AA, g2)
+        g2_2 = self.attn2_mh_apply[ll](AAg, g2)
         g2_update.append(g2_2)
+
         # # nb x nloc x nnei x nh2
         # h2_1 = self.attn2_ev_apply[ll](AA, h2)
         # h2_update.append(h2_1)
+        # nb x nloc x nnei x nnei x nh
+        AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
+        # nb x nloc x nnei x nh2
+        h2_1 = self.attn2_ev_apply[ll](AAh, h2)
+        h2_update.append(h2_1)
+
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
       torch.transpose(h2, -1, -2), g2) / (float(nnei)**1)
