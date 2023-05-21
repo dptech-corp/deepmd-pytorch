@@ -159,11 +159,11 @@ class LocalAtten(torch.nn.Module):
     g1q = self.mapq(g1).view(nb, nloc, nd, nh)
     # nb x nloc x nh x nd
     g1q = torch.permute(g1q, (0, 1, 3, 2))
-    # nb x nloc x nnei x nd x (nh x 2)
-    gg1kv = self.mapkv(gg1).view(nb, nloc, nnei, nd, nh*2)
+    # nb x nloc x nnei x (nd+ni) x nh
+    gg1kv = self.mapkv(gg1).view(nb, nloc, nnei, nd+ni, nh)
     gg1kv = torch.permute(gg1kv, (0, 1, 4, 2, 3))
     # nb x nloc x nh x nnei x nd, nb x nloc x nh x nnei x ng1
-    gg1k, gg1v = torch.split(gg1kv, nh, dim=2)
+    gg1k, gg1v = torch.split(gg1kv, [nd, ni], dim=-1)
 
     # nb x nloc x nh x 1 x nnei
     attnw = torch.matmul(
@@ -200,7 +200,7 @@ class DescrptSeUni(Descriptor):
       g1_hiddens: int = [128, 128, 128],
       g2_hiddens: int = [16, 16, 16],
       axis_dim: int = 4,
-      attn1_hidden: int = 128,
+      attn1_hidden: int = 64,
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
