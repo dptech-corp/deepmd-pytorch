@@ -207,6 +207,7 @@ class DescrptSeUni(Descriptor):
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
+      update_g2_has_g1g1: bool = True,
       update_h2: bool = False,
       attn_dotr: bool = True,
       activation: str = "tanh",
@@ -238,6 +239,7 @@ class DescrptSeUni(Descriptor):
     self.update_g1_has_drrd = update_g1_has_drrd
     self.update_g1_has_conv = update_g1_has_conv
     self.update_g1_has_attn = attn1_nhead > 0 and attn1_hidden > 0
+    self.update_g2_has_g1g1 = update_g2_has_g1g1
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -253,6 +255,7 @@ class DescrptSeUni(Descriptor):
     self.linear1 = self._linear_layers(g1_in_dims, g1_hiddens)
     self.linear2 = self._linear_layers(g2_hiddens, g2_hiddens)
     self.proj_g1g2 = self._linear_layers(g1_hiddens, g2_hiddens, bias=False)
+    self.proj_g1g1g2 = self._linear_layers(g1_hiddens, g2_hiddens, bias=False)
     self.attn2g_map = torch.nn.ModuleList(
       [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
     self.attn2h_map = torch.nn.ModuleList(
@@ -386,6 +389,16 @@ class DescrptSeUni(Descriptor):
     g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
     return g1_13
 
+  def _update_g2_g1g1(
+      self,
+      g1,         # nb x nloc x ng1
+      gg1,        # nb x nloc x nnei x ng1
+      nlist_mask, # nb x nloc x nnei
+  ):    
+    ret = g1.unsqueeze(-2) * gg1
+    ret = ret.masked_fill(~nlist_mask.unsqueeze(-1), float(0.))
+    return ret
+
   def _one_layer(
       self,
       ll,       # 
@@ -401,6 +414,7 @@ class DescrptSeUni(Descriptor):
     update_g1_has_drrd = self.update_g1_has_drrd
     update_g1_has_grrg = self.update_g1_has_grrg
     update_g1_has_attn = self.update_g1_has_attn
+    update_g2_has_g1g1 = self.update_g2_has_g1g1
     update_h2 = self.update_h2
     cal_gg1 = update_g1_has_drrd or update_g1_has_conv or update_g1_has_attn
 
@@ -419,10 +433,17 @@ class DescrptSeUni(Descriptor):
     g1_update = [g1]
     g1_mlp = [g1]
 
+    if cal_gg1:
+      gg1 = self._make_nei_g1(g1, nlist)
+
     if update_chnnl_2:
       # nb x nloc x nnei x ng2
       g2_1 = self.act(self.linear2[ll](g2))
       g2_update.append(g2_1)
+      
+      if update_g2_has_g1g1:
+        g2_update.append(self.proj_g1g1g2[ll](
+          self._update_g2_g1g1(g1, gg1, nlist_mask)))
 
       if use_attn2:
         # nb x nloc x nnei x nnei x nh
@@ -433,9 +454,6 @@ class DescrptSeUni(Descriptor):
 
       if update_h2:
         h2_update.append(self._update_h2(ll, g2, h2, nlist_mask))
-
-    if cal_gg1:
-      gg1 = self._make_nei_g1(g1, nlist)
 
     if update_g1_has_conv:
       g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask))
