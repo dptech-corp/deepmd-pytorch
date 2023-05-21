@@ -38,8 +38,9 @@ class Atten2Map(torch.nn.Module):
     
   def forward(
       self,
-      g2,       # nh x nloc x nnei x ng2
-      h2,       # nh x nloc x nnei x 3
+      g2,       # nb x nloc x nnei x ng2
+      h2,       # nb x nloc x nnei x 3
+      nlist_mask, # nb x nloc x nnei
   ):
     nb, nloc, nnei, _, = g2.shape
     nd, nh = self.nd, self.nh
@@ -50,13 +51,16 @@ class Atten2Map(torch.nn.Module):
     # nb x nloc x nh x nnei x nd
     g2q, g2k = torch.split(g2qk, nh, dim=2)
     # nb x nloc x nh x nnei x nnei
-    g2qk = torch.matmul(
-      g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
+    attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
+    # mask the attenmap, nb x nloc x 1 x 1 x nnei
+    attnw_mask = ~nlist_mask.unsqueeze(2).unsqueeze(2)
+    attnw = attnw.masked_fill(attnw_mask, float("-inf"),)
+    attnw = torch.softmax(attnw, dim=-1)
+    attnw = attnw.masked_fill(attnw_mask, float(0.0),)
     # nb x nloc x nnei x nnei
-    h2h2t = torch.matmul(
-      h2, torch.transpose(h2, -1, -2)) / 3.**0.5
+    h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3.**0.5
     # nb x nloc x nh x nnei x nnei
-    ret = torch.softmax(g2qk, dim=-1) * h2h2t[:,:,None,:,:]
+    ret = attnw * h2h2t[:,:,None,:,:]
     # ret = torch.softmax(g2qk, dim=-1)
     # nb x nloc x nnei x nnei x nh
     ret = torch.permute(ret, (0, 1, 3, 4, 2))
@@ -219,11 +223,11 @@ class DescrptSeUni(Descriptor):
     masked_nlist_loc = nlist_loc * nlist_mask
 
     # nb x nloc x ng1
-    g1 = (self.type_embd(atype))
+    g1 = self.act(self.type_embd(atype))
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
     g2, h2 = torch.split(dmatrix, [1, 3], dim=-1)
     # nb x nloc x nnei x ng2
-    g2 = (self.g2_embd(g2))
+    g2 = self.act(self.g2_embd(g2))
 
     for ll in range(self.nlayers):
       g1, g2, h2 = self._one_layer(
@@ -279,13 +283,13 @@ class DescrptSeUni(Descriptor):
       g2_update.append(g2_1)
       if use_attn2:
         # nb x nloc x nnei x nnei x nh
-        AA = self.attn2_map[ll](g2, h2)
+        AA = self.attn2_map[ll](g2, h2, nlist_mask)
         # nb x nloc x nnei x ng2
         g2_2 = self.attn2_mh_apply[ll](AA, g2)
         g2_update.append(g2_2)
-        # nb x nloc x nnei x nh2
-        h2_1 = self.attn2_ev_apply[ll](AA, h2)
-        h2_update.append(h2_1)
+        # # nb x nloc x nnei x nh2
+        # h2_1 = self.attn2_ev_apply[ll](AA, h2)
+        # h2_update.append(h2_1)
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
       torch.transpose(h2, -1, -2), g2) / (float(nnei)**1)
