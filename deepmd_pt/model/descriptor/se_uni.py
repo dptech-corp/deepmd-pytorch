@@ -38,8 +38,8 @@ class Atten2Map(torch.nn.Module):
     
   def forward(
       self,
-      g2,       # nb x nloc x nnei x ng2
-      h2,       # nb x nloc x nnei x 3
+      g2,         # nb x nloc x nnei x ng2
+      h2,         # nb x nloc x nnei x 3
       nlist_mask, # nb x nloc x nnei
   ):
     nb, nloc, nnei, _, = g2.shape
@@ -130,6 +130,63 @@ class Atten2EquiVarApply(torch.nn.Module):
     return torch.squeeze(self.head_map(ret), dim=-1)
 
 
+class LocalAtten(torch.nn.Module):
+  def __init__(
+      self,
+      ni,
+      nd,
+      nh,
+  ):
+    super(LocalAtten, self).__init__()
+    self.ni = ni
+    self.nd = nd
+    self.nh = nh
+    self.mapq = mylinear(ni, nd * 1 * nh, bias=False)
+    self.mapkv = mylinear(ni, (nd + ni) * nh, bias=False)
+    self.head_map = mylinear(ni * nh, ni)
+
+  def forward(
+      self,
+      g1,         # nb x nloc x ng1
+      gg1,        # nb x nloc x nnei x ng1
+      nlist_mask, # nb x nloc x nnei
+  ):
+    nb, nloc, nnei = nlist_mask.shape
+    ni, nd, nh = self.ni, self.nd, self.nh
+    assert ni == g1.shape[-1]
+    assert ni == gg1.shape[-1]
+    # nb x nloc x nd x nh
+    g1q = self.mapq(g1).view(nb, nloc, nd, nh)
+    # nb x nloc x nh x nd
+    g1q = torch.permute(g1q, (0, 1, 3, 2))
+    # nb x nloc x nnei x nd x (nh x 2)
+    gg1kv = self.mapkv(gg1).view(nb, nloc, nnei, nd, nh*2)
+    gg1kv = torch.permute(gg1kv, (0, 1, 4, 2, 3))
+    # nb x nloc x nh x nnei x nd, nb x nloc x nh x nnei x ng1
+    gg1k, gg1v = torch.split(gg1kv, nh, dim=2)
+
+    # nb x nloc x nh x 1 x nnei
+    attnw = torch.matmul(
+      g1q.unsqueeze(-2),
+      torch.transpose(gg1k, -1, -2)) / nd**0.5
+    # nb x nloc x nh x nnei
+    attnw = attnw.squeeze(-2)
+    # mask the attenmap, nb x nloc x 1 x nnei
+    attnw_mask = ~nlist_mask.unsqueeze(2)
+    # nb x nloc x nh x nnei
+    attnw = attnw.masked_fill(attnw_mask, float("-inf"),)
+    attnw = torch.softmax(attnw, dim=-1)
+    attnw = attnw.masked_fill(attnw_mask, float(0.0),)
+    
+    # nb x nloc x nh x ng1
+    ret = torch.matmul(attnw.unsqueeze(-2), gg1v)\
+               .squeeze(-2)\
+               .view(nb, nloc, nh*ni)
+    # nb x nloc x ng1
+    ret = self.head_map(ret)
+    return ret
+
+
 def print_stat(aa, info=""):
   print(info, torch.mean(aa), torch.std(aa))
 
@@ -180,6 +237,7 @@ class DescrptSeUni(Descriptor):
     self.update_g1_has_grrg = update_g1_has_grrg
     self.update_g1_has_drrd = update_g1_has_drrd
     self.update_g1_has_conv = update_g1_has_conv
+    self.update_g1_has_attn = attn1_nhead > 0 and attn1_hidden > 0
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -203,6 +261,8 @@ class DescrptSeUni(Descriptor):
       [Atten2MultiHeadApply(ii, attn2_nhead) for ii in g2_hiddens])
     self.attn2_ev_apply = torch.nn.ModuleList(
       [Atten2EquiVarApply(ii, attn2_nhead) for ii in g2_hiddens])
+    self.loc_attn = torch.nn.ModuleList(
+      [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in g1_hiddens])
     self.lmg1 = torch.nn.ModuleList(
       [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in g1_hiddens])
     self.lmg2 = torch.nn.ModuleList(
@@ -340,6 +400,7 @@ class DescrptSeUni(Descriptor):
     update_g1_has_conv = self.update_g1_has_conv
     update_g1_has_drrd = self.update_g1_has_drrd
     update_g1_has_grrg = self.update_g1_has_grrg
+    update_g1_has_attn = self.update_g1_has_attn
     update_h2 = self.update_h2
     cal_gg1 = update_g1_has_drrd or update_g1_has_conv
 
@@ -391,6 +452,10 @@ class DescrptSeUni(Descriptor):
       torch.cat(g1_mlp, dim=-1)
     ))
     g1_update.append(g1_1)
+
+    if update_g1_has_attn:
+      g1_update.append(self.loc_attn[ll](g1, gg1, nlist_mask))
+      
 
     def list_update(update_list):
       nitem = len(update_list)
