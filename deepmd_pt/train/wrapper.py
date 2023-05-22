@@ -11,13 +11,19 @@ class ModelWrapper(torch.nn.Module):
 
     def __init__(self,
                  model: Union[torch.nn.Module, Dict],
-                 loss: Union[torch.nn.Module, Dict] = None):
+                 loss: Union[torch.nn.Module, Dict] = None,
+                 model_params = None,):
         """Construct a DeePMD model wrapper.
 
         Args:
         - config: The Dict-like configuration with training options.
         """
         super(ModelWrapper, self).__init__()
+        self.model_params = model_params if model_params is not None else {}
+        self.train_infos = {
+            'lr': 0,
+            'step': 0,
+        }
         self.multi_task = False
         self.model = torch.nn.ModuleDict()
         # Model
@@ -59,3 +65,15 @@ class ModelWrapper(torch.nn.Module):
             return model_pred, loss, more_loss
         else:
             return model_pred, None, None
+
+    def set_extra_state(self, state: Dict):
+        self.model_params = state['model_params']
+        self.train_infos = state['train_infos']
+        return None
+    
+    def get_extra_state(self) -> Dict:
+        state = {
+            'model_params': self.model_params,
+            'train_infos': self.train_infos,
+        }
+        return state

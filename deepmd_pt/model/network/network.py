@@ -396,7 +396,7 @@ class NeighborWiseAttentionLayer(torch.nn.Module):
 
 class GatedSelfAttetion(torch.nn.Module):
     def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None):
+                 head_num=1, normalize=True, temperature=None, bias=True):
         """Construct a neighbor-wise attention net.
         """
         super(GatedSelfAttetion, self).__init__()
