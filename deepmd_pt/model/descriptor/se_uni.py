@@ -197,18 +197,21 @@ class DescrptSeUni(Descriptor):
       rcut_smth,
       sel: int,
       ntypes: int,
-      g1_hiddens: int = [128, 128, 128],
-      g2_hiddens: int = [16, 16, 16],
+      nlayers: int = 3,
+      g1_dim = 128,
+      g2_dim = 16,
       axis_dim: int = 4,
+      update_g1_has_conv: bool = True,
+      update_g1_has_drrd: bool = True,
+      update_g1_has_grrg: bool = True,
+      update_g1_has_attn: bool = True,
+      update_g2_has_g1g1: bool = True,
+      update_g2_has_attn: bool = True,
+      update_h2: bool = False,
       attn1_hidden: int = 64,
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
-      update_g1_has_conv: bool = True,
-      update_g1_has_drrd: bool = True,
-      update_g1_has_grrg: bool = True,
-      update_g2_has_g1g1: bool = True,
-      update_h2: bool = False,
       attn_dotr: bool = True,
       activation: str = "tanh",
       set_davg_zero: bool = True, # TODO
@@ -219,8 +222,7 @@ class DescrptSeUni(Descriptor):
     self.rcut = rcut
     self.rcut_smth = rcut_smth
     self.ntypes = ntypes
-    self.nlayers = len(g1_hiddens) - 1
-    assert self.nlayers == len(g2_hiddens) - 1
+    self.nlayers = nlayers
     sel = [sel] if isinstance(self, int) else sel
     self.nnei = sum(sel)  # 总的邻居数量
     assert len(sel) == 1
@@ -228,18 +230,16 @@ class DescrptSeUni(Descriptor):
     self.sec = self.sel
     self.axis_dim = axis_dim
     self.set_davg_zero = set_davg_zero
-    self.g1_hiddens = g1_hiddens
-    self.g2_hiddens = g2_hiddens
-    self.type_embd = TypeEmbedNet(self.ntypes, g1_hiddens[0])
-    self.g2_embd = mylinear(1, g2_hiddens[0])
+    self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
+    self.g2_hiddens = [g2_dim for ii in range(self.nlayers)]
     self.act = get_activation_fn(activation)
-    self.use_attn2 = attn2_nhead > 0 and attn2_hidden > 0
     self.update_h2 = update_h2
     self.update_g1_has_grrg = update_g1_has_grrg
     self.update_g1_has_drrd = update_g1_has_drrd
     self.update_g1_has_conv = update_g1_has_conv
-    self.update_g1_has_attn = attn1_nhead > 0 and attn1_hidden > 0
+    self.update_g1_has_attn = update_g1_has_attn
     self.update_g2_has_g1g1 = update_g2_has_g1g1
+    self.update_g2_has_attn = update_g2_has_attn
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -251,25 +251,28 @@ class DescrptSeUni(Descriptor):
         ret += g2d
       return ret
     g1_in_dims = [cal_1_dim(d1,d2,self.axis_dim) \
-                  for d1,d2 in zip(g1_hiddens, g2_hiddens)]
-    self.linear1 = self._linear_layers(g1_in_dims, g1_hiddens)
-    self.linear2 = self._linear_layers(g2_hiddens, g2_hiddens)
-    self.proj_g1g2 = self._linear_layers(g1_hiddens, g2_hiddens, bias=False)
-    self.proj_g1g1g2 = self._linear_layers(g1_hiddens, g2_hiddens, bias=False)
+                  for d1,d2 in zip(self.g1_hiddens, self.g2_hiddens)]
+
+    self.type_embd = TypeEmbedNet(self.ntypes, self.g1_hiddens[0])
+    self.g2_embd = mylinear(1, self.g2_hiddens[0])
+    self.linear1 = self._linear_layers(g1_in_dims, self.g1_hiddens)
+    self.linear2 = self._linear_layers(self.g2_hiddens, self.g2_hiddens)
+    self.proj_g1g2 = self._linear_layers(self.g1_hiddens, self.g2_hiddens, bias=False)
+    self.proj_g1g1g2 = self._linear_layers(self.g1_hiddens, self.g2_hiddens, bias=False)
     self.attn2g_map = torch.nn.ModuleList(
-      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
+      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
     self.attn2h_map = torch.nn.ModuleList(
-      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in g2_hiddens])
+      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
     self.attn2_mh_apply = torch.nn.ModuleList(
-      [Atten2MultiHeadApply(ii, attn2_nhead) for ii in g2_hiddens])
+      [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
     self.attn2_ev_apply = torch.nn.ModuleList(
-      [Atten2EquiVarApply(ii, attn2_nhead) for ii in g2_hiddens])
+      [Atten2EquiVarApply(ii, attn2_nhead) for ii in self.g2_hiddens])
     self.loc_attn = torch.nn.ModuleList(
-      [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in g1_hiddens])
+      [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in self.g1_hiddens])
     self.lmg1 = torch.nn.ModuleList(
-      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in g1_hiddens])
+      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in self.g1_hiddens])
     self.lmg2 = torch.nn.ModuleList(
-      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in g2_hiddens])
+      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in self.g2_hiddens])
 
     sshape = (self.ntypes, self.nnei, 4)
     mean = torch.zeros(sshape, dtype=mydtype, device=mydev) 
@@ -409,7 +412,7 @@ class DescrptSeUni(Descriptor):
       nlist_mask,
       update_chnnl_2: bool=True,
   ):
-    use_attn2 = self.use_attn2,
+    update_g2_has_attn = self.update_g2_has_attn,
     update_g1_has_conv = self.update_g1_has_conv
     update_g1_has_drrd = self.update_g1_has_drrd
     update_g1_has_grrg = self.update_g1_has_grrg
@@ -445,7 +448,7 @@ class DescrptSeUni(Descriptor):
         g2_update.append(self.proj_g1g1g2[ll](
           self._update_g2_g1g1(g1, gg1, nlist_mask)))
 
-      if use_attn2:
+      if update_g2_has_attn:
         # nb x nloc x nnei x nnei x nh
         AAg = self.attn2g_map[ll](g2, h2, nlist_mask)
         # nb x nloc x nnei x ng2
