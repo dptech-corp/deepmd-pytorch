@@ -411,8 +411,8 @@ class GatedSelfAttetion(torch.nn.Module):
         else:
             self.scaling = temperature
         self.normalize = normalize
-        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=False)
-        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=False)
+        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=bias)
+        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=bias)
 
     def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
         """
