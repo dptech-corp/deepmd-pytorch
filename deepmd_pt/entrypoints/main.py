@@ -11,13 +11,15 @@ from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
 
+from deepmd_pt.utils.finetune import load_model_params
 from deepmd_pt.utils.stat import make_stat_input
 
 
-def get_trainer(config, ckpt=None, force_load=False):
+def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
+    config = load_model_params(ckpt, finetune_model, config)
     training_params = config['training']
     model_params = config['model']
-    training_dataset_params = training_params.pop('training_data')
+    training_dataset_params = training_params['training_data']
     type_split = True
     if model_params['descriptor']['type'] in ['se_atten']:
         type_split = False
@@ -68,7 +70,7 @@ def get_trainer(config, ckpt=None, force_load=False):
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data,
-                               resume_from=ckpt, force_load=force_load)
+                               resume_from=ckpt, force_load=force_load, finetune_model=finetune_model)
     return trainer
 
 
@@ -76,7 +78,7 @@ def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = get_trainer(config, FLAGS.CKPT, FLAGS.force_load)
+    trainer = get_trainer(config, FLAGS.CKPT, FLAGS.force_load, FLAGS.finetune)
     trainer.run()
 
 
@@ -110,6 +112,7 @@ def main(args=None):
     train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
     train_parser.add_argument("--force-load", action="store_true",
                               help='Force load from ckpt, other missing tensors will init from scratch')
+    train_parser.add_argument("--finetune", help="The Finetune model.")
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')

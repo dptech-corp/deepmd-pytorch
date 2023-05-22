@@ -1,96 +1,195 @@
-from typing import List
+import torch, copy
 import unittest
-import torch
-import json
-import numpy as np
-import copy
-
+from deepmd_pt.utils.preprocess import (
+  Region3D, make_env_mat,
+)
 from deepmd_pt.utils import env
-from deepmd_pt.utils.dataset import DeepmdDataSystem
-from deepmd_pt.model.model import EnergyModelSeA
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 
+dtype = torch.float64
 
-# exchange i and j
-def exchange(frames, name, nframes, i, j):
-    tmp = frames[name].reshape(nframes, -1, 3)
-    result = copy.deepcopy(tmp)
-    result[:, i, :] = tmp[:, j, :]
-    result[:, j, :] = tmp[:, i, :]
-    return result.reshape(nframes, -1)
+model_se_e2_a = {
+  "type_map": ["O","H"],
+  "descriptor": {
+    "type": "se_e2_a",
+    "sel": [46, 92],
+    "rcut_smth": 0.50,
+    "rcut": 6.00,
+    "neuron": [25, 50, 100],
+    "resnet_dt": False,
+    "axis_neuron": 16,
+    "seed": 1,
+  },
+  "fitting_net": {
+    "neuron": [24, 24, 24],
+    "resnet_dt": True,
+    "seed": 1,
+  },
+  "data_stat_nbatch": 20,
+}
 
+model_dpa1 = {
+  "type_map": ["O","H"],
+  "descriptor": {
+    "type": "se_atten",
+    "sel": 40,
+    "rcut_smth": 0.5,
+    "rcut": 4.0,
+    "neuron": [25, 50, 100],
+    "resnet_dt": False,
+    "axis_neuron": 16,
+    "seed": 1,
+    "attn": 64,
+    "attn_layer": 2,
+    "attn_dotr": True,
+    "attn_mask": False,
+    "post_ln": True,
+    "ffn": False,
+    "ffn_embed_dim": 512,
+    "activation": "tanh",
+    "scaling_factor": 1.0,
+    "head_num": 1,
+    "normalize": False,
+    "temperature": 1.0,
+    "_comment": " that's all"
+  },
+  "fitting_net": {
+    "neuron": [24, 24, 24],
+    "resnet_dt": True,
+    "seed": 1,
+  },
+}
 
-class CheckSymmetry(DeepmdDataSystem):
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True):
-        super().__init__(sys_path, rcut, sec, type_map, type_split)
+model_dpa2 = {
+  "type_map": ["O", "H", "MASKED_TOKEN"],
+  "descriptor": {
+    "type": "se_atten",
+    "sel": 120,
+    "rcut_smth": 0.5,
+    "rcut": 6.0,
+    "neuron": [25, 50, 100 ],
+    "resnet_dt": False,
+    "axis_neuron": 6,
+    "seed": 1,
+    "attn": 128,
+    "attn_layer": 2,
+    "attn_dotr": True,
+    "attn_mask": False,
+    "post_ln": True,
+    "ffn": False,
+    "ffn_embed_dim": 1024,
+    "activation": "tanh",
+    "scaling_factor": 1.0,
+    "head_num": 1,
+    "normalize": True,
+    "temperature": 1.0,
+    "_comment": " that's all"
+  },
+  "backbone":{
+    "type": "evo-2b",
+    "layer_num": 6,
+    "attn_head": 8,
+    "feature_dim": 600,
+    "ffn_dim": 1024,
+    "post_ln": False,
+    "final_layer_norm": True,
+    "final_head_layer_norm": False,
+    "emb_layer_norm": False,
+    "atomic_residual": True,
+    "evo_residual": True,
+    "activation_function": "gelu"
+  },
+  "fitting_net": {
+    "neuron": [24, 24, 24],
+    "resnet_dt": True,
+    "seed": 1,
+    "_comment": " that's all"
+  },
+}
 
-    def get_permutation(self, index):
-        for i in range(0,
-                       len(self._dirs) + 1):  # note: if different sets can be merged, prefix sum is unused to calculate
-            if index < self.prefix_sum[i]:
-                break
-        frames = self._load_set(self._dirs[i - 1])
-        ei, ej = self.get_exchange_index()
-        frames['coord'] = exchange(frames, 'coord', self.nframes, ei, ej)
-        frames['force'] = exchange(frames, 'force', self.nframes, ei, ej)
-        frame = self.single_preprocess(frames, index - self.prefix_sum[i - 1])
-        return frame, ei, ej
+def infer_model(
+    model,
+    coord,
+    cell,
+    atype,
+):
+  rcut = model.descriptor.rcut
+  sec = model.descriptor.sec
+  # sec = torch.cumsum(torch.tensor(sel, dtype=torch.int32), dim=0)
+  # still problematic
+  if cell is not None:
+    region = Region3D(cell)
+  else:
+    region = None
+  # inputs: coord, atype, regin; rcut, sec
+  selected, selected_loc, selected_type, merged_coord_shift, merged_mapping = \
+    make_env_mat(coord, atype, region, rcut, sec)
+  # add batch dim
+  [batch_coord, batch_atype, batch_shift, batch_mapping, batch_selected, batch_selected_loc, batch_selected_type] = \
+    [torch.unsqueeze(ii,0) for ii in \
+     [coord, atype, merged_coord_shift, merged_mapping, selected, selected_loc, selected_type]]
+  # inference, assumes pbc
+  ret = model(
+    batch_coord, batch_atype, None, 
+    batch_mapping, batch_shift, 
+    batch_selected, batch_selected_type, batch_selected_loc,
+    box=cell,
+  )
+  # remove the frame axis
+  ret1 = {}
+  for kk,vv in ret.items():
+    ret1[kk] = vv[0]
+  return ret1
 
-    # get random ei and ej
-    def get_exchange_index(self, random_seed=20):
-        np.random.seed(random_seed)
-        atom_index = np.random.randint(len(self._type_map))
-        atom_locations = np.where(self._atom_type == atom_index)[0]
-        ei, ej = np.random.choice(atom_locations, size=2, replace=False)
-        return ei, ej
+def make_sample(model_params):
+  training_systems = ["tests/water/data/data_0",]
+  data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
+  train_data = DpLoaderSet(
+    training_systems, batch_size=4, model_params=model_params.copy(),
+  )
+  sampled = make_stat_input(
+    train_data.systems, train_data.dataloaders, data_stat_nbatch)
+  return sampled
 
+class TestPermutation():
+  def test(
+      self,
+  ):
+    natoms = 5
+    cell = torch.rand([3, 3], dtype=dtype)
+    cell = (cell + cell.T) + 5. * torch.eye(3)
+    coord = torch.rand([natoms, 3], dtype=dtype)
+    coord = torch.matmul(coord, cell)
+    atype = torch.IntTensor([0, 0, 0, 1, 1])      
+    idx_perm = [1, 0, 4, 3, 2]    
+    ret0 = infer_model(self.model, coord, cell, atype)
+    ret1 = infer_model(self.model, coord[idx_perm], cell, atype[idx_perm])
+    prec = 1e-10
+    torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
+    torch.testing.assert_close(ret0['force'][idx_perm], ret1['force'], rtol=prec, atol=prec)
+    torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=prec, atol=prec)
+    # print(ret0, ret1)
 
-def get_data(batch):
-    inputs = {}
-    for key in ['coord', 'atype', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
-        inputs[key] = batch[key].unsqueeze(0).to(env.DEVICE)
-    inputs['natoms'] = None
-    return inputs
+class TestEnergyModelSeA(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_se_e2_a
+    sampled = make_sample(model_params)
+    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
 
+class TestEnergyModelDPA1(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpa1
+    sampled = make_sample(model_params)
+    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
 
-class TestPermutation(unittest.TestCase):
-    def setUp(self):
-        np.random.seed(20)
-        with open(env.TEST_CONFIG, 'r') as fin:
-            self.config = json.load(fin)
-        self.get_dataset(0)
-        self.get_model()
+class TestEnergyModelDPA2(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpa2
+    sampled = make_sample(model_params)
+    self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
 
-    def get_model(self):
-        training_systems = self.config['training']['training_data']['systems']
-        model_params = self.config['model']
-        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        train_data = DpLoaderSet(training_systems, self.config['training']['training_data']['batch_size'], model_params)
-        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
-        self.model = EnergyModelSeA(self.config['model'], sampled).to(env.DEVICE)
-
-    def get_dataset(self, system_index=0, batch_index=0):
-        systems = self.config['training']['training_data']['systems']
-        rcut = self.config['model']['descriptor']['rcut']
-        sel = self.config['model']['descriptor']['sel']
-        sec = torch.cumsum(torch.tensor(sel), dim=0)
-        type_map = self.config['model']['type_map']
-        dpdatasystem = CheckSymmetry(sys_path=systems[system_index], rcut=rcut, sec=sec, type_map=type_map)
-        self.origin_batch = dpdatasystem._get_item(batch_index)
-        self.permutate_batch, self.ei, self.ej = dpdatasystem.get_permutation(batch_index)
-
-    def test_permutation(self):
-        result1 = self.model(**get_data(self.origin_batch))
-        result2 = self.model(**get_data(self.permutate_batch))
-        self.assertTrue(result1['energy'] == result2['energy'])
-        if 'force' in result1:
-            permutate_force = copy.deepcopy(result1['force'][0].detach().cpu().numpy())
-            permutate_force[self.ei] = result1['force'][0, self.ej].detach().cpu().numpy()
-            permutate_force[self.ej] = result1['force'][0, self.ei].detach().cpu().numpy()
-            self.assertTrue(torch.allclose(result2['force'][0], torch.tensor(permutate_force).to(env.DEVICE)))
-        if 'virial' in result1:
-            self.assertTrue(torch.allclose(result2['virial'][0], result1['virial'][0]))
 
 
 if __name__ == '__main__':

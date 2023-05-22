@@ -51,6 +51,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
             batch_size=None,
             num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
             drop_last=False,
+            pin_memory=True,
         )
         self.training_data = BufferedIterator(iter(self.training_dataloader))
         self.loss = EnergyStdLoss(**self.config['loss'])

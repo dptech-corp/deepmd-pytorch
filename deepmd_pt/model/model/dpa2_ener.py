@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
@@ -20,6 +21,7 @@ class EnergyModelDPA2(BaseModel):
         - sampled: The sampled dataset for stat.
         """
         super(EnergyModelDPA2, self).__init__()
+        model_params = copy.deepcopy(model_params)
         # Descriptor + Type Embedding Net
         ntypes = len(model_params['type_map'])
         self.ntypes = ntypes

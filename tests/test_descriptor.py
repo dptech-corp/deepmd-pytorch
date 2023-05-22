@@ -105,7 +105,6 @@ class TestSeA(unittest.TestCase):
             std_ones.reshape([-1, self.nnei, 4]).to(DEVICE),
             self.rcut,
             self.rcut_smth,
-            self.sec
         )
         my_d.sum().backward()
         bsz = pt_coord.shape[0]

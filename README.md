@@ -157,14 +157,35 @@ flowchart LR
 
 For more details, please see `deepmd-pytorch/deepmd_pt/utils/dataloader.py`.
 
-## Run on local machine
-We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to start a training session.
+## Run on a local cluster
 
-To launch a DDP task, one can set `nnodes` as the number of available nodes, `node_rank` as the rank of the current node among all nodes (not the rank of processes!), and `nproc_per_node` as the number of available GPUs in one node. Please make sure that every node can access the rendezvous address and port.
+We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to launch a DDP training session.
+
+To start training with multiple GPUs in one node, set parameter `nproc_per_node` as the number of it:
 
 ```bash
-OMP_NUM_THREADS=4 torchrun --rdzv_endpoint=localhost:12321 --nnodes=1 --nproc_per_node=2 --node_rank=0 --no_python dp train tests/water/se_e2_a.json
+torchrun --nproc_per_node=4 --no-python dp_pt train input.json
+# Not setting `nproc_per_node` uses only 1 GPU
+torchrun --no-python dp_pt train input.json
 ```
+
+If you wish to execute the codes under active development without `pip install`ing, please try:
+
+```bash
+PYTHONPATH=~/deepmd-pytorch torchrun ~/deepmd-pytorch/deepmd_pt/entrypoints/main.py train input.json
+```
+
+To train a model with a cluster, one can manually launch the task using the commands below (usually this should be done by your job management system). Set `nnodes` as the number of available nodes, `node_rank` as the rank of the current node among all nodes (not the rank of processes!), and `nproc_per_node` as the number of available GPUs in one node. Please make sure that every node can access the rendezvous address and port (`rdzv_endpoint` in the command), and has a same amount of GPUs.
+
+```bash
+# Running DDP on 2 nodes with 4 GPUs each
+# On node 0:
+torchrun --rdzv_endpoint=node0:12321 --nnodes=2 --nproc_per_node=4 --node_rank=0 --no_python dp train tests/water/se_e2_a.json
+# On node 1:
+torchrun --rdzv_endpoint=node0:12321 --nnodes=2 --nproc_per_node=4 --node_rank=1 --no_python dp train tests/water/se_e2_a.json
+```
+
+> **Note** Set environment variables to tune [CPU specific optimizations](https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#cpu-specific-optimizations) in advance.
 
 > **Note** for developers: `torchrun` by default passes settings as environment variables [(list here)](https://pytorch.org/docs/stable/elastic/run.html#environment-variables).
 
@@ -178,5 +199,23 @@ sbatch distributed_data_parallel_slurm_setup.sbatch
 ```
 
 These files are modified from: https://github.com/lkskstlr/distributed_data_parallel_slurm_setup
+
+# Track runs using W&B
+
+`wandb` is automatically installed as a requirement for deepmd-pytorch.
+
+First setup with `wandb login`, and set the corresponding fields under the "training" part in your input file (typically `input.json`) as follows:
+
+```jsonc
+// "training": {
+    "wandb_config": {
+        "job_name": "Cu-dpa_adam_bz1_at2",
+        "wandb_enabled": true,
+        "entity": "dp_model_engineering", // a username or team name
+        "project": "DPA-2"
+    },
+```
+
+To disable logging temporarily, set env var `WANDB_MODE=disabled`.
 
 # Known Problems & TODO
