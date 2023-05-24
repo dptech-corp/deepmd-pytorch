@@ -57,7 +57,6 @@ class ResidualLinear(torch.nn.Module):
 class TypeFilter(torch.nn.Module):
     use_tebd: Final[bool]
     tebd_mode: Final[str]
-    deep_layers_t: Final[torch.nn.ModuleList] # This does not working for jit
 
     def __init__(self, offset, length, neuron, return_G=False, tebd_dim=0, use_tebd=False, tebd_mode='concat'):
         """Construct a filter on the given element as neighbor.
@@ -86,13 +85,13 @@ class TypeFilter(torch.nn.Module):
             deep_layers.append(one)
         self.deep_layers = torch.nn.ModuleList(deep_layers)
 
+        deep_layers_t = []
         if use_tebd and tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
             self.neuron_t = [tebd_dim * 2] + neuron
-            deep_layers_t = []
             for ii in range(1, len(self.neuron_t)):
                 one = ResidualLinear(self.neuron_t[ii - 1], self.neuron_t[ii])
                 deep_layers_t.append(one)
-            self.deep_layers_t = torch.nn.ModuleList(deep_layers_t)
+        self.deep_layers_t = torch.nn.ModuleList(deep_layers_t)
 
         self.return_G = return_G
 

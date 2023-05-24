@@ -131,9 +131,9 @@ class Trainer(object):
             raise NotImplementedError
 
         # Model Wrapper
-        self.wrapper = ModelWrapper(self.model, self.loss)
         if JIT:
-            self.wrapper = torch.jit.script(self.wrapper)
+            self.model = torch.jit.script(self.model)
+        self.wrapper = ModelWrapper(self.model, self.loss)
 
         if (resume_from is not None) and (self.rank == 0):
             logging.info(f"Resuming from {resume_from}.")
@@ -326,7 +326,7 @@ class Trainer(object):
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
             if JIT:
-                self.wrapper.save("torchscript_model.pt")
+                self.model.save("torchscript_model.pt")
         if fout:
             fout.close()
 

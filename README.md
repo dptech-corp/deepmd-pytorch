@@ -23,7 +23,7 @@ pip install git+https://github.com/dptech-corp/deepmd-pytorch.git
 
 ```bash
 conda activate deepmd-pt
-python3 dp train tests/water/se_e2_a.json
+python3 deepmd_pt/entrypoints/main.py train  tests/water/se_e2_a.json
 ```
 
 # Profiling
