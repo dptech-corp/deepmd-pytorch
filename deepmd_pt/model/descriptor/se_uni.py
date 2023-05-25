@@ -54,9 +54,12 @@ class Atten2Map(torch.nn.Module):
     attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
     # mask the attenmap, nb x nloc x 1 x 1 x nnei
     attnw_mask = ~nlist_mask.unsqueeze(2).unsqueeze(2)
+    # mask the attenmap, nb x nloc x 1 x nnei x 1
+    attnw_mask_c = ~nlist_mask.unsqueeze(2).unsqueeze(-1)
     attnw = attnw.masked_fill(attnw_mask, float("-inf"),)
     attnw = torch.softmax(attnw, dim=-1)
     attnw = attnw.masked_fill(attnw_mask, float(0.0),)
+    attnw = attnw.masked_fill(attnw_mask_c, float(0.0),)
     # nb x nloc x nnei x nnei
     h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3.**0.5
     # nb x nloc x nh x nnei x nnei
@@ -361,6 +364,11 @@ class DescrptSeUni(Descriptor):
     gg1 = gg1.view(nb, nloc, nnei, ng1)
     return gg1
 
+  def _apply_nlist_mask(self, gg, nlist_mask):
+    # gg:  nf x nloc x nnei x ng
+    # msk: nf x nloc x nnei
+    return gg.masked_fill(~nlist_mask.unsqueeze(-1), float(0.))
+
   def _update_g1_conv(self, ll, gg1, g2, nlist, nlist_mask):
     nb, nloc, nnei, _ = g2.shape
     ng1 = gg1.shape[-1]
@@ -368,21 +376,28 @@ class DescrptSeUni(Descriptor):
     # gg1  : nb x nloc x nnei x ng2
     gg1 = self.proj_g1g2[ll](gg1).view(nb, nloc, nnei, ng2)
     # nb x nloc x nnei x ng2
-    gg1 = gg1 * nlist_mask.unsqueeze(-1)
+    gg1 = self._apply_nlist_mask(gg1, nlist_mask)
     # nb x nloc
     invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
     # nb x nloc x ng2
     g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei.unsqueeze(-1)
     return g1_11
 
-  def _update_g1_grrg(self, ll, g2, h2):
+  def _update_g1_grrg(self, ll, g2, h2, nlist_mask):
     # g2:  nf x nloc x nnei x ng2
     # h2:  nf x nloc x nnei x 3
+    # msk: nf x nloc x nnei
     nb, nloc, nnei, _ = g2.shape
     ng2 = g2.shape[-1]
+    # nb x nloc x nnei x ng2
+    g2 = self._apply_nlist_mask(g2, nlist_mask)
+    # nb x nloc
+    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))    
+    # nb x nloc x 1 x 1
+    invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
-      torch.transpose(h2, -1, -2), g2) / (float(nnei)**1)
+      torch.transpose(h2, -1, -2), g2) * invnnei
     # nb x nloc x 3 x axis
     h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]    
     # nb x nloc x axis x ng2
@@ -399,7 +414,8 @@ class DescrptSeUni(Descriptor):
       nlist_mask, # nb x nloc x nnei
   ):    
     ret = g1.unsqueeze(-2) * gg1
-    ret = ret.masked_fill(~nlist_mask.unsqueeze(-1), float(0.))
+    # nb x nloc x nnei x ng1
+    ret = self._apply_nlist_mask(ret, nlist_mask)
     return ret
 
   def _one_layer(
@@ -462,10 +478,10 @@ class DescrptSeUni(Descriptor):
       g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask))
 
     if update_g1_has_grrg:
-      g1_mlp.append(self._update_g1_grrg(ll, g2, h2))
+      g1_mlp.append(self._update_g1_grrg(ll, g2, h2, nlist_mask))
 
     if update_g1_has_drrd:
-      g1_mlp.append(self._update_g1_grrg(ll, gg1, h2))
+      g1_mlp.append(self._update_g1_grrg(ll, gg1, h2, nlist_mask))
     
     # nb x nloc x [ng1+ng2+(axisxng2)+(axisxng1)]
     #                  conv   grrg      drrd
