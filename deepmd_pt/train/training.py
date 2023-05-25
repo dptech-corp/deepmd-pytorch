@@ -326,7 +326,7 @@ class Trainer(object):
             logging.info(f"Trained model weight has been saved to {self.save_ckpt}")
 
             if JIT:
-                pth_model_path = "torchscript_model.pth" # We use .pth to denote the frozen model
+                pth_model_path = "frozen_model.pth" # We use .pth to denote the frozen model
                 self.model.save(pth_model_path)
                 logging.info(f"Frozen model for inferencing has been saved to {pth_model_path}")
 
