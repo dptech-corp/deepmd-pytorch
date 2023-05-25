@@ -323,10 +323,13 @@ class Trainer(object):
             except OSError:
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
                 torch.save(module.state_dict(), self.save_ckpt)
-            logging.info(f"Trained model has been saved to: {self.save_ckpt}")
+            logging.info(f"Trained model weight has been saved to {self.save_ckpt}")
 
             if JIT:
-                self.model.save("torchscript_model.pt")
+                pth_model_path = "torchscript_model.pth" # We use .pth to denote the frozen model
+                self.model.save(pth_model_path)
+                logging.info(f"Frozen model for inferencing has been saved to {pth_model_path}")
+
         if fout:
             fout.close()
 
