@@ -428,7 +428,7 @@ class DescrptSeUni(Descriptor):
       nlist_mask,
       update_chnnl_2: bool=True,
   ):
-    update_g2_has_attn = self.update_g2_has_attn,
+    update_g2_has_attn = self.update_g2_has_attn
     update_g1_has_conv = self.update_g1_has_conv
     update_g1_has_drrd = self.update_g1_has_drrd
     update_g1_has_grrg = self.update_g1_has_grrg
