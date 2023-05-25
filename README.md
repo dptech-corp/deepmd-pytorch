@@ -70,14 +70,17 @@ utils
 ```
 
 # Deploy
-Tested with libtorch pre-CXX11 abi cu116, cuda 11.6, torch 1.13
+
+This test requires cuda toolkit to be installed locally. Verify if `nvcc -V` presents.
 
 ```bash
-python test.py
+cd deploy
 export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/share/cmake:$CMAKE_PREFIX_PATH
 cmake -B build
-cd build
-cmake --build .
+cmake --build build
+
+python test.py # Generates a toy model named 'model.pt'
+./build/test model.pt # ... [ CUDADoubleType{10,3} ]ok
 ```
 
 # Test
