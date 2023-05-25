@@ -41,8 +41,6 @@ def tfdict2ptdict(my_model, tf_dict, config):
             pt_dict[pt_key] = totorch(tf_dict[pt_key])
         elif pt_key in ['type_embedding.embedding.weight']:
             tmp = tf_dict['type_embed_net/matrix_1:0'].value + tf_dict['type_embed_net/bias_1:0'].value
-            # if ntypes == 8:
-            #     tmp += np.eye(8)
             type_embed_net = np.vstack((tmp, np.zeros((1, tmp.shape[1]))))
             pt_dict[pt_key] = totorch(type_embed_net)
         elif 'descriptor.dpa1_attention.attention_layers' in pt_key:
@@ -65,27 +63,13 @@ def tfdict2ptdict(my_model, tf_dict, config):
                 pt_dict[pt_key] = totorch(tf_dict[tf_key].value, add_dim)
         else:
             pt_words = pt_key.split('.')
-            # type_str = '_type_%s'%pt_words[2] if type_split else '_type_all'
-            # descriptor.filter_layers
             if 'descriptor.filter_layers' in pt_key:
                 type_str = '_%s'%pt_words[2] if type_split else ''
                 tf_key = 'filter_type_all/%s_%d%s:0'%(pt_words[-1], int(pt_words[-2])+1, type_str)
-                # if type_split:
-                #     neuron_i = int(pt_words[-2]) + 1
-                #     tf_key = 'filter_type_%s/%s_%d:0'%(pt_words[2], pt_words[-1], neuron_i)
-                # else:
-                #     tf_key = 'filter_type_all/%s_%d:0'%(pt_words[-1], neuron_i)
-                # pt_dict[pt_key] = totorch(tf_dict[tf_key].value, pt_words[-1] not in ['matrix'])
-            # fitting_net.filter_layers
             elif 'fitting_net.filter_layers' in pt_key:
                 type_str = '_type_%s'%pt_words[2] if type_split else ''
                 neuron_str = 'final_layer' if pt_words[-2]=='final_layer' else 'layer_%s'%pt_words[-2]
                 tf_key = '%s%s/%s:0'%(neuron_str, type_str, pt_words[-1])
-                
-                # if 'final_layer' in pt_key:
-                #     tf_key = 'final_layer%s/%s:0'%(type_str, pt_words[-1])
-                # else:
-                #     tf_key = 'layer_%s%s/%s:0'%(pt_words[2], type_str, pt_words[-1])
             pt_dict[pt_key] = totorch(tf_dict[tf_key].value, pt_words[-1] not in ['matrix'])
     return pt_dict
 
@@ -223,7 +207,6 @@ class TrainerForTest():
             batch = self.train_data.get_batch()
             feeds = self._get_feed_dict(batch, place_holders)
             grads_and_vars, head_dict = sess.run([t_grad_and_vars, t_heads], feed_dict=feeds)
-            # vs_dict = {}
             for idx, one in enumerate(t_vars):
                 grad, var = grads_and_vars[idx]
                 vs_dict[one.name] = VariableState(var, grad)
