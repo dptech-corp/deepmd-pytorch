@@ -435,7 +435,7 @@ class DescrptSeUni(Descriptor):
     update_g1_has_attn = self.update_g1_has_attn
     update_g2_has_g1g1 = self.update_g2_has_g1g1
     update_h2 = self.update_h2
-    cal_gg1 = update_g1_has_drrd or update_g1_has_conv or update_g1_has_attn
+    cal_gg1 = update_g1_has_drrd or update_g1_has_conv or update_g1_has_attn or update_g2_has_g1g1
 
     nb, nloc, nnei, _ = g2.shape
     assert (nb, nloc) == g1.shape[:2]
