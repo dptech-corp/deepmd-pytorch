@@ -291,9 +291,3 @@ class TestModel(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    # water_sea = 'tests/water/se_e2_a.json'
-    # water_atten = 'tests/water/se_atten.json'
-    # pt_file = 'tests/NoPBC/se_atten.json'
-    # a = TestModel(pt_file)
-    # a.test_model()
-    # print('%s OK'%pt_file)
