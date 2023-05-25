@@ -423,7 +423,7 @@ class DeepmdDataSystem(object):
             return np.float32(0.0), data
 
     # deprecated TODO
-    def preprocess(self, batch):
+    def preprocess(self, batch, pbc=True):
         n_frames = batch['coord'].shape[0]
         for kk in self._data_dict.keys():
             if "find_" in kk:
@@ -448,11 +448,15 @@ class DeepmdDataSystem(object):
         selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
 
         for sid in trange(n_frames, disable=None):
-            region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
-            _coord = normalize_coord(coord[sid], region, nloc)
-            coord[sid] = _coord
-            a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
+            if pbc:
+                region = Region3D(box[sid])
+                _coord = normalize_coord(coord[sid], region, nloc)
+                coord[sid] = _coord
+            else:
+                region = None
+                _coord = coord[sid]
+            a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split, pbc=pbc)
             selected.append(a)
             selected_loc.append(b)
             selected_type.append(c)
