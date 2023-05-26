@@ -217,6 +217,7 @@ class DescrptSeUni(Descriptor):
       attn2_nhead: int = 4,
       attn_dotr: bool = True,
       activation: str = "tanh",
+      update_style: str = "res_avg",
       set_davg_zero: bool = True, # TODO
       **kwargs,
   ):
@@ -243,6 +244,7 @@ class DescrptSeUni(Descriptor):
     self.update_g1_has_attn = update_g1_has_attn
     self.update_g2_has_g1g1 = update_g2_has_g1g1
     self.update_g2_has_attn = update_g2_has_attn
+    self.update_style = update_style
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -494,12 +496,28 @@ class DescrptSeUni(Descriptor):
       g1_update.append(self.loc_attn[ll](g1, gg1, nlist_mask))
       
 
-    def list_update(update_list):
+    def list_update_res_avg(update_list):
       nitem = len(update_list)
       uu = update_list[0]
       for ii in range(1,nitem):
         uu = uu + update_list[ii]
       return uu / (float(nitem) ** 0.5)
+
+    def list_update_res_incr(update_list):
+      nitem = len(update_list)
+      uu = update_list[0]
+      scale = 1./(float(nitem)**0.5) if nitem > 1 else 0.      
+      for ii in range(1,nitem):
+        uu = uu + scale * update_list[ii]
+      return uu
+  
+    def list_update(update_list):
+      if self.update_style == "res_avg":
+        return list_update_res_avg(update_list)
+      elif self.update_style == "res_incr":
+        return list_update_res_incr(update_list)
+      else:
+        raise RuntimeError(f"unknown update style {self.update_style}")
 
     # update
     if update_chnnl_2:
