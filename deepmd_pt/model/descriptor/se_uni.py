@@ -227,7 +227,7 @@ class DescrptSeUni(Descriptor):
     self.rcut_smth = rcut_smth
     self.ntypes = ntypes
     self.nlayers = nlayers
-    sel = [sel] if isinstance(self, int) else sel
+    sel = [sel] if isinstance(sel, int) else sel
     self.nnei = sum(sel)  # 总的邻居数量
     assert len(sel) == 1
     self.sel = torch.tensor(sel)  # 每种元素在邻居中的位移    
