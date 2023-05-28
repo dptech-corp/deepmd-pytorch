@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import unittest
 from copy import deepcopy
 
@@ -29,12 +30,16 @@ class TestDPTest(unittest.TestCase):
         for k, v in res.items():
             if k == "rmse" or "mae" in k:
                 continue
-            self.assertTrue(np.allclose(v, more_loss[k].cpu().detach().numpy()),
-                            "Test result of %s is incorrect" % k)
+            np.testing.assert_allclose(v, more_loss[k].cpu().detach().numpy(), rtol=1e-05, atol=1e-08)
 
     def tearDown(self):
-        os.remove("model.pt")
-        os.remove("lcurve.out")
+        for f in os.listdir("."):
+            if f.startswith("model") and f.endswith(".pt"):
+                os.remove(f)
+            if f in ["lcurve.out"]:
+                os.remove(f)
+            if f in ["stat_files"]:
+                shutil.rmtree(f)
 
 
 if __name__ == '__main__':
