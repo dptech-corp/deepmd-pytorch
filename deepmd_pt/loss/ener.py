@@ -57,6 +57,8 @@ class EnergyStdLoss(TaskLoss):
             if mae:
                 mae_e = torch.mean(torch.abs(model_pred['energy'] - label['energy'])) * atom_norm
                 more_loss['mae_e'] = mae_e.detach()
+                mae_e_all = torch.mean(torch.abs(model_pred['energy'] - label['energy']))
+                more_loss['mae_e_all'] = mae_e_all.detach()
 
         if self.has_f and 'force' in model_pred and 'force' in label:
             diff_f = label['force'] - model_pred['force']
