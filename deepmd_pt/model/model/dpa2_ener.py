@@ -9,6 +9,7 @@ from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.model.task import EnergyFittingNetType
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
+from IPython import embed
 
 
 class EnergyModelDPA2(BaseModel):

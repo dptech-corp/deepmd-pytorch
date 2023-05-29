@@ -17,10 +17,11 @@ def get_activation_fn(activation: str) -> Callable:
     else:
         raise RuntimeError("--activation-fn {} not supported".format(activation))
 
+
 class ActivationFn(torch.nn.Module):
     def __init__(self, activation: Optional[str]):
         super().__init__()
-        self.activation : str = activation if activation is not None else "linear"
+        self.activation: str = activation if activation is not None else "linear"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """ Returns the tensor after applying activation function corresponding to `activation` """
@@ -32,6 +33,8 @@ class ActivationFn(torch.nn.Module):
             return F.gelu(x)
         elif self.activation == "tanh":
             return torch.tanh(x)
+        elif self.activation == "sigmoid":
+            return torch.sigmoid(x)
         elif self.activation == "linear":
             return x
         else:

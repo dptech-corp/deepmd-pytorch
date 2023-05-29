@@ -39,16 +39,12 @@ class DenoiseLoss(TaskLoss):
         Returns:
         - loss: Loss to minimize.
         """
-        updated_coord = model_pred["updated_coord"]
-        logits = model_pred["logits"]
-        clean_coord = label["clean_coord"]
-        clean_type = label["clean_type"]
-        coord_mask = label['coord_mask']
-        type_mask = label['type_mask']
-
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
         if self.has_coord:
+            updated_coord = model_pred["updated_coord"]
+            clean_coord = label["clean_coord"]
+            coord_mask = label['coord_mask']
             if self.mask_loss_coord:
                 masked_updated_coord = updated_coord[coord_mask]
                 masked_clean_coord = clean_coord[coord_mask]
@@ -71,6 +67,9 @@ class DenoiseLoss(TaskLoss):
             loss += self.masked_coord_loss * coord_loss
             more_loss['coord_l1_error'] = coord_loss.detach()
         if self.has_token:
+            logits = model_pred["logits"]
+            clean_type = label["clean_type"]
+            type_mask = label['type_mask']
             if self.mask_loss_token:
                 masked_logits = logits[type_mask]
                 masked_target = clean_type[type_mask]

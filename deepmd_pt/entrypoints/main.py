@@ -21,7 +21,7 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
     model_params = config['model']
     training_dataset_params = training_params['training_data']
     type_split = True
-    if model_params['descriptor']['type'] in ['se_atten']:
+    if model_params['descriptor']['type'] in ['se_atten', 'gaussian']:
         type_split = False
     validation_dataset_params = training_params.pop('validation_data')
     # Initialize DDP
@@ -65,7 +65,8 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split)
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+        # sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+        sampled = None
         if noise_settings is not None:
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)

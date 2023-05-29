@@ -2,6 +2,8 @@ import torch
 from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
 from deepmd_pt.loss import TaskLoss
 from deepmd_pt.utils import env
+import torch.nn.functional as F
+from IPython import embed
 
 
 class EnergyStdLoss(TaskLoss):
@@ -14,6 +16,7 @@ class EnergyStdLoss(TaskLoss):
                  limit_pref_f=0.0,
                  start_pref_v=0.0,
                  limit_pref_v=0.0,
+                 use_l1_all: bool = False,
                  **kwargs):
         """Construct a layer to compute loss on energy, force and virial."""
         super(EnergyStdLoss, self).__init__()
@@ -27,6 +30,7 @@ class EnergyStdLoss(TaskLoss):
         self.limit_pref_f = limit_pref_f
         self.start_pref_v = start_pref_v
         self.limit_pref_v = limit_pref_v
+        self.use_l1_all = use_l1_all
 
     def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on loss and force.
@@ -49,22 +53,34 @@ class EnergyStdLoss(TaskLoss):
         more_loss = {}
         atom_norm = 1. / natoms[0, 0]
         if self.has_e and 'energy' in model_pred and 'energy' in label:
-            l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
-            more_loss['l2_ener_loss'] = l2_ener_loss.detach()
-            loss += atom_norm * (pref_e * l2_ener_loss)
-            rmse_e = l2_ener_loss.sqrt() * atom_norm
-            more_loss['rmse_e'] = rmse_e.detach()
+            if not self.use_l1_all:
+                l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
+                more_loss['l2_ener_loss'] = l2_ener_loss.detach()
+                loss += atom_norm * (pref_e * l2_ener_loss)
+                rmse_e = l2_ener_loss.sqrt() * atom_norm
+                more_loss['rmse_e'] = rmse_e.detach()
+            else:  # use l1 and for all atoms
+                l1_ener_loss = F.l1_loss(model_pred['energy'], label['energy'], reduction="sum")
+                loss += (pref_e * l1_ener_loss)
+                more_loss['mae_e'] = F.l1_loss(model_pred['energy'], label['energy'], reduction="mean").detach()
             if mae:
                 mae_e = torch.mean(torch.abs(model_pred['energy'] - label['energy'])) * atom_norm
                 more_loss['mae_e'] = mae_e.detach()
+                mae_e_all = torch.mean(torch.abs(model_pred['energy'] - label['energy']))
+                more_loss['mae_e_all'] = mae_e_all.detach()
 
         if self.has_f and 'force' in model_pred and 'force' in label:
-            diff_f = label['force'] - model_pred['force']
-            l2_force_loss = torch.mean(torch.square(diff_f))
-            more_loss['l2_force_loss'] = l2_force_loss.detach()
-            loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
-            rmse_f = l2_force_loss.sqrt()
-            more_loss['rmse_f'] = rmse_f.detach()
+            if not self.use_l1_all:
+                diff_f = label['force'] - model_pred['force']
+                l2_force_loss = torch.mean(torch.square(diff_f))
+                more_loss['l2_force_loss'] = l2_force_loss.detach()
+                loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
+                rmse_f = l2_force_loss.sqrt()
+                more_loss['rmse_f'] = rmse_f.detach()
+            else:
+                l1_force_loss = F.l1_loss(label['force'], model_pred['force'], reduction="sum")
+                loss += (pref_f * l1_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
+                more_loss['mae_f'] = F.l1_loss(label['force'], model_pred['force'], reduction="mean").detach()
             if mae:
                 mae_f = torch.mean(torch.abs(diff_f))
                 more_loss['mae_f'] = mae_f.detach()

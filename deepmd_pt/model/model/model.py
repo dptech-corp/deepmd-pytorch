@@ -43,8 +43,14 @@ class BaseModel(torch.nn.Module):
                                         sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
                                         bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
             else:  # load stat
-                logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
-                stats = np.load(model_params["stat_file_path"])
+                try:
+                    stats = np.load(model_params["stat_file_path"])
+                    logging.info(f'Loading stat file from {model_params["stat_file_path"]}')
+                except FileNotFoundError as e:
+                    logging.warning(f'Stat data not exist! '
+                                    f'The statistics weights in descriptor and fitting will be set to default!')
+                    fitting_param['bias_atom_e'] = [0.0] * ntypes
+                    return
                 stat_type_map = list(stats["type_map"])
                 target_type_map = model_params['type_map']
                 missing_type = [i for i in target_type_map if i not in stat_type_map]

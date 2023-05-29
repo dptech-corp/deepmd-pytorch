@@ -9,7 +9,8 @@ try:
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
+from deepmd_pt.model.network import TypeFilter, TypeFilter3b, NeighborWiseAttention
+from IPython import embed
 
 
 class DescrptSeAtten(Descriptor):
@@ -23,12 +24,19 @@ class DescrptSeAtten(Descriptor):
                  axis_neuron: int = 16,
                  tebd_dim: int = 8,
                  tebd_input_mode: str = 'concat',
+                 # 3 body settings
+                 use_3b: bool = False,
+                 only_3b: bool = False,
+                 sel_3b=None,
+                 tebd_input_mode_3b: str = 'concat',
+                 center_type_3b: bool = True,
                  # set_davg_zero: bool = False,
-                 set_davg_zero: bool = True, # TODO
+                 set_davg_zero: bool = True,  # TODO
                  attn: int = 128,
                  attn_layer: int = 2,
                  attn_dotr: bool = True,
                  attn_mask: bool = False,
+                 triangular_gated: bool = False,
                  post_ln=True,
                  ffn=False,
                  ffn_embed_dim=1024,
@@ -60,6 +68,7 @@ class DescrptSeAtten(Descriptor):
         self.attn_layer = attn_layer
         self.attn_dotr = attn_dotr
         self.attn_mask = attn_mask
+        self.triangular_gated = triangular_gated
         self.post_ln = post_ln
         self.ffn = ffn
         self.ffn_embed_dim = ffn_embed_dim
@@ -69,7 +78,8 @@ class DescrptSeAtten(Descriptor):
         self.normalize = normalize
         self.temperature = temperature
         self.return_rot = return_rot
-
+        self.use_3b = use_3b
+        self.only_3b = False
         if isinstance(sel, int):
             sel = [sel]
 
@@ -77,12 +87,23 @@ class DescrptSeAtten(Descriptor):
         self.sec = torch.tensor(sel)  # 每种元素在邻居中的位移
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
+        if use_3b:
+            self.only_3b = only_3b
+            sel_3b = sel_3b if sel_3b is not None else sel
+            if isinstance(sel_3b, int):
+                sel_3b = [sel_3b]
+            self.nnei_3b = sum(sel_3b)
+            self.ndescrpt_3b = self.nnei_3b * 4
+            self.slim_3b = (self.nnei_3b < self.nnei)
+            self.tebd_input_mode_3b = tebd_input_mode_3b
+            self.center_type_3b = center_type_3b
+
         self.dpa1_attention = NeighborWiseAttention(self.attn_layer, self.nnei, self.filter_neuron[-1], self.attn_dim,
                                                     dotr=self.attn_dotr, do_mask=self.attn_mask, post_ln=self.post_ln,
                                                     ffn=self.ffn, ffn_embed_dim=self.ffn_embed_dim,
                                                     activation=self.activation, scaling_factor=self.scaling_factor,
                                                     head_num=self.head_num, normalize=self.normalize,
-                                                    temperature=self.temperature)
+                                                    temperature=self.temperature, triangular_gated=self.triangular_gated)
 
         wanted_shape = (self.ntypes, self.nnei, 4)
         mean = torch.zeros(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
@@ -95,13 +116,28 @@ class DescrptSeAtten(Descriptor):
                          tebd_mode=self.tebd_input_mode)
         filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
+        if self.use_3b:
+            filter_layers_3b = []
+            one = TypeFilter3b([0, 0], [self.nnei_3b, self.nnei_3b], self.filter_neuron, return_G=True,
+                               tebd_dim=self.tebd_dim,
+                               use_tebd=True,
+                               tebd_mode=self.tebd_input_mode_3b,
+                               center_type=self.center_type_3b)
+            filter_layers_3b.append(one)
+            self.filter_layers_3b = torch.nn.ModuleList(filter_layers_3b)
 
     @property
     def dim_out(self):
         """
         Returns the output dimension of this descriptor
         """
-        return self.filter_neuron[-1] * self.axis_neuron
+        if not self.use_3b:
+            return self.filter_neuron[-1] * self.axis_neuron
+        else:
+            if self.only_3b:
+                return self.filter_neuron[-1]
+            else:
+                return self.filter_neuron[-1] * self.axis_neuron + self.filter_neuron[-1]
 
     @property
     def dim_emb(self):
@@ -189,27 +225,62 @@ class DescrptSeAtten(Descriptor):
         )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
 
-
-        ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
-                                    nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
-        input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
-        nei_mask = selected_type != self.ntypes
-        ret = self.dpa1_attention(ret, nei_mask, input_r)  # shape is [nframes*nloc, self.neei, out_size]
-        inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
-        xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
-        xyz_scatter = xyz_scatter / self.nnei
-        xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)
-        rot_mat = xyz_scatter_1[:, :, 1:4]
-        xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
-        result = torch.matmul(xyz_scatter_1,
-                              xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
-        if not self.return_rot:
-            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
-                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff
+        # 2 body
+        result = None
+        ret = None
+        rot_mat = None
+        result_3b = None
+        if not self.only_3b:
+            ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
+                                        nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
+            input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
+            nei_mask = selected_type != self.ntypes
+            ret = self.dpa1_attention(ret, nei_mask, input_r)  # shape is [nframes*nloc, self.neei, out_size]
+            inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2,
+                                                                    1)  # shape is [nframes*natoms[0], 4, self.neei]
+            xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
+            xyz_scatter = xyz_scatter / self.nnei
+            xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)
+            rot_mat = xyz_scatter_1[:, :, 1:4]
+            xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
+            result = torch.matmul(
+                xyz_scatter_1, xyz_scatter_2
+            )  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
+            # shape is [nframes*nloc, self.filter_neuron[-1]*self.axis_neuron]
+            result = result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron)
+            ret = ret.view(-1, nloc, self.nnei, self.filter_neuron[-1])
+        if self.use_3b:
+            if self.slim_3b:
+                dmatrix_3b = (dmatrix.reshape(-1, self.nnei, 4)[:, :self.nnei_3b, :]).reshape(-1, self.ndescrpt_3b)
+                nlist_tebd_3b = nlist_tebd[:, :, :self.nnei_3b, :]
+            else:
+                dmatrix_3b = dmatrix
+                nlist_tebd_3b = nlist_tebd
+            result_3b = self.filter_layers_3b[0](dmatrix_3b,
+                                                 atype_tebd=atype_tebd.unsqueeze(2).unsqueeze(2)
+                                                 .expand(-1, -1, self.nnei_3b, self.nnei_3b, -1),
+                                                 nlist_tebd=nlist_tebd_3b)  # shape is [nframes*nloc, self.filter_neuron[-1]]
+            result_3b = result_3b.view(-1, nloc, self.filter_neuron[-1])
+        if not self.use_3b:
+            assert result is not None, "2b and 3b can not all be None!"
+            if not self.return_rot:
+                return result, ret, diff
+            else:
+                return result, ret, diff, \
+                       rot_mat.view(-1, self.filter_neuron[-1], 3)
         else:
-            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
-                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
-                   rot_mat.view(-1, self.filter_neuron[-1], 3)
+            if self.only_3b:
+                if not self.return_rot:
+                    return result_3b, None, None
+                else:
+                    return result_3b, None, None, None
+            else:
+                # shape is [nframes*nloc, self.filter_neuron[-1]*self.axis_neuron + self.filter_neuron[-1]]
+                concat_result = torch.concat([result, result_3b], dim=-1)
+                if not self.return_rot:
+                    return concat_result, ret, diff
+                else:
+                    return concat_result, ret, diff, rot_mat.view(-1, self.filter_neuron[-1], 3)
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

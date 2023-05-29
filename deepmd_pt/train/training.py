@@ -17,6 +17,7 @@ from deepmd_pt.utils.dataloader import BufferedIterator
 from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+from IPython import embed
 
 
 import wandb as wb
@@ -114,9 +115,11 @@ class Trainer(object):
         self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
 
         # Learning rate
+        # TODO
+        self.warmup_steps = 0
         lr_params = config.pop("learning_rate")
         assert lr_params.pop("type", "exp"), "Only learning rate `exp` is supported!"
-        lr_params["stop_steps"] = self.num_steps
+        lr_params["stop_steps"] = self.num_steps - self.warmup_steps
         self.lr_exp = LearningRateExp(**lr_params)
 
         # Loss
@@ -186,13 +189,19 @@ class Trainer(object):
                 output_device=LOCAL_RANK
             )
 
+        def warm_up_linear(step, warmup_steps):
+            if step < warmup_steps:
+                return step / warmup_steps
+            else:
+                return self.lr_exp.value(step - warmup_steps) / self.lr_exp.start_lr
+
         if self.opt_type == "Adam":
             self.optimizer = torch.optim.Adam(
                 self.wrapper.parameters(), lr=self.lr_exp.start_lr
             )
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
-                lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr,
+                lambda step: warm_up_linear(step, self.warmup_steps),
             )
         elif self.opt_type == "LKF":
             self.optimizer = LKFOptimizer(
@@ -215,12 +224,17 @@ class Trainer(object):
             logging.info(f"Rank: {dist.get_rank()}/{dist.get_world_size()}")
 
         def step(_step_id, task_key="Default"):
-            cur_lr = self.lr_exp.value(_step_id)
-            self.optimizer.zero_grad(set_to_none=True)
+            self.wrapper.train()
+            cur_lr = self.scheduler.get_last_lr()[0]
+            if _step_id < self.warmup_steps:
+                pref_lr = self.lr_exp.start_lr
+            else:
+                pref_lr = cur_lr
+            self.optimizer.zero_grad()
             input_dict, label_dict = self.get_data(is_train=True)
             if self.opt_type == "Adam":
                 model_pred, loss, more_loss = self.wrapper(
-                    **input_dict, cur_lr=cur_lr, label=label_dict, task_key=task_key
+                    **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key
                 )
                 loss.backward()
                 self.optimizer.step()
@@ -240,7 +254,7 @@ class Trainer(object):
                     model_pred = {"energy": p_energy, "force": p_force}
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     loss, more_loss = module.loss[task_key](
-                            model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                            model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
                         )
                 elif isinstance(self.loss, DenoiseLoss):
                     KFOptWrapper = KFOptimizerWrapper(
@@ -249,13 +263,14 @@ class Trainer(object):
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1, module.loss[task_key].mask_loss_coord, label_dict["coord_mask"])
                     loss, more_loss = module.loss[task_key](
-                        model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
                     )
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
             # Log and persist
             if _step_id % self.disp_freq == 0:
+                self.wrapper.eval()
                 # training
                 train_results = {}
                 valid_results = {}
@@ -284,7 +299,7 @@ class Trainer(object):
                         input_dict, label_dict = self.get_data(is_train=False)
                         _, loss, more_loss = self.wrapper(
                             **input_dict,
-                            cur_lr=cur_lr,
+                            cur_lr=pref_lr,
                             label=label_dict,
                             task_key=task_key,
                         )

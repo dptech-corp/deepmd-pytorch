@@ -110,7 +110,7 @@ class Tester(object):
                 dataset,
                 sampler=torch.utils.data.RandomSampler(dataset),
                 batch_size=None,
-                num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
+                num_workers=1,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
             )
             data = iter(dataloader)

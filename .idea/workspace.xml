@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="4763561f-eb53-4e93-8744-9ba9d4daf430" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/deepmd-pytorch.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/deployment.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/deepmd_pt/model/backbone/evoformer3b.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/deepmd_pt/model/descriptor/gaussian.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/deepmd_pt/model/model/dpa2_denoise_iter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/entrypoints/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/entrypoints/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/infer/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/infer/inference.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/loss/denoise.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/loss/denoise.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/loss/ener.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/loss/ener.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/backbone/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/backbone/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/descriptor/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/descriptor/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/descriptor/se_atten.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/descriptor/se_atten.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/model/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/model/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/model/dpa2_ener.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/model/dpa2_ener.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/model/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/model/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/model/network/network.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/model/network/network.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/train/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/train/training.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deepmd_pt/utils/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/deepmd_pt/utils/utils.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitSEFilterConfiguration">
+    <file-type-list>
+      <filtered-out-file-type name="LOCAL_BRANCH" />
+      <filtered-out-file-type name="REMOTE_BRANCH" />
+      <filtered-out-file-type name="TAG" />
+      <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
+    </file-type-list>
+  </component>
+  <component name="ProjectId" id="2P3swrKvAoAO0hEwO5YowfyYZ2m" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/deepmd_pt/examples/water/dpa2-force-ener" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/deepmd_pt/examples/water/dpa2-force-ener" />
+      <recent name="$PROJECT_DIR$/deepmd_pt/examples/water/dpa2-force" />
+      <recent name="$PROJECT_DIR$/deepmd_pt/examples/water" />
+      <recent name="$PROJECT_DIR$/deepmd_pt/examples/water/dpa2-denoise" />
+      <recent name="$PROJECT_DIR$/deepmd_pt/examples/water/dpa1-denoise" />
+    </key>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="4763561f-eb53-4e93-8744-9ba9d4daf430" name="Changes" comment="" />
+      <created>1682697342639</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1682697342639</updated>
+      <workItem from="1682697345608" duration="2037000" />
+      <workItem from="1683047204639" duration="41763000" />
+      <workItem from="1683366006953" duration="22030000" />
+      <workItem from="1683792946357" duration="20268000" />
+      <workItem from="1684247005400" duration="1328000" />
+      <workItem from="1684315241386" duration="300000" />
+      <workItem from="1684391082017" duration="67301000" />
+      <workItem from="1685262483672" duration="394000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+</project>
