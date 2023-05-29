@@ -235,7 +235,7 @@ class DescrptSeUni(Descriptor):
     self.axis_dim = axis_dim
     self.set_davg_zero = set_davg_zero
     self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
-    self.g2_hiddens = [g2_dim for ii in range(self.nlayers)]
+    self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
     self.act = get_activation_fn(activation)
     self.update_h2 = update_h2
     self.update_g1_has_grrg = update_g1_has_grrg
@@ -256,28 +256,28 @@ class DescrptSeUni(Descriptor):
         ret += g2d
       return ret
     g1_in_dims = [cal_1_dim(d1,d2,self.axis_dim) \
-                  for d1,d2 in zip(self.g1_hiddens, self.g2_hiddens)]
-
+                  for d1,d2 in zip(self.g1_hiddens, [g2_dim]+self.g2_hiddens)]
     self.type_embd = TypeEmbedNet(self.ntypes, self.g1_hiddens[0])
     self.g2_embd = mylinear(1, self.g2_hiddens[0])
     self.linear1 = self._linear_layers(g1_in_dims, self.g1_hiddens)
     self.linear2 = self._linear_layers(self.g2_hiddens, self.g2_hiddens)
-    self.proj_g1g2 = self._linear_layers(self.g1_hiddens, self.g2_hiddens, bias=False)
-    self.proj_g1g1g2 = self._linear_layers(self.g1_hiddens, self.g2_hiddens, bias=False)
-    self.attn2g_map = torch.nn.ModuleList(
-      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
-    self.attn2h_map = torch.nn.ModuleList(
-      [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
-    self.attn2_mh_apply = torch.nn.ModuleList(
-      [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
-    self.attn2_ev_apply = torch.nn.ModuleList(
-      [Atten2EquiVarApply(ii, attn2_nhead) for ii in self.g2_hiddens])
-    self.loc_attn = torch.nn.ModuleList(
-      [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in self.g1_hiddens])
-    self.lmg1 = torch.nn.ModuleList(
-      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in self.g1_hiddens])
-    self.lmg2 = torch.nn.ModuleList(
-      [torch.nn.LayerNorm(ii, dtype=mydtype) for ii in self.g2_hiddens])
+    if update_g1_has_conv:
+      self.proj_g1g2 = self._linear_layers(self.g1_hiddens, [g2_dim]+self.g2_hiddens, bias=False)
+    if update_g2_has_g1g1:
+      self.proj_g1g1g2 = self._linear_layers(self.g1_hiddens[1:], self.g2_hiddens, bias=False)
+    if update_g2_has_attn:
+      self.attn2g_map = torch.nn.ModuleList(
+        [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
+      self.attn2_mh_apply = torch.nn.ModuleList(
+        [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
+    if update_h2:
+      self.attn2h_map = torch.nn.ModuleList(
+        [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
+      self.attn2_ev_apply = torch.nn.ModuleList(
+        [Atten2EquiVarApply(ii, attn2_nhead) for ii in self.g2_hiddens])
+    if update_g1_has_attn: 
+      self.loc_attn = torch.nn.ModuleList(
+        [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in self.g1_hiddens])
 
     sshape = (self.ntypes, self.nnei, 4)
     mean = torch.zeros(sshape, dtype=mydtype, device=mydev) 
