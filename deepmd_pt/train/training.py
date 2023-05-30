@@ -348,9 +348,9 @@ class Trainer(object):
             fout.close()
 
     def save_model(self, save_path, lr=0, step=0):
-        self.wrapper.train_infos['lr'] = lr
-        self.wrapper.train_infos['step'] = step
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
+        module.train_infos['lr'] = lr
+        module.train_infos['step'] = step
         torch.save(module.state_dict(), save_path)
         
     def get_data(self, is_train=True):
