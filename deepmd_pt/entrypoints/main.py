@@ -21,7 +21,7 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
     model_params = config['model']
     training_dataset_params = training_params['training_data']
     type_split = True
-    if model_params['descriptor']['type'] in ['se_atten']:
+    if model_params['descriptor']['type'] in ['se_atten', 'se_uni']:
         type_split = False
     validation_dataset_params = training_params.pop('validation_data')
     # Initialize DDP
