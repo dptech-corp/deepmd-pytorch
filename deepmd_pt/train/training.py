@@ -318,17 +318,16 @@ class Trainer(object):
         if (
             self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned
+            if JIT:
+                pth_model_path = "frozen_model.pth" # We use .pth to denote the frozen model
+                self.model.save(pth_model_path)
+                logging.info(f"Frozen model for inferencing has been saved to {pth_model_path}")
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
                 torch.save(module.state_dict(), self.save_ckpt)
             logging.info(f"Trained model weight has been saved to {self.save_ckpt}")
-
-            if JIT:
-                pth_model_path = "frozen_model.pth" # We use .pth to denote the frozen model
-                self.model.save(pth_model_path)
-                logging.info(f"Frozen model for inferencing has been saved to {pth_model_path}")
 
         if fout:
             fout.close()
