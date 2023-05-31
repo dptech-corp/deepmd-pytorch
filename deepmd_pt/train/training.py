@@ -225,14 +225,16 @@ class Trainer(object):
 
         def step(_step_id, task_key="Default"):
             self.wrapper.train()
-            cur_lr = self.scheduler.get_last_lr()[0]
-            if _step_id < self.warmup_steps:
-                pref_lr = self.lr_exp.start_lr
-            else:
-                pref_lr = cur_lr
+            cur_lr = self.lr_exp.value(_step_id)
+            pref_lr = cur_lr
             self.optimizer.zero_grad(set_to_none=True)
             input_dict, label_dict = self.get_data(is_train=True)
             if self.opt_type == "Adam":
+                cur_lr = self.scheduler.get_last_lr()[0]
+                if _step_id < self.warmup_steps:
+                    pref_lr = self.lr_exp.start_lr
+                else:
+                    pref_lr = cur_lr
                 model_pred, loss, more_loss = self.wrapper(
                     **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key
                 )
@@ -366,7 +368,6 @@ class Trainer(object):
                 self.wrapper.save("torchscript_model.pt")
         if fout:
             fout.close()
-
 
     def save_model(self, save_path, lr=0., step=0):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
