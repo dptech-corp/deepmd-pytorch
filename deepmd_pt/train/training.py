@@ -367,6 +367,7 @@ class Trainer(object):
         if fout:
             fout.close()
 
+
     def save_model(self, save_path, lr=0., step=0):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
         module.train_infos['lr'] = lr
