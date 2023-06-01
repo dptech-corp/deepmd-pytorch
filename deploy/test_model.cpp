@@ -50,11 +50,12 @@ int main(int argc, const char* argv[]) {
   inputs.push_back(mapping);
   inputs.push_back(shift);
   inputs.push_back(selected);
+  inputs.push_back(box); //selected_type, unused for se_a
+  inputs.push_back(box); //selected_loc, unused for se_a
   inputs.push_back(box);
-
-  // Execute the model and turn its output into a tensor.
-  auto outputs = module.forward(inputs).toTensorVector();
-  at::Tensor energy = outputs[0];
-  at::Tensor force = outputs[1];
-  std::cout << energy<< force<< "ok\n";
+  c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
+  c10::IValue energy = outputs.at("energy");
+  c10::IValue force = outputs.at("force");
+  c10::IValue virial = outputs.at("virial");
+  std::cout << energy<< force<< virial<<"ok\n";
 }

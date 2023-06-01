@@ -314,7 +314,8 @@ class Trainer(object):
                 range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
             ):  # set to None to disable on non-TTY; disable on not rank 0
                 step(step_id)
-
+                if JIT:
+                    break
         if (
             self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned

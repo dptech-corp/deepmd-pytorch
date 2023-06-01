@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 import torch
-from typing import Optional, List
+from typing import Optional, List, Dict
 from deepmd_pt.model.descriptor import DescrptSeA
 from deepmd_pt.model.task import EnergyFittingNet
 from deepmd_pt.utils.stat import compute_output_stats
@@ -41,7 +41,7 @@ class EnergyModelSeA(BaseModel):
 
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None)->Dict[str, torch.Tensor]:
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
