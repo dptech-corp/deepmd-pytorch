@@ -204,6 +204,7 @@ class DescrptSeUni(Descriptor):
       g1_dim = 128,
       g2_dim = 16,
       axis_dim: int = 4,
+      gather_g1: bool = True,
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
@@ -245,6 +246,7 @@ class DescrptSeUni(Descriptor):
     self.update_g2_has_g1g1 = update_g2_has_g1g1
     self.update_g2_has_attn = update_g2_has_attn
     self.update_style = update_style
+    self.gather_g1 = gather_g1
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -278,6 +280,8 @@ class DescrptSeUni(Descriptor):
     if update_g1_has_attn: 
       self.loc_attn = torch.nn.ModuleList(
         [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in self.g1_hiddens])
+    if self.gather_g1:
+      self.all_g1_proj = mylinear((self.nlayers+1)*g1_dim, g1_dim)
 
     sshape = (self.ntypes, self.nnei, 4)
     mean = torch.zeros(sshape, dtype=mydtype, device=mydev) 
@@ -320,6 +324,8 @@ class DescrptSeUni(Descriptor):
     # nb x nloc x nnei x ng2
     g2 = self.act(self.g2_embd(g2))
 
+    if self.gather_g1:
+      all_g1 = [g1]
     for ll in range(self.nlayers):
       g1, g2, h2 = self._one_layer(
         ll, g1, g2, h2, 
@@ -327,8 +333,14 @@ class DescrptSeUni(Descriptor):
         nlist_mask, 
         update_chnnl_2=(ll!=self.nlayers-1),
       )
+      if self.gather_g1:
+        all_g1.append(g1)
+    if self.gather_g1:
+      g1 = torch.cat(all_g1, dim=-1)
+      g1 = self.all_g1_proj(g1)
 
     return g1, None, None
+
 
   def _linear_layers(
       self,
@@ -506,7 +518,7 @@ class DescrptSeUni(Descriptor):
     def list_update_res_incr(update_list):
       nitem = len(update_list)
       uu = update_list[0]
-      scale = 1./(float(nitem)**0.5) if nitem > 1 else 0.      
+      scale = 1./(float(nitem-1)**0.5) if nitem > 1 else 0.      
       for ii in range(1,nitem):
         uu = uu + scale * update_list[ii]
       return uu
