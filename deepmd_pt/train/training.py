@@ -144,26 +144,13 @@ class Trainer(object):
             origin_model = finetune_model if finetune_model is not None else resume_from
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model)
+
+            def hook(module, incompatible_keys) -> None:
+                logging.warning(f"Force load mode enabled! These keys are not in checkpoint and will be re-inited: {incompatible_keys}")
             if force_load:
-                input_keys = list(state_dict.keys())
-                target_keys = list(self.wrapper.state_dict().keys())
-                missing_keys = [item for item in target_keys if item not in input_keys]
-                if missing_keys:
-                    target_state_dict = self.wrapper.state_dict()
-                    slim_keys = []
-                    for item in missing_keys:
-                        state_dict[item] = target_state_dict[item].clone().detach()
-                        new_key = True
-                        for slim_key in slim_keys:
-                            if slim_key in item:
-                                new_key = False
-                                break
-                        if new_key:
-                            tmp_keys = '.'.join(item.split('.')[:3])
-                            slim_keys.append(tmp_keys)
-                    slim_keys = [i + '.*' for i in slim_keys]
-                    logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
-            self.wrapper.load_state_dict(state_dict)
+                self.wrapper.register_load_state_dict_post_hook(hook)
+            self.wrapper.load_state_dict(state_dict, strict=not force_load)
+
             # finetune
             if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
                 assert model_params["descriptor"]["type"] in [
@@ -374,7 +361,7 @@ class Trainer(object):
         module.train_infos['lr'] = lr
         module.train_infos['step'] = step
         torch.save(module.state_dict(), save_path)
-        
+
     def get_data(self, is_train=True):
         if is_train:
             try:
