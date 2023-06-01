@@ -296,6 +296,13 @@ class DescrptSeUni(Descriptor):
     """
     return self.g1_hiddens[-1]
 
+  @property
+  def dim_emb(self):
+    """
+    Returns the embedding dimension g2
+    """
+    return self.g2_hiddens[-1]
+
   def forward(
       self, 
       extended_coord, 
@@ -339,7 +346,12 @@ class DescrptSeUni(Descriptor):
       g1 = torch.cat(all_g1, dim=-1)
       g1 = self.all_g1_proj(g1)
 
-    return g1, None, None
+    # nb x nloc x 3 x ng2
+    h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
+    # (nb x nloc) x ng2 x 3
+    rot_mat = torch.permute(h2g2, (0, 1, 3, 2))
+
+    return g1, None, rot_mat.view(-1, self.dim_emb, 3)
 
 
   def _linear_layers(
@@ -397,7 +409,7 @@ class DescrptSeUni(Descriptor):
     g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei.unsqueeze(-1)
     return g1_11
 
-  def _update_g1_grrg(self, ll, g2, h2, nlist_mask):
+  def _cal_h2g2(self, g2, h2, nlist_mask):
     # g2:  nf x nloc x nnei x ng2
     # h2:  nf x nloc x nnei x 3
     # msk: nf x nloc x nnei
@@ -412,6 +424,16 @@ class DescrptSeUni(Descriptor):
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
       torch.transpose(h2, -1, -2), g2) * invnnei
+    return h2g2
+
+  def _update_g1_grrg(self, ll, g2, h2, nlist_mask):
+    # g2:  nf x nloc x nnei x ng2
+    # h2:  nf x nloc x nnei x 3
+    # msk: nf x nloc x nnei
+    nb, nloc, nnei, _ = g2.shape
+    ng2 = g2.shape[-1]
+    # nb x nloc x 3 x ng2
+    h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
     # nb x nloc x 3 x axis
     h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]    
     # nb x nloc x axis x ng2
@@ -536,7 +558,7 @@ class DescrptSeUni(Descriptor):
       g2_new = list_update(g2_update)
       h2_new = list_update(h2_update)
     else:
-      g2_new, h2_new = None, None
+      g2_new, h2_new = g2, h2
     g1_new = list_update(g1_update)
     return g1_new, g2_new, h2_new
 

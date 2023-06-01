@@ -4,7 +4,7 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation import infer_model, make_sample
@@ -128,7 +128,7 @@ model_dpa2 = {
 }
 
 
-class TestRot():
+class TestTrans():
   def test(
       self,
   ):
@@ -147,37 +147,45 @@ class TestRot():
     prec = 1e-10
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
     torch.testing.assert_close(ret0['force'], ret1['force'], rtol=prec, atol=prec)
-    torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=prec, atol=prec)
+    if not hasattr(self, "test_virial") or self.test_virial:
+      torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=prec, atol=prec)
 
-class TestEnergyModelSeA(unittest.TestCase, TestRot):
+class TestEnergyModelSeA(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_se_e2_a
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
 
-class TestEnergyModelDPA1(unittest.TestCase, TestRot):
+class TestEnergyModelDPA1(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_dpa1
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
 
-class TestEnergyModelDPA2(unittest.TestCase, TestRot):
+class TestEnergyModelDPA2(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_dpa2
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
 
-
-class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
+class TestEnergyModelDPAUni(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_dpau
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
 
+class TestForceModelDPAUni(unittest.TestCase, TestTrans):
+  def setUp(self):
+    model_params = model_dpau
+    model_params["fitting_net"]["type"] = "direct_force_ener"
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.test_virial = False
+    self.model = ForceModelDPAUni(model_params, sampled).to(env.DEVICE)
 
 
 if __name__ == '__main__':

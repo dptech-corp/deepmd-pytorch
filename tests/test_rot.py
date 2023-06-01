@@ -4,7 +4,7 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation import infer_model, make_sample
@@ -144,9 +144,10 @@ class TestRot():
     prec = 1e-10
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
     torch.testing.assert_close(torch.matmul(ret0['force'], rmat), ret1['force'], rtol=prec, atol=prec)
-    torch.testing.assert_close(
-      torch.matmul(rmat.T, torch.matmul(ret0['virial'], rmat)), 
-      ret1['virial'], rtol=prec, atol=prec)
+    if not hasattr(self, "test_virial") or self.test_virial:
+      torch.testing.assert_close(
+        torch.matmul(rmat.T, torch.matmul(ret0['virial'], rmat)), 
+        ret1['virial'], rtol=prec, atol=prec)
 
 class TestEnergyModelSeA(unittest.TestCase, TestRot):
   def setUp(self):
@@ -169,7 +170,6 @@ class TestEnergyModelDPA2(unittest.TestCase, TestRot):
     self.type_split = True
     self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
 
-
 class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
     model_params = model_dpau
@@ -177,6 +177,14 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
     self.type_split = True
     self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
 
+class TestForceModelDPAUni(unittest.TestCase, TestRot):
+  def setUp(self):
+    model_params = model_dpau
+    model_params["fitting_net"]["type"] = "direct_force_ener"
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.test_virial = False
+    self.model = ForceModelDPAUni(model_params, sampled).to(env.DEVICE)
 
 
 if __name__ == '__main__':
