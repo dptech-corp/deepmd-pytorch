@@ -72,7 +72,7 @@ utils
 # Deploy
 
 This test requires cuda toolkit to be installed locally. Verify if `nvcc -V` presents.
-For the first test, CMakeLists.txt should make `test.cpp`, for the second test, make `test_model.cpp` instead.
+`deploy/test_model.py` illustrates the model interface in C++.
 
 ```bash
 cd deploy
@@ -80,17 +80,7 @@ export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/sha
 cmake -B build
 cmake --build build
 
-python test.py # Generates a toy model named 'model.pt'
-./build/test model.pt # ... [ CUDADoubleType{10,3} ]ok
-```
-
-```bash
-cd deploy
-export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/share/cmake:$CMAKE_PREFIX_PATH
-cmake -B build
-cmake --build build
-
-# run traninig with JIT=True to dump a torchscript model
+# run traninig with JIT=True to dump a torchscript frozen model
 python deepmd_pt/entrypoints/main.py train tests/water/se_e2_a.json
 ./build/test ../frozen_model.pth 
 ```

@@ -53,7 +53,7 @@ class ModelWrapper(torch.nn.Module):
             assert task_key is not None, \
                 f"Multitask model must specify the inference task! Supported tasks are {list(self.model.keys())}."
         model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, selected, selected_type,
-                                          selected_loc=selected_loc, box=box)
+                                        selected_loc=selected_loc, box=box)
         if not self.inference_only and not inference_only:
             loss, more_loss = self.loss[task_key](model_pred, label, natoms=natoms, learning_rate=cur_lr)
             return model_pred, loss, more_loss

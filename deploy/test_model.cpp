@@ -13,12 +13,11 @@ int main(int argc, const char* argv[]) {
   torch::jit::script::Module module;
   // Deserialize the ScriptModule from a file using torch::jit::load().
   module = torch::jit::load(argv[1]);
+  // Move the model to GPU.
   module.to(device);
   auto options = torch::TensorOptions();
   auto int_options = torch::TensorOptions().dtype(torch::kInt64);
-  // Create a vector of inputs.
-  std::vector<torch::jit::IValue> inputs;
-  //coord, atype, natoms, mapping, shift, selected 
+  // Create coord, atype, natoms, mapping, shift, selected 
   double coord_value[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
   at::Tensor coord = torch::from_blob(coord_value, {1, 3, 3}, options).to(device);
   long atype_value[3] = {0, 1, 1};
@@ -43,18 +42,21 @@ int main(int argc, const char* argv[]) {
   at::Tensor selected = torch::from_blob(selected_value, {1, 3, 138}, int_options).to(device);
   double box_value[9] = {10, 0, 0, 0, 10, 0, 0, 0, 10};
   at::Tensor box = torch::from_blob(box_value, {1, 3, 3}, options).to(device);
- // at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
+  // at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
+  // Create a vector of inputs.
+  std::vector<torch::jit::IValue> inputs;
   inputs.push_back(coord);
   inputs.push_back(atype);
   inputs.push_back(natoms);
   inputs.push_back(mapping);
   inputs.push_back(shift);
   inputs.push_back(selected);
+  inputs.push_back(box); //selected_type, unused for se_a
+  inputs.push_back(box); //selected_loc, unused for se_a
   inputs.push_back(box);
-
-  // Execute the model and turn its output into a tensor.
-  auto outputs = module.forward(inputs).toTensorVector();
-  at::Tensor energy = outputs[0];
-  at::Tensor force = outputs[1];
-  std::cout << energy<< force<< "ok\n";
+  c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
+  c10::IValue energy = outputs.at("energy");
+  c10::IValue force = outputs.at("force");
+  c10::IValue virial = outputs.at("virial");
+  std::cout << energy<< force<< virial<<"ok\n";
 }
