@@ -206,6 +206,7 @@ class DescrptSeUni(Descriptor):
       axis_dim: int = 4,
       gather_g1: bool = False,
       combine_grrg: bool = False,
+      direct_dist: bool = False,
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
@@ -239,6 +240,7 @@ class DescrptSeUni(Descriptor):
     self.gather_g1 = gather_g1
     self.combine_grrg = combine_grrg
     self.update_last_g2 = self.combine_grrg
+    self.direct_dist = direct_dist
     self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
     if not self.update_last_g2:
       self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
@@ -337,7 +339,12 @@ class DescrptSeUni(Descriptor):
     # nb x nloc x ng1
     g1 = self.act(self.type_embd(atype))
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
-    g2, h2 = torch.split(dmatrix, [1, 3], dim=-1)
+    if not self.direct_dist:
+      g2, h2 = torch.split(dmatrix, [1, 3], dim=-1)
+    else:
+      g2, h2 = torch.linalg.norm(diff, dim=-1, keepdim=True), diff
+      g2 = g2 / self.rcut
+      h2 = h2 / self.rcut
     # nb x nloc x nnei x ng2
     g2 = self.act(self.g2_embd(g2))
 
