@@ -204,7 +204,8 @@ class DescrptSeUni(Descriptor):
       g1_dim = 128,
       g2_dim = 16,
       axis_dim: int = 4,
-      gather_g1: bool = True,
+      gather_g1: bool = False,
+      combine_grrg: bool = False,
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
@@ -235,8 +236,14 @@ class DescrptSeUni(Descriptor):
     self.sec = self.sel
     self.axis_dim = axis_dim
     self.set_davg_zero = set_davg_zero
+    self.gather_g1 = gather_g1
+    self.combine_grrg = combine_grrg
+    self.update_last_g2 = self.combine_grrg
     self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
-    self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
+    if not self.update_last_g2:
+      self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
+    else:
+      self.g2_hiddens = [g2_dim for ii in range(self.nlayers)]
     self.act = get_activation_fn(activation)
     self.update_h2 = update_h2
     self.update_g1_has_grrg = update_g1_has_grrg
@@ -246,7 +253,6 @@ class DescrptSeUni(Descriptor):
     self.update_g2_has_g1g1 = update_g2_has_g1g1
     self.update_g2_has_attn = update_g2_has_attn
     self.update_style = update_style
-    self.gather_g1 = gather_g1
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -264,9 +270,11 @@ class DescrptSeUni(Descriptor):
     self.linear1 = self._linear_layers(g1_in_dims, self.g1_hiddens)
     self.linear2 = self._linear_layers(self.g2_hiddens, self.g2_hiddens)
     if update_g1_has_conv:
-      self.proj_g1g2 = self._linear_layers(self.g1_hiddens, [g2_dim]+self.g2_hiddens, bias=False)
+      tmp_g2_h = self.g2_hiddens if self.update_last_g2 else [g2_dim]+self.g2_hiddens 
+      self.proj_g1g2 = self._linear_layers(self.g1_hiddens, tmp_g2_h, bias=False)
     if update_g2_has_g1g1:
-      self.proj_g1g1g2 = self._linear_layers(self.g1_hiddens[1:], self.g2_hiddens, bias=False)
+      tmp_g1_h = self.g1_hiddens if self.update_last_g2 else self.g1_hiddens[1:]
+      self.proj_g1g1g2 = self._linear_layers(tmp_g1_h, self.g2_hiddens, bias=False)
     if update_g2_has_attn:
       self.attn2g_map = torch.nn.ModuleList(
         [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
@@ -294,7 +302,8 @@ class DescrptSeUni(Descriptor):
     """
     Returns the output dimension of this descriptor
     """
-    return self.g1_hiddens[-1]
+    add_g2_dim = self.g2_hiddens[-1]*self.axis_dim if self.combine_grrg else 0
+    return self.g1_hiddens[-1] + add_g2_dim
 
   @property
   def dim_emb(self):
@@ -316,6 +325,7 @@ class DescrptSeUni(Descriptor):
     atype:              [nb, nloc]
     """
     nframes, nloc = nlist_loc.shape[:2]
+    # nb x nloc x nnei x 4
     dmatrix, diff = prod_env_mat_se_a(
       extended_coord, nlist, atype,
       self.mean, self.stddev,
@@ -334,11 +344,15 @@ class DescrptSeUni(Descriptor):
     if self.gather_g1:
       all_g1 = [g1]
     for ll in range(self.nlayers):
+      if self.update_last_g2:
+        update_chnnl_2 = True
+      else:
+        update_chnnl_2 = (ll!=self.nlayers-1)
       g1, g2, h2 = self._one_layer(
         ll, g1, g2, h2, 
         masked_nlist_loc, 
         nlist_mask, 
-        update_chnnl_2=(ll!=self.nlayers-1),
+        update_chnnl_2=update_chnnl_2,
       )
       if self.gather_g1:
         all_g1.append(g1)
@@ -350,6 +364,10 @@ class DescrptSeUni(Descriptor):
     h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
     # (nb x nloc) x ng2 x 3
     rot_mat = torch.permute(h2g2, (0, 1, 3, 2))
+
+    if self.combine_grrg:
+      grrg = self._cal_grrg(h2g2)
+      g1 = torch.cat([g1, grrg], dim=-1)
 
     return g1, None, rot_mat.view(-1, self.dim_emb, 3)
 
@@ -426,6 +444,18 @@ class DescrptSeUni(Descriptor):
       torch.transpose(h2, -1, -2), g2) * invnnei
     return h2g2
 
+  def _cal_grrg(self, h2g2):
+    # nb x nloc x 3 x ng2
+    nb, nloc, _, ng2 = h2g2.shape
+    # nb x nloc x 3 x axis
+    h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]    
+    # nb x nloc x axis x ng2
+    g1_13 = torch.matmul(
+      torch.transpose(h2g2m, -1, -2), h2g2) / (float(3.)**1)
+    # nb x nloc x (axisxng2)
+    g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
+    return g1_13
+
   def _update_g1_grrg(self, ll, g2, h2, nlist_mask):
     # g2:  nf x nloc x nnei x ng2
     # h2:  nf x nloc x nnei x 3
@@ -434,13 +464,8 @@ class DescrptSeUni(Descriptor):
     ng2 = g2.shape[-1]
     # nb x nloc x 3 x ng2
     h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
-    # nb x nloc x 3 x axis
-    h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]    
-    # nb x nloc x axis x ng2
-    g1_13 = torch.matmul(
-      torch.transpose(h2g2m, -1, -2), h2g2) / (float(3.)**1)
     # nb x nloc x (axisxng2)
-    g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
+    g1_13 = self._cal_grrg(h2g2)
     return g1_13
 
   def _update_g2_g1g1(
