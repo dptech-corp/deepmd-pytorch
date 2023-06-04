@@ -9,24 +9,24 @@ from .dpa2_force import ForceModelDPA2
 from .dpa2_denoise_iter import DenoiseModelDPA2Iter
 
 
-def get_model(model_params, sampled=None):
+def get_model(model_params, sampled=None, set_zero_energy_bias=False):
     if model_params.get("fitting_net", None) is not None:
         if model_params.get("backbone", None) is None:
             if model_params["descriptor"]["type"] == "se_e2_a":
-                return EnergyModelSeA(model_params, sampled)
+                return EnergyModelSeA(model_params, sampled, set_zero_energy_bias=set_zero_energy_bias)
             elif model_params["descriptor"]["type"] == "se_atten":
                 if model_params["fitting_net"].get("type", "ener") == "ener":
-                    return EnergyModelDPA1(model_params, sampled)
+                    return EnergyModelDPA1(model_params, sampled, set_zero_energy_bias=set_zero_energy_bias)
                 elif "direct" in model_params["fitting_net"].get("type", "ener"):
-                    return ForceModelDPA1(model_params, sampled)
+                    return ForceModelDPA1(model_params, sampled, set_zero_energy_bias=set_zero_energy_bias)
             else:
                 raise NotImplementedError
         else:
             if model_params["backbone"]["type"] == "evo-2b":
                 if model_params["fitting_net"].get("type", "ener") == "ener":
-                    return EnergyModelDPA2(model_params, sampled)
+                    return EnergyModelDPA2(model_params, sampled, set_zero_energy_bias=set_zero_energy_bias)
                 elif "direct" in model_params["fitting_net"].get("type", "ener"):
-                    return ForceModelDPA2(model_params, sampled)
+                    return ForceModelDPA2(model_params, sampled, set_zero_energy_bias=set_zero_energy_bias)
             elif model_params["backbone"]["type"] == "evo-iter":
                 return DenoiseModelDPA2Iter(model_params, sampled)
             else:

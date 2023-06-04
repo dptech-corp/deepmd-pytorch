@@ -14,7 +14,7 @@ from deepmd_pt.model.model import BaseModel
 
 class ForceModelDPA2(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, sampled=None, set_zero_energy_bias=False):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -70,12 +70,13 @@ class ForceModelDPA2(BaseModel):
         self.fitting_net_force = DipoleFittingNetType(**fitting_param)
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled,
+                                  set_zero_energy_bias=set_zero_energy_bias)
 
         if fitting_type == 'direct_force_ener':
             self.fitting_net_ener = EnergyFittingNetType(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None, **kwargs):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].

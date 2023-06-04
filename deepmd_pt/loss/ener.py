@@ -60,9 +60,9 @@ class EnergyStdLoss(TaskLoss):
                 rmse_e = l2_ener_loss.sqrt() * atom_norm
                 more_loss['rmse_e'] = rmse_e.detach()
             else:  # use l1 and for all atoms
-                l1_ener_loss = F.l1_loss(model_pred['energy'], label['energy'], reduction="sum")
+                l1_ener_loss = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="sum")
                 loss += (pref_e * l1_ener_loss)
-                more_loss['mae_e'] = F.l1_loss(model_pred['energy'], label['energy'], reduction="mean").detach()
+                more_loss['mae_e'] = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="mean").detach()
             if mae:
                 mae_e = torch.mean(torch.abs(model_pred['energy'] - label['energy'])) * atom_norm
                 more_loss['mae_e'] = mae_e.detach()

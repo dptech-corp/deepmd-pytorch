@@ -112,11 +112,13 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
+
+        self.set_zero_energy_bias = training_params.get("set_zero_energy_bias", False)
+        self.model = get_model(deepcopy(model_params), sampled,  set_zero_energy_bias=self.set_zero_energy_bias).to(DEVICE)
 
         # Learning rate
         # TODO
-        self.warmup_steps = 0
+        self.warmup_steps = training_params.get("warmup_steps", 0)
         lr_params = config.pop("learning_rate")
         assert lr_params.pop("type", "exp"), "Only learning rate `exp` is supported!"
         lr_params["stop_steps"] = self.num_steps - self.warmup_steps
@@ -231,10 +233,10 @@ class Trainer(object):
             else:
                 pref_lr = cur_lr
             self.optimizer.zero_grad()
-            input_dict, label_dict = self.get_data(is_train=True)
+            input_dict, label_dict, batch_data = self.get_data(is_train=True)
             if self.opt_type == "Adam":
                 model_pred, loss, more_loss = self.wrapper(
-                    **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key
+                    **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key, batch_data=batch_data,
                 )
                 loss.backward()
                 self.optimizer.step()
@@ -296,12 +298,13 @@ class Trainer(object):
                     sum_natoms = 0
                     for ii in range(self.valid_numb_batch):
                         self.optimizer.zero_grad()
-                        input_dict, label_dict = self.get_data(is_train=False)
+                        input_dict, label_dict, batch_data = self.get_data(is_train=False)
                         _, loss, more_loss = self.wrapper(
                             **input_dict,
                             cur_lr=pref_lr,
                             label=label_dict,
                             task_key=task_key,
+                            batch_data=batch_data
                         )
                         # more_loss.update({"rmse": math.sqrt(loss)})
                         natoms = input_dict["natoms"][0, 0]
@@ -406,7 +409,7 @@ class Trainer(object):
         for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
-        return input_dict, label_dict
+        return input_dict, label_dict, batch_data
 
     def wandb_log(self, data: dict, step, type_suffix=""):
         if not self.wandb_enabled or self.rank != 0:

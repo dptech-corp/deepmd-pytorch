@@ -13,7 +13,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 
 from deepmd_pt.utils.finetune import load_model_params
 from deepmd_pt.utils.stat import make_stat_input
-
+from IPython import embed
 
 def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
     config = load_model_params(ckpt, finetune_model, config)

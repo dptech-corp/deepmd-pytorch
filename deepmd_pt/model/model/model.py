@@ -4,6 +4,7 @@ import logging
 import os
 from deepmd_pt.utils import env
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
+from IPython import embed
 
 
 class BaseModel(torch.nn.Module):
@@ -13,12 +14,12 @@ class BaseModel(torch.nn.Module):
         """
         super(BaseModel, self).__init__()
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, box):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, box, **kwargs):
         """Model output.
         """
         raise NotImplementedError
 
-    def compute_or_load_stat(self, model_params, fitting_param, ntypes, sampled=None):
+    def compute_or_load_stat(self, model_params, fitting_param, ntypes, sampled=None, set_zero_energy_bias=False):
         resuming = model_params.get("resuming", False)
         if not resuming:
             if sampled is not None:  # compute stat
@@ -33,8 +34,11 @@ class BaseModel(torch.nn.Module):
                     input_natoms = [item['real_natoms_vec'] for item in sampled]
                 else:
                     input_natoms = [item['natoms'] for item in sampled]
-                tmp = compute_output_stats(energy, input_natoms)
-                fitting_param['bias_atom_e'] = tmp[:, 0]
+                if not set_zero_energy_bias:
+                    tmp = compute_output_stats(energy, input_natoms)
+                    fitting_param['bias_atom_e'] = tmp[:, 0]
+                else:
+                    fitting_param['bias_atom_e'] = [0.0] * ntypes
                 if model_params.get("stat_file_path", None) is not None:
                     logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
                     if not os.path.exists(model_params["stat_file_dir"]):
@@ -60,7 +64,10 @@ class BaseModel(torch.nn.Module):
                 sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
                                                  stats["sumn"][idx_map], stats["sumr2"][idx_map], \
                                                  stats["suma2"][idx_map]
-                fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
+                if not set_zero_energy_bias:
+                    fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
+                else:
+                    fitting_param['bias_atom_e'] = [0.0] * ntypes
             self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
         else:  # resuming for checkpoint; init model params from scratch
             fitting_param['bias_atom_e'] = [0.0] * ntypes

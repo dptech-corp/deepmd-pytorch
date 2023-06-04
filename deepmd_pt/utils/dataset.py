@@ -95,6 +95,9 @@ class DeepmdDataSystem(object):
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
         self.add('virial', 9, atomic=False, must=False, high_prec=False)
+        self.add('tags', 1, atomic=True, must=False)
+        self.add('tags2', 1, atomic=True, must=False)
+        self.add('tags3', 1, atomic=True, must=False)
 
         self._sys_path = sys_path
         self.rcut = rcut

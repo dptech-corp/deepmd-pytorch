@@ -11,7 +11,7 @@ from deepmd_pt.model.model import BaseModel
 
 class EnergyModelSeA(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, sampled=None, set_zero_energy_bias=False):
         """Based on components, construct a model for energy.
 
         Args:
@@ -37,11 +37,12 @@ class EnergyModelSeA(BaseModel):
         fitting_param['embedding_width'] = self.descriptor.dim_out
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled,
+                                  set_zero_energy_bias=set_zero_energy_bias)
 
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None, **kwargs):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].

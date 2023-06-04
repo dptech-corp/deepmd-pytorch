@@ -589,7 +589,7 @@ class ResidualDeep(nn.Module):
         self.deep_layers = nn.ModuleList(deep_layers)
         if not env.ENERGY_BIAS_TRAINABLE:
             bias_atom_e = 0
-        self.final_layer = SimpleLinear(self.neuron[-1], self.out_dim, bias_atom_e)
+        self.final_layer = Linear(self.neuron[-1], self.out_dim, bias=False, init='final')
 
     def forward(self, inputs):
         """Calculate decoded embedding for each atom.
@@ -1555,14 +1555,14 @@ class Evoformer3bEncoderLayer(nn.Module):
         residual = x
         if self.pre_ln:
             x = self.self_attn_layer_norm(x)
-        # x = self.self_attn(
-        #     x,
-        #     x,
-        #     x,
-        #     nlist=nlist,
-        #     pair=pair,
-        #     mask=attn_mask,
-        # )
+        x = self.self_attn(
+            x,
+            x,
+            x,
+            nlist=nlist,
+            pair=pair,
+            mask=attn_mask,
+        )
         # x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.dropout_module(x)
         x = residual + x

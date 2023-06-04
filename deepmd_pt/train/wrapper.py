@@ -52,14 +52,15 @@ class ModelWrapper(torch.nn.Module):
         pass
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None,
-                cur_lr: Optional[torch.Tensor]=None, label: Optional[torch.Tensor]=None, task_key: Optional[torch.Tensor]=None, inference_only=False):
+                cur_lr: Optional[torch.Tensor]=None, label: Optional[torch.Tensor]=None,
+                task_key: Optional[torch.Tensor]=None, inference_only=False, batch_data=None):
         if not self.multi_task:
             task_key = "Default"
         else:
             assert task_key is not None, \
                 f"Multitask model must specify the inference task! Supported tasks are {list(self.model.keys())}."
         model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, selected, selected_type,
-                                          selected_loc=selected_loc, box=box)
+                                          selected_loc=selected_loc, box=box, batch_data=batch_data)
         if not self.inference_only and not inference_only:
             loss, more_loss = self.loss[task_key](model_pred, label, natoms=natoms, learning_rate=cur_lr)
             return model_pred, loss, more_loss

@@ -40,6 +40,8 @@ class DenoiseModelDPA2Iter(BaseModel):
         self.descriptor = DescrptGaussian(**descriptor_param)
         self.atom_type_embedding = TypeEmbedNet(ntypes, self.tebd_dim)
         self.edge_type_embedding = TypeEmbedNet(ntypes * (ntypes + 1), self.descriptor.dim_emb)
+        self.tag_encoder = nn.Embedding(3, self.tebd_dim)
+        self.tag_encoder2 = nn.Embedding(2, self.tebd_dim)
 
         # BackBone
         backbone_param = model_params.pop('backbone')
@@ -63,7 +65,8 @@ class DenoiseModelDPA2Iter(BaseModel):
         self.node_proc = NodeTaskHead(self.tebd_dim, self.pair_embed_dim, self.attention_heads)
         self.node_proc.zero_init()
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type,
+                selected_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None, batch_data=None, **kwargs):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -79,6 +82,12 @@ class DenoiseModelDPA2Iter(BaseModel):
         # coord nframes x nloc x 3
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
+        print('here iter 82')
+        embed()
+        # nframes x nloc x 1
+        tags = batch_data['tags']
+        tags2 = batch_data['tags2']
+        tags3 = batch_data['tags3']
         nframes, nloc = coord.shape[:-1]
         _, nall = extended_coord.shape[:-1]
         nnei = selected.shape[-1]
@@ -86,7 +95,7 @@ class DenoiseModelDPA2Iter(BaseModel):
         # [nframes x nloc x tebd_dim]
         atom_feature = self.atom_type_embedding(atype)
         selected_type[selected_type == -1] = self.ntypes
-        edge_type = atype.unsqueeze(-1) * (self.ntypes+1) + selected_type
+        edge_type = atype.unsqueeze(-1) * (self.ntypes + 1) + selected_type
         # [nframes x nloc x nnei x pair_dim]
         edge_feature = self.edge_type_embedding(edge_type)
         # [nframes x nloc x nnei x 2]
@@ -98,7 +107,8 @@ class DenoiseModelDPA2Iter(BaseModel):
         # atomic_feature: [nframes x nloc x tebd_dim]
         # pair_feature: [nframes x nloc x nnei x pair_dim]
         # diff: [nframes x nloc x nnei x 3]
-        atomic_feature, pair_feature, diff = self.descriptor(extended_coord, selected, atom_feature, edge_type_2dim, edge_feature)
+        atomic_feature, pair_feature, diff = self.descriptor(extended_coord, selected, atom_feature, edge_type_2dim,
+                                                             edge_feature)
 
         nnei_mask = selected != -1
         padding_selected_loc = selected_loc * nnei_mask
@@ -110,7 +120,8 @@ class DenoiseModelDPA2Iter(BaseModel):
         attn_mask = attn_mask.unsqueeze(1).repeat(1, self.attention_heads, 1, 1)
         # nframes x nloc x nnei x pair_dim
         attn_bias = pair_feature
-        output, pair = self.backbone(atomic_feature, pair=attn_bias, nlist=padding_selected_loc, attn_mask=attn_mask, pair_mask=nnei_mask)
+        output, pair = self.backbone(atomic_feature, pair=attn_bias, nlist=padding_selected_loc, attn_mask=attn_mask,
+                                     pair_mask=nnei_mask)
 
         # energy outut
         # [nframes, nloc]
