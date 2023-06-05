@@ -9,7 +9,7 @@ from .dpa2_force import ForceModelDPA2
 from .dpau_ener import EnergyModelDPAUni
 
 
-def get_model(model_params, training_data, sampled=None):
+def get_model(model_params, training_data=None, sampled=None):
     if model_params.get("fitting_net", None) is not None:
         if model_params.get("backbone", None) is None:
             if model_params["descriptor"]["type"] == "se_e2_a":
