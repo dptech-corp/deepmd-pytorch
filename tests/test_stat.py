@@ -128,7 +128,7 @@ class TestDataset(unittest.TestCase):
                         'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)
-        sumr, suma, sumn, sumr2, suma2 = my_en.compute_input_stats(sampled)
+        sumr, suma, sumn, sumr2, suma2, _ = my_en.compute_input_stats(self.data_stat_nbatch,self.my_dataset)
         my_en.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
         my_en.mean = my_en.mean
         my_en.stddev = my_en.stddev
