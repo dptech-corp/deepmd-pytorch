@@ -75,6 +75,45 @@ def make_stat_input(datasets, dataloaders, nbatches):
         lst.append(sys_stat)
     return lst
 
+def sample_system(keys, nbatch, dataloaders):
+    sys_stat = {key: [] for key in keys}
+    iterator = iter(dataloaders)
+    for _ in range(nbatch):
+        try:
+            stat_data = next(iterator)
+        except StopIteration:
+            iterator = iter(dataloaders)
+            stat_data = next(iterator)
+        for dd in stat_data:
+            if dd in keys:
+                sys_stat[dd].append(stat_data[dd].to(env.DEVICE))
+    for key in keys:
+        if key == "mapping" or key == "shift":
+            extend = max(d.shape[1] for d in sys_stat[key])
+            for jj in range(len(sys_stat[key])):
+                l = []
+                item = sys_stat[key][jj]
+                for ii in range(item.shape[0]):
+                    l.append(item[ii])
+                n_frames = len(item)
+                if key == "shift":
+                    shape = torch.zeros(
+                        (n_frames, extend, 3),
+                        dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                        device=env.DEVICE,
+                    )
+                else:
+                    shape = torch.zeros(
+                        (n_frames, extend),
+                        dtype=torch.long,
+                        device=env.DEVICE,
+                    )
+                for i in range(len(item)):
+                    natoms_tmp = l[i].shape[0]
+                    shape[i, :natoms_tmp] = l[i]
+                sys_stat[key][jj] = shape           
+        sys_stat[key] = torch.cat(sys_stat[key], dim=0)
+    return sys_stat
 
 def compute_output_stats(energy, natoms, rcond=1e-3):
     """Update mean and stddev for descriptor elements.

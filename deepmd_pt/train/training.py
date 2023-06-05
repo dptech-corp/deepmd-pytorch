@@ -85,6 +85,7 @@ class Trainer(object):
                 )
 
         # Data + Model
+        self.loader_set = training_data
         dp_random.seed(training_params["seed"])
         self.training_dataloader = DataLoader(
             training_data,
@@ -111,7 +112,7 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
+        self.model = get_model(deepcopy(model_params), self.loader_set, sampled).to(DEVICE)
 
         # Learning rate
         self.warmup_steps = training_params.get("warmup_steps", 0)
@@ -351,7 +352,7 @@ class Trainer(object):
         self.t0 = time.time()
         with logging_redirect_tqdm():
             for step_id in tqdm(
-                range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
+                range(self.num_steps), disable=None
             ):  # set to None to disable on non-TTY; disable on not rank 0
                 step(step_id)
 
