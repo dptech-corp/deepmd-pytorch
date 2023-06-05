@@ -74,7 +74,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
     def create_wrapper(self):
         model_config = copy.deepcopy(self.config['model'])
         sampled = copy.deepcopy(self.sampled)
-        dataset = copy.deepcopy(self.dataset)
+        dataset = self.dataset
         model = EnergyModelSeA(model_config, dataset, sampled).to(env.DEVICE)
         return ModelWrapper(model, self.loss)
 
