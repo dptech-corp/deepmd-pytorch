@@ -153,7 +153,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestRot):
   def setUp(self):
     model_params = model_se_e2_a
     data = make_sample(model_params)
-    sample = True
+    sampled = True
     self.type_split = False
     self.model = EnergyModelSeA(model_params, data, sampled).to(env.DEVICE)
 
@@ -161,7 +161,7 @@ class TestEnergyModelDPA1(unittest.TestCase, TestRot):
   def setUp(self):
     model_params = model_dpa1
     data = make_sample(model_params)
-    sample = True
+    sampled = True
     self.type_split = True
     self.model = EnergyModelDPA1(model_params, data, sampled).to(env.DEVICE)
 
@@ -169,7 +169,7 @@ class TestEnergyModelDPA2(unittest.TestCase, TestRot):
   def setUp(self):
     model_params = model_dpa2
     data = make_sample(model_params)
-    sample = True
+    sampled = True
     self.type_split = True
     self.model = EnergyModelDPA2(model_params, data, sampled).to(env.DEVICE)
 
@@ -178,7 +178,7 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
     model_params = model_dpau
     data = make_sample(model_params)
-    sample = True
+    sampled = True
     self.type_split = True
     self.model = EnergyModelDPAUni(model_params, data, sampled).to(env.DEVICE)
 
