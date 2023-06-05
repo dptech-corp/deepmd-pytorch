@@ -52,8 +52,8 @@ class TestForceGrad(unittest.TestCase):
         model_params = self.config['model']
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
         train_data = DpLoaderSet(training_systems, self.config['training']['training_data']['batch_size'], model_params)
-        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
-        self.model = EnergyModelSeA(self.config['model'], sampled).to(env.DEVICE)
+        sampled = True
+        self.model = EnergyModelSeA(self.config['model'], train_data, sampled).to(env.DEVICE)
 
     def get_dataset(self, system_index=0, batch_index=0):
         systems = self.config['training']['training_data']['systems']

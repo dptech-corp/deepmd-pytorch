@@ -174,9 +174,7 @@ def make_sample(model_params):
   train_data = DpLoaderSet(
     training_systems, batch_size=4, model_params=model_params.copy(),
   )
-  sampled = make_stat_input(
-    train_data.systems, train_data.dataloaders, data_stat_nbatch)
-  return sampled
+  return train_data
 
 class TestPermutation():
   def test(
@@ -200,31 +198,31 @@ class TestPermutation():
 class TestEnergyModelSeA(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_se_e2_a
-    sampled = make_sample(model_params)
+    data = make_sample(model_params)
     self.type_split = False
-    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
+    self.model = EnergyModelSeA(model_params, data, sampled = True).to(env.DEVICE)
 
 class TestEnergyModelDPA1(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpa1
-    sampled = make_sample(model_params)
+    data = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
+    self.model = EnergyModelDPA1(model_params, data, sampled = True).to(env.DEVICE)
 
 class TestEnergyModelDPA2(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpa2
-    sampled = make_sample(model_params)
+    data = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
+    self.model = EnergyModelDPA2(model_params, data, sampled = True).to(env.DEVICE)
 
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpau
-    sampled = make_sample(model_params)
+    data = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = EnergyModelDPAUni(model_params, data, sampled = True).to(env.DEVICE)
 
 
 # class TestEnergyFoo(unittest.TestCase):
@@ -264,8 +262,8 @@ class TestUnusedParams(unittest.TestCase):
       self._test_unused(model_dpau)
 
   def _test_unused(self, model_params):
-    sampled = make_sample(model_params)
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    data = make_sample(model_params)
+    self.model = EnergyModelDPAUni(model_params, data, sampled = True).to(env.DEVICE)
 
     natoms = 5
     cell = torch.rand([3, 3], dtype=dtype)

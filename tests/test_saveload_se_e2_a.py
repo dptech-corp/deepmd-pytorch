@@ -33,8 +33,7 @@ def get_dataset(config):
                               },
                               'type_map': type_map
                           })
-    data_stat_nbatch = model_config.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(dataset.systems, dataset.dataloaders, data_stat_nbatch)
+    sampled = True
     return dataset, sampled
 
 
@@ -75,7 +74,8 @@ class TestSaveLoadDPA1(unittest.TestCase):
     def create_wrapper(self):
         model_config = copy.deepcopy(self.config['model'])
         sampled = copy.deepcopy(self.sampled)
-        model = EnergyModelSeA(model_config, sampled).to(env.DEVICE)
+        dataset = copy.deepcopy(self.dataset)
+        model = EnergyModelSeA(model_config, dataset, sampled).to(env.DEVICE)
         return ModelWrapper(model, self.loss)
 
     def get_data(self):

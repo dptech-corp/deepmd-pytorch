@@ -239,7 +239,7 @@ class TestEnergy(unittest.TestCase):
                                 },
                                 'type_map': self.type_map
                             })
-        sampled = make_stat_input(my_ds.systems, my_ds.dataloaders, self.data_stat_nbatch)
+        sampled = True
         my_model = EnergyModelSeA(
             model_params={
                 'descriptor': {
@@ -256,6 +256,7 @@ class TestEnergy(unittest.TestCase):
                 'data_stat_nbatch': self.data_stat_nbatch,
                 'type_map': self.type_map,
             },
+            training_data=my_ds,
             sampled=sampled
         )
         my_model.to(DEVICE)
