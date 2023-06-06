@@ -63,7 +63,7 @@ class DescrptGaussian(Descriptor):
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
         pass
 
-    def forward(self, extended_coord, selected, atom_feature, edge_type_2dim, edge_feature):
+    def forward_old_local(self, extended_coord, selected, atom_feature, edge_type_2dim, edge_feature):
         """Calculate decoded embedding for each atom.
 
         """
@@ -101,6 +101,32 @@ class DescrptGaussian(Descriptor):
 
         attn_bias = gbf_result + edge_feature
         return atom_feature, attn_bias, diff
+
+    def forward(self, coord, atom_feature, edge_type_2dim, edge_feature):
+        ## global forward
+        """Calculate decoded embedding for each atom.
+
+        """
+        nframes, nloc, _ = coord.shape
+        # nframes x nloc x nloc x 3
+        delta_pos = coord.unsqueeze(1) - coord.unsqueeze(2)
+        # nframes x nloc x nloc
+        dist = delta_pos.norm(dim=-1).view(-1, nloc, nloc)
+        # [nframes, nloc, nloc, K]
+        gbf_feature = self.gbf(dist, edge_type_2dim)
+        edge_features = gbf_feature
+        # [nframes, nloc, K]
+        sum_edge_features = edge_features.sum(dim=-2)
+        if self.edge_proj is not None:
+            sum_edge_features = self.edge_proj(sum_edge_features)
+        # [nframes, nloc, embed_dim]
+        atom_feature = atom_feature + sum_edge_features
+
+        # [nframes, nloc, nloc, pair_dim]
+        gbf_result = self.gbf_proj(gbf_feature)
+
+        attn_bias = gbf_result + edge_feature
+        return atom_feature, attn_bias, delta_pos
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

@@ -117,10 +117,11 @@ class Trainer(object):
         self.model = get_model(deepcopy(model_params), sampled,  set_zero_energy_bias=self.set_zero_energy_bias).to(DEVICE)
 
         # Learning rate
-        # TODO
         self.warmup_steps = training_params.get("warmup_steps", 0)
+        self.gradient_max_norm = training_params.get("gradient_max_norm", 0.)
         lr_params = config.pop("learning_rate")
         assert lr_params.pop("type", "exp"), "Only learning rate `exp` is supported!"
+        assert self.num_steps - self.warmup_steps > 0, "Warm up steps must be less than total training steps!"
         lr_params["stop_steps"] = self.num_steps - self.warmup_steps
         self.lr_exp = LearningRateExp(**lr_params)
 
@@ -227,18 +228,25 @@ class Trainer(object):
 
         def step(_step_id, task_key="Default"):
             self.wrapper.train()
-            cur_lr = self.scheduler.get_last_lr()[0]
-            if _step_id < self.warmup_steps:
-                pref_lr = self.lr_exp.start_lr
-            else:
-                pref_lr = cur_lr
-            self.optimizer.zero_grad()
+            cur_lr = self.lr_exp.value(_step_id)
+            pref_lr = cur_lr
+            self.optimizer.zero_grad(set_to_none=True)
             input_dict, label_dict, batch_data = self.get_data(is_train=True)
             if self.opt_type == "Adam":
+                cur_lr = self.scheduler.get_last_lr()[0]
+                if _step_id < self.warmup_steps:
+                    pref_lr = self.lr_exp.start_lr
+                else:
+                    pref_lr = cur_lr
                 model_pred, loss, more_loss = self.wrapper(
                     **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key, batch_data=batch_data,
                 )
                 loss.backward()
+                if self.gradient_max_norm > 0.:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.wrapper.parameters(), self.gradient_max_norm)
+                    if not torch.isfinite(grad_norm).all():
+                        # check local gradnorm single GPU case, trigger NanDetector
+                        raise FloatingPointError("gradients are Nan/Inf")
                 self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == "LKF":
@@ -246,9 +254,11 @@ class Trainer(object):
                     KFOptWrapper = KFOptimizerWrapper(
                         self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                     )
-                    pref_e = self.kf_start_pref_e * (self.kf_limit_pref_e/self.kf_start_pref_e)**(_step_id/self.num_steps)
+                    pref_e = self.kf_start_pref_e * (self.kf_limit_pref_e / self.kf_start_pref_e) ** (
+                                _step_id / self.num_steps)
                     _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"], pref_e)
-                    pref_f = self.kf_start_pref_f * (self.kf_limit_pref_f/self.kf_start_pref_f)**(_step_id/self.num_steps)
+                    pref_f = self.kf_start_pref_f * (self.kf_limit_pref_f / self.kf_start_pref_f) ** (
+                                _step_id / self.num_steps)
                     p_energy, p_force = KFOptWrapper.update_force(
                         input_dict, label_dict["force"], pref_f
                     )
@@ -256,14 +266,16 @@ class Trainer(object):
                     model_pred = {"energy": p_energy, "force": p_force}
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     loss, more_loss = module.loss[task_key](
-                            model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
-                        )
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
+                    )
                 elif isinstance(self.loss, DenoiseLoss):
                     KFOptWrapper = KFOptimizerWrapper(
                         self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                     )
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                    model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1, module.loss[task_key].mask_loss_coord, label_dict["coord_mask"])
+                    model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1,
+                                                                   module.loss[task_key].mask_loss_coord,
+                                                                   label_dict["coord_mask"])
                     loss, more_loss = module.loss[task_key](
                         model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
                     )
@@ -365,10 +377,10 @@ class Trainer(object):
         if fout:
             fout.close()
 
-    def save_model(self, save_path, lr=0, step=0):
-        self.wrapper.train_infos['lr'] = lr
-        self.wrapper.train_infos['step'] = step
+    def save_model(self, save_path, lr=0., step=0):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
+        module.train_infos['lr'] = lr
+        module.train_infos['step'] = step
         torch.save(module.state_dict(), save_path)
         
     def get_data(self, is_train=True):

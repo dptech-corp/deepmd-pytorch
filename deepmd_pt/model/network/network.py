@@ -523,8 +523,9 @@ class NonLinear(nn.Module):
         self.layer2 = Linear(hidden, output_size, init="final")
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = nn.functional.gelu(x)
+        x = F.linear(x, self.layer1.weight)
+        # x = fused_ops.bias_torch_gelu(x, self.layer1.bias)
+        x = nn.GELU()(x) + self.layer1.bias
         x = self.layer2(x)
         return x
 
@@ -618,7 +619,7 @@ class TypeEmbedNet(nn.Module):
         super(TypeEmbedNet, self).__init__()
         self.embedding = Embedding(type_nums + 1, embed_dim, padding_idx=type_nums,
                                    dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        nn.init.normal_(self.embedding.weight[:-1], mean=bavg, std=stddev)
+        # nn.init.normal_(self.embedding.weight[:-1], mean=bavg, std=stddev)
 
     def forward(self, atype):
         """
@@ -1150,7 +1151,7 @@ class Evoformer2bEncoder(nn.Module):
         return atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep
 
 
-class NodeTaskHead(nn.Module):
+class NodeTaskHeadLocal(nn.Module):
     def __init__(
         self,
         embed_dim: int,
@@ -1245,6 +1246,80 @@ class NodeTaskHead(nn.Module):
         return cur_force
 
 
+class NodeTaskHead(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        pair_dim: int,
+        num_head: int,
+    ):
+        super().__init__()
+        self.layer_norm = nn.LayerNorm(embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.pair_norm = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.embed_dim = embed_dim
+        self.q_proj = Linear(embed_dim, embed_dim, bias=False, init="glorot")
+        self.k_proj = Linear(embed_dim, embed_dim, bias=False, init="glorot")
+        self.v_proj = Linear(embed_dim, embed_dim, bias=False, init="glorot")
+        self.num_heads = num_head
+        self.head_dim = embed_dim // num_head
+        self.scaling = self.head_dim ** -0.5
+        self.force_proj = Linear(embed_dim, 1, init="final", bias=False)
+        self.linear_bias = Linear(pair_dim, num_head)
+        self.dropout = 0.1
+
+    def zero_init(self):
+        nn.init.zeros_(self.force_proj.weight)
+
+    def forward(
+        self,
+        query: Tensor,
+        pair: Tensor,
+        delta_pos: Tensor,
+        attn_mask: Tensor = None,
+    ) -> Tensor:
+        nframes, nloc, _ = query.size()
+        query = self.layer_norm(query)
+        # [nframes, nloc, nloc, pair_dim]
+        pair = self.pair_norm(pair)
+
+        # [nframes, attn_head, nloc, head_dim]
+        q = (
+            self.q_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
+            * self.scaling
+        )
+        # [nframes, attn_head, nloc, head_dim]
+        k = self.k_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
+        v = self.v_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
+        # [nframes, attn_head, nloc, nloc]
+        attn = q @ k.transpose(-1, -2)
+        del q, k
+        # [nframes, attn_head, nloc, nloc]
+        bias = self.linear_bias(pair).permute(0, 3, 1, 2).contiguous()
+
+        # [nframes, attn_head, nloc, nloc]
+        attn_probs = softmax_dropout(
+            attn,
+            self.dropout,
+            self.training,
+            mask=attn_mask,
+            bias=bias.contiguous(),
+        ).view(nframes, self.num_heads, nloc, nloc)
+
+        # delta_pos: [nframes, nloc, nloc, 3]
+        # [nframes, attn_head, nloc, nloc, 3]
+        rot_attn_probs = attn_probs.unsqueeze(-1) * delta_pos.unsqueeze(1).type_as(
+            attn_probs
+        )
+        # [nframes, attn_head, 3, nloc, nloc]
+        rot_attn_probs = rot_attn_probs.permute(0, 1, 4, 2, 3)
+        # [nframes, attn_head, 3, nloc, head_dim]
+        x = rot_attn_probs @ v.unsqueeze(2)
+        # [nframes, nloc, 3, embed_dim]
+        x = x.permute(0, 3, 2, 1, 4).contiguous().view(nframes, nloc, 3, -1)
+        cur_force = self.force_proj(x).view(nframes, nloc, 3)
+        return cur_force
+
+
 class EnergyHead(nn.Module):
     def __init__(
         self,
@@ -1304,6 +1379,45 @@ class OuterProductLocal(nn.Module):
         a, b = ab.chunk(2, dim=-1)
         # [nframes, nloc, nnei, d_pair]
         z = self._opm(a, b, nlist)
+        z *= op_norm
+        return z
+
+
+class OuterProduct(nn.Module):
+    def __init__(self, d_atom, d_pair, d_hid=32):
+        super(OuterProduct, self).__init__()
+
+        self.d_atom = d_atom
+        self.d_pair = d_pair
+        self.d_hid = d_hid
+
+        self.linear_in = nn.Linear(d_atom, d_hid*2, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.linear_out = nn.Linear(d_hid**2, d_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.act = nn.GELU()
+
+    def _opm(self, a, b):
+        # [nframes, nloc, d]
+        nframes, nloc, d = a.shape
+        a = a.view(nframes, nloc, 1, d, 1)
+        b = b.view(nframes, 1, nloc, 1, d)
+        # [nframes, nloc, nloc, d, d]
+        outer = a * b
+        outer = outer.view(outer.shape[:-2] + (-1,))
+        outer = self.linear_out(outer)
+        return outer
+
+    def forward(
+        self,
+        m: torch.Tensor,
+        nlist: torch.Tensor,
+        op_mask: float,
+        op_norm: float,
+    ) -> torch.Tensor:
+        ab = self.linear_in(m)
+        ab = ab * op_mask
+        a, b = ab.chunk(2, dim=-1)
+        # [nframes, nloc, nnei, d_pair]
+        z = self._opm(a, b)
         z *= op_norm
         return z
 
@@ -1422,6 +1536,97 @@ class AttentionLocal(nn.Module):
         return o
 
 
+class Attention(nn.Module):
+    def __init__(
+            self,
+            q_dim: int,
+            k_dim: int,
+            v_dim: int,
+            head_dim: int,
+            num_heads: int,
+            gating: bool = False,
+            dropout: float = 0.0,
+    ):
+        super(Attention, self).__init__()
+
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        total_dim = head_dim * self.num_heads
+        self.total_dim = total_dim
+        self.q_dim = q_dim
+        self.gating = gating
+        self.linear_q = Linear(q_dim, total_dim, bias=False, init="glorot")
+        self.linear_k = Linear(k_dim, total_dim, bias=False, init="glorot")
+        self.linear_v = Linear(v_dim, total_dim, bias=False, init="glorot")
+        self.linear_o = Linear(total_dim, q_dim, init="final")
+        self.linear_g = None
+        if self.gating:
+            self.linear_g = Linear(q_dim, total_dim, init="gating")
+        # precompute the 1/sqrt(head_dim)
+        self.norm = head_dim ** -0.5
+        self.dropout = dropout
+
+    def forward(
+            self,
+            q: torch.Tensor,
+            k: torch.Tensor,
+            v: torch.Tensor,
+            bias: torch.Tensor,
+            mask: torch.Tensor = None,
+    ) -> torch.Tensor:
+        nframes, nloc, embed_dim = q.size()
+        g = None
+        if self.linear_g is not None:
+            # gating, use raw query input
+            # [nframes, nloc, total_dim]
+            g = self.linear_g(q)
+        # [nframes, nloc, total_dim]
+        q = self.linear_q(q)
+        q *= self.norm
+        # [nframes, nloc, total_dim]
+        k = self.linear_k(k)
+        # [nframes, nloc, total_dim]
+        v = self.linear_v(v)
+        # global
+        # q [nframes, h, nloc, d]
+        # k [nframes, h, nloc, d]
+        # v [nframes, h, nloc, d]
+        # attn [nframes, h, nloc, nloc]
+        # o [nframes, h, nloc, d]
+
+        # [nframes, h, nloc, d]
+        q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3).contiguous()
+        k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3).contiguous()
+        v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+        # [nframes, h, nloc, nloc]
+        attn = torch.matmul(q, k.transpose(-1, -2))
+        del q, k
+        # [nframes, h, nloc, nloc]
+        attn = softmax_dropout(attn, self.dropout, self.training, mask=mask, bias=bias)
+        # [nframes, h, nloc, d]
+        o = torch.matmul(attn, v)
+        del attn, v
+
+        # local
+        # q [nframes, h, nloc, 1, d]
+        # k [nframes, h, nloc, nnei, d]
+        # v [nframes, h, nloc, nnei, d]
+        # attn [nframes, h, nloc, nnei]
+        # o [nframes, h, nloc, d]
+
+        assert list(o.size()) == [nframes, self.num_heads, nloc, self.head_dim]
+        # [nframes, nloc, total_dim]
+        o = o.transpose(-2, -3).contiguous()
+        o = o.view(*o.shape[:-2], -1)
+
+        if g is not None:
+            o = torch.sigmoid(g) * o
+
+        # merge heads
+        o = self.linear_o(o)
+        return o
+
+
 class AtomAttentionLocal(nn.Module):
     def __init__(
             self,
@@ -1456,6 +1661,96 @@ class AtomAttentionLocal(nn.Module):
         return self.mha(q, k, v, nlist=nlist, bias=bias, mask=mask)
 
 
+class AtomAttention(nn.Module):
+    def __init__(
+            self,
+            q_dim: int,
+            k_dim: int,
+            v_dim: int,
+            pair_dim: int,
+            head_dim: int,
+            num_heads: int,
+            gating: bool = False,
+            dropout: float = 0.0,
+    ):
+        super(AtomAttention, self).__init__()
+
+        self.mha = Attention(
+            q_dim, k_dim, v_dim, head_dim, num_heads, gating=gating, dropout=dropout
+        )
+        self.layer_norm = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.linear_bias = Linear(pair_dim, num_heads)
+
+    def forward(
+            self,
+            q: torch.Tensor,
+            k: torch.Tensor,
+            v: torch.Tensor,
+            nlist: torch.Tensor,
+            pair: torch.Tensor,
+            mask: torch.Tensor = None,
+    ) -> torch.Tensor:
+        pair = self.layer_norm(pair)
+        bias = self.linear_bias(pair).permute(0, 3, 1, 2).contiguous()
+        return self.mha(q, k, v, bias=bias, mask=mask)
+
+
+class TriangleMultiplication(nn.Module):
+    def __init__(self, d_pair, d_hid):
+        super(TriangleMultiplication, self).__init__()
+
+        self.linear_ab_p = Linear(d_pair, d_hid * 2)
+        self.linear_ab_g = Linear(d_pair, d_hid * 2, init="gating")
+
+        self.linear_g = Linear(d_pair, d_pair, init="gating")
+        self.linear_z = Linear(d_hid, d_pair, init="final")
+
+        self.layer_norm_out = nn.LayerNorm(d_hid, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+
+    def forward(
+        self,
+        z: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+
+        # z : [nframes, nloc, nloc, pair_dim]
+
+        # [nframes, nloc, nloc, pair_dim]
+        g = self.linear_g(z)
+        if self.training:
+            ab = self.linear_ab_p(z) * torch.sigmoid(self.linear_ab_g(z))
+        else:
+            ab = self.linear_ab_p(z)
+            ab *= torch.sigmoid(self.linear_ab_g(z))
+        # [nframes, nloc, nloc, d]
+        a, b = torch.chunk(ab, 2, dim=-1)
+        del z, ab
+
+        # [nframes, d, nloc_i, nloc_k] row not trans
+        a1 = a.permute(0, 3, 1, 2)
+        # [nframes, d, nloc_k, nloc_j(i)]  trans
+        b1 = b.transpose(-1, -3)
+        # [nframes, d, nloc_i, nloc_j]
+        x = torch.matmul(a1, b1)
+        del a1, b1
+
+        # [nframes, d, nloc_k, nloc_j(i)] not trans
+        b2 = b.permute(0, 3, 1, 2)
+        # [nframes, d, nloc_i, nloc_k]  col trans # check TODO
+        a2 = a.transpose(-1, -3)
+
+        # [nframes, d, nloc_i, nloc_j]
+        x = x + torch.matmul(a2, b2)
+        del a, b, a2, b2
+
+        # [nframes, nloc_i, nloc_j, d]
+        x = x.permute(0, 2, 3, 1)
+
+        x = self.layer_norm_out(x)
+        x = self.linear_z(x)
+        return g * x
+
+
 class Evoformer3bEncoderLayer(nn.Module):
     def __init__(self,
                  nnei,
@@ -1487,9 +1782,12 @@ class Evoformer3bEncoderLayer(nn.Module):
         else:
             self.dropout_module = Dropout(dropout)
 
-        self.self_attn = AtomAttentionLocal(embedding_dim, embedding_dim, embedding_dim, pair_dim,
-                                            embedding_dim // num_attention_heads, num_attention_heads,
-                                            gating=False, dropout=attention_dropout)
+        # self.self_attn = AtomAttentionLocal(embedding_dim, embedding_dim, embedding_dim, pair_dim,
+        #                                     embedding_dim // num_attention_heads, num_attention_heads,
+        #                                     gating=False, dropout=attention_dropout)
+        self.self_attn = AtomAttention(embedding_dim, embedding_dim, embedding_dim, pair_dim,
+                                       embedding_dim // num_attention_heads, num_attention_heads,
+                                       gating=False, dropout=attention_dropout)
         # layer norm associated with the self attention layer
         self.pre_ln = pre_ln
         self.self_attn_layer_norm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
@@ -1498,7 +1796,8 @@ class Evoformer3bEncoderLayer(nn.Module):
         self.final_layer_norm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
         self.x_layer_norm_opm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.opm = OuterProductLocal(self.embedding_dim, pair_dim, d_hid=pair_hidden_dim)
+        # self.opm = OuterProductLocal(self.embedding_dim, pair_dim, d_hid=pair_hidden_dim)
+        self.opm = OuterProduct(self.embedding_dim, pair_dim, d_hid=pair_hidden_dim)
         # self.pair_layer_norm_opm = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         self.pair_layer_norm_ffn = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         self.pair_ffn = Transition(
@@ -1509,7 +1808,8 @@ class Evoformer3bEncoderLayer(nn.Module):
         self.pair_dropout = pair_dropout
         self.tri_update = tri_update
         if self.tri_update:
-            self.pair_layer_norm_tri = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.pair_layer_norm_trimul = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.pair_tri_mul = TriangleMultiplication(pair_dim, pair_hidden_dim)
 
     def update_pair(
         self,
@@ -1519,7 +1819,10 @@ class Evoformer3bEncoderLayer(nn.Module):
         op_mask,
         op_norm,
     ):
+        # local:
         # [nframes, nloc, nnei, pair_dim]
+        # global:
+        # [nframes, nloc, nloc, pair_dim]
         pair = pair + self.dropout_module(self.opm(self.x_layer_norm_opm(x), nlist, op_mask, op_norm))
         if not self.pre_ln:
             pair = self.pair_layer_norm_opm(pair)
@@ -1598,17 +1901,17 @@ class Evoformer3bEncoderLayer(nn.Module):
             input_x=(x, pair),
         )
 
-        # if self.tri_update:
-        #     residual_pair = pair
-        #     if self.pre_ln:
-        #         pair = self.pair_layer_norm_tri(pair)
-        #
-        #     pair = self.shared_dropout(
-        #         self.pair_tri_update(pair, nlist), -3, self.pair_dropout
-        #     )
-        #     pair = residual_pair + pair
-        #     if not self.pre_ln:
-        #         pair = self.pair_layer_norm_tri(pair)
+        if self.tri_update:
+            residual_pair = pair
+            if self.pre_ln:
+                pair = self.pair_layer_norm_trimul(pair)
+
+            pair = self.shared_dropout(
+                self.pair_tri_mul(pair, pair_mask), -3, self.pair_dropout
+            )
+            pair = residual_pair + pair
+            if not self.pre_ln:
+                pair = self.pair_layer_norm_trimul(pair)
 
         residual_pair = pair
         if self.pre_ln:
@@ -1664,6 +1967,7 @@ class Evoformer3bEncoder(nn.Module):
             pair, nlist, attn_mask=None, pair_mask=None
     ):
         nframes, nloc, nnei = pair.shape[:-1]
+        # TODO check
         op_mask = float(nloc) ** -0.5
         op_norm = float(nloc)
         for layer in self.layers:

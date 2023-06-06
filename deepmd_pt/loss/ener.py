@@ -70,6 +70,10 @@ class EnergyStdLoss(TaskLoss):
                 more_loss['mae_e_all'] = mae_e_all.detach()
 
         if self.has_f and 'force' in model_pred and 'force' in label:
+            if 'force_target_mask' in model_pred:
+                force_target_mask = model_pred['force_target_mask']
+            else:
+                force_target_mask = None
             if not self.use_l1_all:
                 diff_f = label['force'] - model_pred['force']
                 l2_force_loss = torch.mean(torch.square(diff_f))
@@ -78,9 +82,16 @@ class EnergyStdLoss(TaskLoss):
                 rmse_f = l2_force_loss.sqrt()
                 more_loss['rmse_f'] = rmse_f.detach()
             else:
-                l1_force_loss = F.l1_loss(label['force'], model_pred['force'], reduction="sum")
+                l1_force_loss = F.l1_loss(label['force'], model_pred['force'], reduction="none")
+                if force_target_mask is not None:
+                    l1_force_loss *= force_target_mask
+                    force_cnt = force_target_mask.squeeze(-1).sum(-1)
+                    more_loss['mae_f'] = (l1_force_loss.mean(-1).sum(-1) / force_cnt).mean()
+                    l1_force_loss = (l1_force_loss.sum(-1).sum(-1) / force_cnt).sum()
+                else:
+                    more_loss['mae_f'] = l1_force_loss.mean().detach()
+                    l1_force_loss = l1_force_loss.sum(-1).mean(-1).sum()
                 loss += (pref_f * l1_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
-                more_loss['mae_f'] = F.l1_loss(label['force'], model_pred['force'], reduction="mean").detach()
             if mae:
                 mae_f = torch.mean(torch.abs(diff_f))
                 more_loss['mae_f'] = mae_f.detach()
