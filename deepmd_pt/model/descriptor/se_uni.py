@@ -50,6 +50,8 @@ class Atten2Map(torch.nn.Module):
     g2qk = torch.permute(g2qk, (0, 1, 4, 2, 3))
     # nb x nloc x nh x nnei x nd
     g2q, g2k = torch.split(g2qk, nh, dim=2)
+    # g2q = torch.nn.functional.normalize(g2q, dim=-1)
+    # g2k = torch.nn.functional.normalize(g2k, dim=-1)
     # nb x nloc x nh x nnei x nnei
     attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
     # mask the attenmap, nb x nloc x 1 x 1 x nnei
@@ -93,6 +95,7 @@ class Atten2MultiHeadApply(torch.nn.Module):
     g2v = self.mapv(g2).view(nf, nloc, nnei, ng2, nh)    
     # nf x nloc x nh x nnei x ng2
     g2v = torch.permute(g2v, (0, 1, 4, 2, 3))    
+    # g2v = torch.nn.functional.normalize(g2v, dim=-1)
     # nf x nloc x nh x nnei x nnei
     AA = torch.permute(AA, (0, 1, 4, 2, 3))
     # nf x nloc x nh x nnei x ng2
@@ -286,6 +289,9 @@ class DescrptSeUni(Descriptor):
         [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
       self.attn2_mh_apply = torch.nn.ModuleList(
         [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
+      self.attn2_lm = torch.nn.ModuleList(
+        [torch.nn.LayerNorm(ii, elementwise_affine=True, device=mydev, dtype=mydtype)
+         for ii in self.g2_hiddens])
     if update_h2:
       self.attn2h_map = torch.nn.ModuleList(
         [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
@@ -614,6 +620,7 @@ class DescrptSeUni(Descriptor):
         AAg = self.attn2g_map[ll](g2, h2, nlist_mask)
         # nb x nloc x nnei x ng2
         g2_2 = self.attn2_mh_apply[ll](AAg, g2)
+        g2_2 = self.attn2_lm[ll](g2_2)
         g2_update.append(g2_2)
 
       if update_h2:
