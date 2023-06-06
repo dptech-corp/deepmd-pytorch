@@ -207,6 +207,7 @@ class DescrptSeUni(Descriptor):
       gather_g1: bool = False,
       combine_grrg: bool = False,
       direct_dist: bool = False,
+      do_bn_mode: str = 'no',
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
@@ -241,6 +242,7 @@ class DescrptSeUni(Descriptor):
     self.combine_grrg = combine_grrg
     self.update_last_g2 = self.combine_grrg
     self.direct_dist = direct_dist
+    self.do_bn_mode = do_bn_mode
     self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
     if not self.update_last_g2:
       self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
@@ -293,6 +295,17 @@ class DescrptSeUni(Descriptor):
     if self.gather_g1:
       self.all_g1_proj = mylinear((self.nlayers+1)*g1_dim, g1_dim)
 
+    if self.do_bn_mode == 'uniform':
+      self.bn1 = self._bn_layers(self.nlayers)
+      self.bn2 = self._bn_layers(self.nlayers)
+    elif self.do_bn_mode == 'component':
+      self.bn1 = self._bn_layers(self.nlayers, nf=g1_dim)
+      self.bn2 = self._bn_layers(self.nlayers, nf=g2_dim)
+    elif self.do_bn_mode == 'no':
+      self.bn1, self.bn2 = None, None
+    else:
+      raise RuntimeError(f"unknown bn_mode {self.do_bn_mode}")
+      
     sshape = (self.ntypes, self.nnei, 4)
     mean = torch.zeros(sshape, dtype=mydtype, device=mydev) 
     stddev = torch.ones(sshape, dtype=mydtype, device=mydev) 
@@ -391,6 +404,18 @@ class DescrptSeUni(Descriptor):
         mylinear(ii, oo, bias=bias))
     return torch.nn.ModuleList(ret)
 
+  def _bn_layers(
+          self,
+          nlayers,
+          nf: int = 1,
+  ):
+    ret = []
+    for ii in range(nlayers):
+      ret.append(torch.nn.BatchNorm1d(
+          nf, eps=1e-5, momentum=1e-1, affine=False,
+          track_running_stats=True, device=mydev, dtype=mydtype))
+    return ret
+
   def _update_h2(self, ll, g2, h2, nlist_mask):
     nb, nloc, nnei, _ = g2.shape
     # # nb x nloc x nnei x nh2
@@ -486,6 +511,52 @@ class DescrptSeUni(Descriptor):
     ret = self._apply_nlist_mask(ret, nlist_mask)
     return ret
 
+  def _apply_bn_uni(
+          self,
+          bn,
+          gg,
+          mode='1',
+  ):
+    def _apply_nb_1(bn, gg):
+      nb, nl, nf = gg.shape
+      gg = gg.view([nb, 1, nl*nf])
+      gg = bn(gg)
+      return gg.view([nb, nl, nf])
+    def _apply_nb_2(bn, gg):
+      nb, nl, nnei, nf = gg.shape
+      gg = gg.view([nb, 1, nl*nnei*nf])
+      gg = bn(gg)
+      return gg.view([nb, nl, nnei, nf])
+    if len(gg.shape)==3:
+      return _apply_nb_1(bn, gg)
+    elif len(gg.shape)==4:
+      return _apply_nb_2(bn, gg)
+    else:
+      raise RuntimeError(f'unsupported input shape {gg.shape}')
+
+  def _apply_bn_comp(
+          self,
+          bn,
+          gg,
+  ):
+    ss = gg.shape
+    nf = ss[-1]
+    gg = gg.view([-1, nf])
+    gg = bn(gg).view(ss)
+    return gg
+
+  def _apply_bn(
+          self,
+          bn,
+          gg,
+  ):
+    if self.do_bn_mode == 'uniform':
+      return self._apply_bn_uni(bn, gg)
+    elif self.do_bn_mode == 'component':
+      return self._apply_bn_comp(bn, gg)
+    else:
+      return gg
+
   def _one_layer(
       self,
       ll,       # 
@@ -514,6 +585,10 @@ class DescrptSeUni(Descriptor):
 
     # g1 = self.lmg1[ll](g1)
     # g2 = self.lmg2[ll](g2)
+    if self.bn1 is not None:
+      g1 = self._apply_bn(self.bn1[ll], g1)
+    if self.bn2 is not None:
+      g2 = self._apply_bn(self.bn2[ll], g2)
 
     g2_update = [g2]
     h2_update = [h2]
