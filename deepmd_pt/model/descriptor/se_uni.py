@@ -208,6 +208,7 @@ class DescrptSeUni(Descriptor):
       combine_grrg: bool = False,
       direct_dist: bool = False,
       do_bn_mode: str = 'no',
+      bn_momentum: float = 0.1,
       update_g1_has_conv: bool = True,
       update_g1_has_drrd: bool = True,
       update_g1_has_grrg: bool = True,
@@ -243,6 +244,7 @@ class DescrptSeUni(Descriptor):
     self.update_last_g2 = self.combine_grrg
     self.direct_dist = direct_dist
     self.do_bn_mode = do_bn_mode
+    self.bn_momentum = bn_momentum
     self.g1_hiddens = [g1_dim for ii in range(self.nlayers)]
     if not self.update_last_g2:
       self.g2_hiddens = [g2_dim for ii in range(self.nlayers-1)]
@@ -412,7 +414,7 @@ class DescrptSeUni(Descriptor):
     ret = []
     for ii in range(nlayers):
       ret.append(torch.nn.BatchNorm1d(
-          nf, eps=1e-5, momentum=1e-1, affine=False,
+          nf, eps=1e-5, momentum=self.bn_momentum, affine=False,
           track_running_stats=True, device=mydev, dtype=mydtype))
     return ret
 
