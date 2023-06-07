@@ -72,7 +72,8 @@ utils
 # Deploy
 
 This test requires cuda toolkit to be installed locally. Verify if `nvcc -V` presents.
-`deploy/test_model.py` illustrates the model interface in C++.
+`deploy/test_model.cpp` illustrates the model interface in C++.
+You may need to modify `SEL` in `test_model.cpp`, 138 for water example se_a, 40 for water example DPA1.
 
 ```bash
 cd deploy
