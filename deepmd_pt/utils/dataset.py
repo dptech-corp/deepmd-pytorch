@@ -93,6 +93,7 @@ class DeepmdDataSystem(object):
         self.add('box', 9, must=self.pbc)
         self.add('coord', 3, atomic=True, must=True)
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
+        self.add('sepABindex', 1, atomic=False, must=False)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
         self.add('virial', 9, atomic=False, must=False, high_prec=False)
 
@@ -352,7 +353,7 @@ class DeepmdDataSystem(object):
             nframes = self.file[set_name][f"coord.npy"].shape[0]
             if fast:
                 return nframes
-            for key in ['coord', 'energy', 'force', 'box']:
+            for key in ['coord', 'energy', 'force', 'box', 'sepABindex']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
                 if self._data_dict[key]['atomic']:
                     data[key] = data[key].reshape(nframes, self._natoms, -1)[:, self._idx_map, :]
@@ -530,15 +531,18 @@ class DeepmdDataSystem(object):
 
             else:
                 _coord = coord.clone()
-            batch['coord'] = _coord
-            selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec,
-                                                                                 pbc=self.pbc,
-                                                                                 type_split=self.type_split)
-            batch['selected'] = selected
-            batch['selected_loc'] = selected_loc
-            batch['selected_type'] = selected_type
-            batch['shift'] = shift
-            batch['mapping'] = mapping
+
+            if "sepABindex" in self._data_dict.keys():
+                sepABindex = int(self._data_dict["sepABindex"][0])
+                batch['coord'] = (_coord, _coord[:sepABindex], _coord[sepABindex:])
+                batch['atype'] = (clean_type, clean_type[:sepABindex], clean_type[sepABindex:])
+                batch['selected'], batch['selected_loc'], batch['selected_type'], batch['shift'], batch['mapping'] = \
+                    zip(*[make_env_mat(_coord, atype, region, rcut, sec, pbc=self.pbc, type_split=self.type_split)
+                          for _coord, atype in zip(batch['coord'], batch['atype'])])
+            else:
+                batch['coord'] = _coord
+                batch['selected'], batch['selected_loc'], batch['selected_type'], batch['shift'], batch['mapping'] = \
+                    make_env_mat(_coord, atype, region, rcut, sec, pbc=self.pbc, type_split=self.type_split)
             return batch
         else:
             batch['clean_type'] = clean_type
