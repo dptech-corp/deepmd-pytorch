@@ -357,9 +357,13 @@ class Trainer(object):
                 self.save_model(self.latest_model, lr=cur_lr, step=_step_id)
 
         self.t0 = time.time()
+        # set to None to disable on non-TTY; disable on not rank 0
+        disable_tqdm = bool(dist.get_rank()) if dist.is_initialized() else None
+        if os.environ.get("DISABLE_TQDM", False):
+            disable_tqdm = True
         with logging_redirect_tqdm():
             for step_id in tqdm(
-                range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
+                range(self.num_steps), disable=disable_tqdm
             ):  # set to None to disable on non-TTY; disable on not rank 0
                 step(step_id)
 

@@ -37,13 +37,18 @@ class DenoiseModelDPA2Iter(BaseModel):
         descriptor_param['ntypes'] = ntypes
         descriptor_param['num_pair'] = 2 * ntypes
         descriptor_param['embed_dim'] = self.tebd_dim
+        self.do_tag_embedding = descriptor_param.pop('do_tag_embedding', True)
+        self.tag_ener_pref = descriptor_param.pop('tag_ener_pref', True)
         self.descriptor = DescrptGaussian(**descriptor_param)
         self.atom_type_embedding = nn.Embedding(ntypes + 1, self.tebd_dim, padding_idx=ntypes)
         # self.atom_type_embedding = TypeEmbedNet(ntypes, self.tebd_dim)
-        self.tag_encoder = nn.Embedding(3, self.tebd_dim)
-        self.tag_encoder2 = nn.Embedding(2, self.tebd_dim)
+        if self.do_tag_embedding:
+            self.tag_encoder = nn.Embedding(3, self.tebd_dim)
+            self.tag_encoder2 = nn.Embedding(2, self.tebd_dim)
+            self.tag_type_embedding = TypeEmbedNet(10, self.descriptor.dim_emb)
+        else:
+            print('not do tag embedding!!')
         self.edge_type_embedding = TypeEmbedNet(ntypes * (ntypes + 1), self.descriptor.dim_emb)
-        self.tag_type_embedding = TypeEmbedNet(10, self.descriptor.dim_emb)
 
         # BackBone
         backbone_param = model_params.pop('backbone')
@@ -86,18 +91,24 @@ class DenoiseModelDPA2Iter(BaseModel):
         # extended_coord = extended_coord - shift
         # _, nall = extended_coord.shape[:-1]
         # nframes x nloc x 1
-        tags = batch_data['tags'].type(torch.int).squeeze(-1)
-        tags2 = batch_data['tags2'].type(torch.int).squeeze(-1)
-        tags3 = batch_data['tags3'].type(torch.int).squeeze(-1)
         nframes, nloc = coord.shape[:-1]
         nnei = selected.shape[-1]
+        if self.do_tag_embedding or self.tag_ener_pref:
+            tags = batch_data['tags'].type(torch.int).squeeze(-1)
+            tags2 = batch_data['tags2'].type(torch.int).squeeze(-1)
+        if 'tags3' in batch_data:
+            tags3 = batch_data['tags3'].type(torch.int).squeeze(-1)
+        else:
+            embed()
+            tags3 = torch.ones([nframes, nloc]).type(torch.int)
         # extended_coord.requires_grad_(True)
         # [nframes x nloc x tebd_dim]
         atom_feature = self.atom_type_embedding(atype)
         # [nframes x nloc x tebd_dim]
-        tags2_emb = self.tag_encoder(tags2)
-        tags3_emb = self.tag_encoder2(tags3)
-        atom_feature = atom_feature + tags2_emb + tags3_emb
+        if self.do_tag_embedding:
+            tags2_emb = self.tag_encoder(tags2)
+            tags3_emb = self.tag_encoder2(tags3)
+            atom_feature = atom_feature + tags2_emb + tags3_emb
 
 
         # global TODO
@@ -109,11 +120,12 @@ class DenoiseModelDPA2Iter(BaseModel):
         )
         # [nframes x nloc x nloc]
         edge_type = atype.unsqueeze(-1) * (self.ntypes + 1) + atype.unsqueeze(-2)
-        tag_pair = tags.unsqueeze(-1) * 3 + tags.unsqueeze(-2)
         # [nframes x nloc x nloc x pair_dim]
-        edge_embedding = self.edge_type_embedding(edge_type)
-        tag_embedding = self.tag_type_embedding(tag_pair)
-        edge_feature = edge_embedding + tag_embedding
+        edge_feature = self.edge_type_embedding(edge_type)
+        if self.do_tag_embedding:
+            tag_pair = tags.unsqueeze(-1) * 3 + tags.unsqueeze(-2)
+            tag_embedding = self.tag_type_embedding(tag_pair)
+            edge_feature = edge_feature + tag_embedding
 
         atomic_feature, pair_feature, delta_pos = self.descriptor(coord, atom_feature, edge_type_2dim, edge_feature)
         # nframes x nloc x nnei x pair_dim
@@ -153,7 +165,10 @@ class DenoiseModelDPA2Iter(BaseModel):
         energy_out = self.engergy_proj(output).view(nframes, nloc)
 
         # nframes x nloc
-        energy_factor = self.energe_agg_factor(tags).view(nframes, nloc)
+        if self.tag_ener_pref:
+            energy_factor = self.energe_agg_factor(tags).view(nframes, nloc)
+        else:
+            energy_factor = self.energe_agg_factor(torch.zeros_like(tags3)).view(nframes, nloc)
         energy_out = (energy_out * energy_factor)
         energy_out *= (tags3 > 0).type_as(energy_out)
         energy_out = energy_out.sum(dim=-1)
