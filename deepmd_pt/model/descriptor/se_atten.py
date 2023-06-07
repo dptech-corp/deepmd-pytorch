@@ -8,7 +8,7 @@ try:
     from typing import Final
 except:
     from torch.jit import Final
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, List
 
 from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
@@ -38,6 +38,7 @@ class DescrptSeAtten(Descriptor):
                  head_num=1,
                  normalize=True,
                  temperature=None,
+                 return_rot=False,
                  **kwargs):
         """Construct an embedding net of type `se_atten`.
 
@@ -68,6 +69,7 @@ class DescrptSeAtten(Descriptor):
         self.head_num = head_num
         self.normalize = normalize
         self.temperature = temperature
+        self.return_rot = return_rot
 
         if isinstance(sel, int):
             sel = [sel]
@@ -167,7 +169,7 @@ class DescrptSeAtten(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd):
+    def forward(self, extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)-> List[Tensor]:
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -201,10 +203,13 @@ class DescrptSeAtten(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
-                ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
-                rot_mat.view(-1, self.filter_neuron[-1], 3)
-
+        if not self.return_rot:
+            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
+                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff
+        else:
+            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
+                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
+                   rot_mat.view(-1, self.filter_neuron[-1], 3)
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):
     """Collect avg, square avg and count of descriptors in a batch."""

@@ -81,7 +81,7 @@ class EnergyModelDPA1(BaseModel):
         selected_type[selected_type == -1] = self.ntypes
         nlist_tebd = self.type_embedding(selected_type)
 
-        descriptor, env_mat, _, _ = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
+        descriptor, env_mat, _ = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
         atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
