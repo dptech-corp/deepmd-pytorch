@@ -1,7 +1,7 @@
 #include <torch/script.h> // One-stop header.
-
 #include <iostream>
 #include <memory>
+#define SEL 40
 
 int main(int argc, const char* argv[]) {
   if (argc != 2) {
@@ -27,19 +27,19 @@ int main(int argc, const char* argv[]) {
   long mapping_value[3] = {0, 1, 2};
   at::Tensor mapping = torch::from_blob(mapping_value, {1, 3}, int_options).to(device);
   at::Tensor shift = at::zeros({1, 3, 3}, options).to(device);
-  long selected_value[3*138] = {};
+  long selected_value[3*SEL] = {};
   for (int i=0; i<3; i++)
   {
-    for (int j=0; j<138; j++)
+    for (int j=0; j<SEL; j++)
     {
-      selected_value[i*138+j] = -1;
+      selected_value[i*SEL+j] = -1;
     }
   }
   selected_value[0] = 1;
   selected_value[1] = 2;
-  selected_value[138] = 0;
-  selected_value[138*2] = 0;
-  at::Tensor selected = torch::from_blob(selected_value, {1, 3, 138}, int_options).to(device);
+  selected_value[SEL] = 0;
+  selected_value[SEL*2] = 0;
+  at::Tensor selected = torch::from_blob(selected_value, {1, 3, SEL}, int_options).to(device);
   double box_value[9] = {10, 0, 0, 0, 10, 0, 0, 0, 10};
   at::Tensor box = torch::from_blob(box_value, {1, 3, 3}, options).to(device);
   // at::Tensor box = torch::randn({1, 3, 3}, options).to(device);
@@ -51,8 +51,8 @@ int main(int argc, const char* argv[]) {
   inputs.push_back(mapping);
   inputs.push_back(shift);
   inputs.push_back(selected);
-  inputs.push_back(box); //selected_type, unused for se_a
-  inputs.push_back(box); //selected_loc, unused for se_a
+  inputs.push_back(selected*0); //selected_type, unused for se_a
+  inputs.push_back(selected*0); //selected_loc, unused for se_a
   inputs.push_back(box);
   c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
   c10::IValue energy = outputs.at("energy");
