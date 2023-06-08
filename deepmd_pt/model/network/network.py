@@ -156,7 +156,9 @@ class SimpleLinear(torch.nn.Module):
                  bavg=0.,
                  stddev=1.,
                  use_timestep=False,
-                 activate=None):
+                 activate=None,
+                 bias: bool = True,
+                 ):
         """Construct a linear layer.
 
         Args:
@@ -173,15 +175,19 @@ class SimpleLinear(torch.nn.Module):
 
         self.matrix = torch.nn.Parameter(data=Tensor(num_in, num_out))
         torch.nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
-        self.bias = torch.nn.Parameter(data=Tensor(1, num_out))
-        torch.nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
+        if bias:
+          self.bias = torch.nn.Parameter(data=Tensor(1, num_out))
+          torch.nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
+        else:
+          self.bias = None
         if self.use_timestep:
             self.idt = torch.nn.Parameter(data=Tensor(1, num_out))
             torch.nn.init.normal_(self.idt.data, mean=0.1, std=0.001)
 
     def forward(self, inputs):
-        """Return X*W+b."""
-        hidden = torch.matmul(inputs, self.matrix) + self.bias
+        """Return X*W+b."""        
+        xw = torch.matmul(inputs, self.matrix)
+        hidden = xw + self.bias if self.bias is not None else xw
         hidden = self.activate(hidden)
         if self.use_timestep:
             hidden = hidden * self.idt
@@ -395,7 +401,7 @@ class NeighborWiseAttentionLayer(torch.nn.Module):
 
 class GatedSelfAttetion(torch.nn.Module):
     def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None):
+                 head_num=1, normalize=True, temperature=None, bias=True):
         """Construct a neighbor-wise attention net.
         """
         super(GatedSelfAttetion, self).__init__()
@@ -410,8 +416,8 @@ class GatedSelfAttetion(torch.nn.Module):
         else:
             self.scaling = temperature
         self.normalize = normalize
-        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False)
-        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False)
+        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=bias)
+        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=bias)
 
     def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
         """

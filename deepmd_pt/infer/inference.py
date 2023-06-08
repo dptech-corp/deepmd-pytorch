@@ -33,7 +33,7 @@ class Tester(object):
         dp_random.seed(training_params['seed'])
         self.dataset_params = training_params.pop('validation_data')
         self.type_split = True
-        if model_params['descriptor']['type'] in ['se_atten']:
+        if model_params['descriptor']['type'] in ['se_atten', 'se_uni']:
             self.type_split = False
         self.model_params = deepcopy(model_params)
 

@@ -4,7 +4,7 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -28,6 +28,30 @@ model_se_e2_a = {
     "seed": 1,
   },
   "data_stat_nbatch": 20,
+}
+
+
+model_dpau = {
+  "type_map": ["O","H"],
+  "descriptor": {
+    "type": "se_uni",
+    "sel": [11],
+    "rcut_smth": 0.5,
+    "rcut": 4.0,
+    "update_g1_has_conv": True,
+    "update_g1_has_drrd": True,
+    "update_g1_has_grrg": True,
+    "update_g1_has_attn": True,
+    "update_g2_has_g1g1": True,
+    "update_g2_has_attn": True,
+    "update_h2": True,
+    "_comment": " that's all"
+  },
+  "fitting_net": {
+    "neuron": [24, 24, 24],
+    "resnet_dt": True,
+    "seed": 1,
+  },
 }
 
 model_dpa1 = {
@@ -91,7 +115,7 @@ model_dpa2 = {
     "type": "evo-2b",
     "layer_num": 6,
     "attn_head": 8,
-    "feature_dim": 600,
+    "feature_dim": 128,
     "ffn_dim": 1024,
     "post_ln": False,
     "final_layer_norm": True,
@@ -114,6 +138,7 @@ def infer_model(
     coord,
     cell,
     atype,
+    type_split: bool=True,
 ):
   rcut = model.descriptor.rcut
   sec = model.descriptor.sec
@@ -125,7 +150,7 @@ def infer_model(
     region = None
   # inputs: coord, atype, regin; rcut, sec
   selected, selected_loc, selected_type, merged_coord_shift, merged_mapping = \
-    make_env_mat(coord, atype, region, rcut, sec)
+    make_env_mat(coord, atype, region, rcut, sec, type_split=type_split)
   # add batch dim
   [batch_coord, batch_atype, batch_shift, batch_mapping, batch_selected, batch_selected_loc, batch_selected_type] = \
     [torch.unsqueeze(ii,0) for ii in \
@@ -164,8 +189,8 @@ class TestPermutation():
     coord = torch.matmul(coord, cell)
     atype = torch.IntTensor([0, 0, 0, 1, 1])      
     idx_perm = [1, 0, 4, 3, 2]    
-    ret0 = infer_model(self.model, coord, cell, atype)
-    ret1 = infer_model(self.model, coord[idx_perm], cell, atype[idx_perm])
+    ret0 = infer_model(self.model, coord, cell, atype, type_split=self.type_split)
+    ret1 = infer_model(self.model, coord[idx_perm], cell, atype[idx_perm], type_split=self.type_split)
     prec = 1e-10
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
     torch.testing.assert_close(ret0['force'][idx_perm], ret1['force'], rtol=prec, atol=prec)
@@ -176,20 +201,98 @@ class TestEnergyModelSeA(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_se_e2_a
     sampled = make_sample(model_params)
+    self.type_split = False
     self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpa1
     sampled = make_sample(model_params)
+    self.type_split = True
     self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA2(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpa2
     sampled = make_sample(model_params)
+    self.type_split = True
     self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
 
+
+class TestEnergyModelDPAUni(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpau
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+
+
+# class TestEnergyFoo(unittest.TestCase):
+#   def test(self):
+#     model_params = model_dpau
+#     sampled = make_sample(model_params)
+#     self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+
+#     natoms = 5
+#     cell = torch.rand([3, 3], dtype=dtype)
+#     cell = (cell + cell.T) + 5. * torch.eye(3)
+#     coord = torch.rand([natoms, 3], dtype=dtype)
+#     coord = torch.matmul(coord, cell)
+#     atype = torch.IntTensor([0, 0, 0, 1, 1])      
+#     idx_perm = [1, 0, 4, 3, 2]    
+#     ret0 = infer_model(self.model, coord, cell, atype, type_split=True)
+
+
+class TestUnusedParams(unittest.TestCase):
+  def test_unused(self):    
+    import itertools
+    for conv, drrd, grrg, attn1, g1g1, attn2, h2 in \
+        itertools.product([True,False], [True,False], [True,False], [True,False], [True,False], [True,False], [True,False]):
+      if (not drrd) and (not grrg) and h2:
+        # skip the case h2 is not envolved
+        continue
+      if (not grrg) and (not conv):
+        # skip the case g2 is not envolved
+        continue
+      model_dpau["descriptor"]["update_g1_has_conv"] = conv
+      model_dpau["descriptor"]["update_g1_has_drrd"] = drrd
+      model_dpau["descriptor"]["update_g1_has_grrg"] = grrg
+      model_dpau["descriptor"]["update_g1_has_attn"] = attn1
+      model_dpau["descriptor"]["update_g2_has_g1g1"] = g1g1
+      model_dpau["descriptor"]["update_g2_has_attn"] = attn2
+      model_dpau["descriptor"]["update_h2"] = h2
+      self._test_unused(model_dpau)
+
+  def _test_unused(self, model_params):
+    sampled = make_sample(model_params)
+    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+
+    natoms = 5
+    cell = torch.rand([3, 3], dtype=dtype)
+    cell = (cell + cell.T) + 5. * torch.eye(3)
+    coord = torch.rand([natoms, 3], dtype=dtype)
+    coord = torch.matmul(coord, cell)
+    atype = torch.IntTensor([0, 0, 0, 1, 1])      
+    idx_perm = [1, 0, 4, 3, 2]    
+    ret0 = infer_model(self.model, coord, cell, atype, type_split=True)
+    
+    # use computation graph to find all contributing tensors
+    def get_contributing_params(y, top_level=True):
+        nf = y.grad_fn.next_functions if top_level else y.next_functions
+        for f, _ in nf:
+            try:
+                yield f.variable
+            except AttributeError:
+                pass  # node has no tensor
+            if f is not None:
+                yield from get_contributing_params(f, top_level=False)
+
+    contributing_parameters = set(get_contributing_params(ret0['energy']))
+    all_parameters = set(self.model.parameters())
+    non_contributing = all_parameters - contributing_parameters
+    for ii in non_contributing:
+      print(ii.shape)
+    self.assertEqual(len(non_contributing), 0)
 
 
 if __name__ == '__main__':

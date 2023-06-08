@@ -3,6 +3,7 @@ import os
 import torch
 import time
 import math
+from copy import deepcopy
 
 from typing import Any, Dict
 from deepmd_pt.utils import dp_random
@@ -36,6 +37,7 @@ class Trainer(object):
         validation_data=None,
         resume_from=None,
         force_load=False,
+        finetune_model=None,
     ):
         """Construct a DeePMD trainer.
 
@@ -109,13 +111,15 @@ class Trainer(object):
             )
         else:
             self.valid_numb_batch = 1
-        model_params["resuming"] = (resume_from is not None)
-        self.model = get_model(model_params, sampled).to(DEVICE)
+        self.model = get_model(deepcopy(model_params), sampled).to(DEVICE)
 
         # Learning rate
+        self.warmup_steps = training_params.get("warmup_steps", 0)
+        self.gradient_max_norm = training_params.get("gradient_max_norm", 0.)
         lr_params = config.pop("learning_rate")
         assert lr_params.pop("type", "exp"), "Only learning rate `exp` is supported!"
-        lr_params["stop_steps"] = self.num_steps
+        assert self.num_steps - self.warmup_steps > 0, "Warm up steps must be less than total training steps!"
+        lr_params["stop_steps"] = self.num_steps - self.warmup_steps
         self.lr_exp = LearningRateExp(**lr_params)
 
         # Loss
@@ -133,11 +137,14 @@ class Trainer(object):
         # Model Wrapper
         if JIT:
             self.model = torch.jit.script(self.model)
-        self.wrapper = ModelWrapper(self.model, self.loss)
+        self.wrapper = ModelWrapper(self.model, self.loss, model_params=model_params)
 
-        if (resume_from is not None) and (self.rank == 0):
-            logging.info(f"Resuming from {resume_from}.")
-            state_dict = torch.load(resume_from)
+        # resuming and finetune
+        if model_params["resuming"] and (self.rank == 0):
+            ntest = model_params.get("data_bias_nsample", 10)
+            origin_model = finetune_model if finetune_model is not None else resume_from
+            logging.info(f"Resuming from {origin_model}.")
+            state_dict = torch.load(origin_model)
             if force_load:
                 input_keys = list(state_dict.keys())
                 target_keys = list(self.wrapper.state_dict().keys())
@@ -158,6 +165,21 @@ class Trainer(object):
                     slim_keys = [i + '.*' for i in slim_keys]
                     logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
+            # finetune
+            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
+                assert model_params["descriptor"]["type"] in [
+                    "se_atten"
+                ] and model_params["fitting_net"].get("type", "ener") in [
+                    "ener"
+                ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+                old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
+                self.model.fitting_net.change_energy_bias(
+                    config,
+                    self.model,
+                    old_type_map,
+                    new_type_map,
+                    ntest=ntest,
+                )
 
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)
@@ -168,13 +190,19 @@ class Trainer(object):
                 output_device=LOCAL_RANK
             )
 
+        def warm_up_linear(step, warmup_steps):
+            if step < warmup_steps:
+                return step / warmup_steps
+            else:
+                return self.lr_exp.value(step - warmup_steps) / self.lr_exp.start_lr
+
         if self.opt_type == "Adam":
             self.optimizer = torch.optim.Adam(
                 self.wrapper.parameters(), lr=self.lr_exp.start_lr
             )
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
-                lambda step: self.lr_exp.value(step) / self.lr_exp.start_lr,
+                lambda step: warm_up_linear(step, self.warmup_steps),
             )
         elif self.opt_type == "LKF":
             self.optimizer = LKFOptimizer(
@@ -197,14 +225,26 @@ class Trainer(object):
             logging.info(f"Rank: {dist.get_rank()}/{dist.get_world_size()}")
 
         def step(_step_id, task_key="Default"):
+            self.wrapper.train()
             cur_lr = self.lr_exp.value(_step_id)
+            pref_lr = cur_lr
             self.optimizer.zero_grad(set_to_none=True)
             input_dict, label_dict = self.get_data(is_train=True)
             if self.opt_type == "Adam":
+                cur_lr = self.scheduler.get_last_lr()[0]
+                if _step_id < self.warmup_steps:
+                    pref_lr = self.lr_exp.start_lr
+                else:
+                    pref_lr = cur_lr
                 model_pred, loss, more_loss = self.wrapper(
-                    **input_dict, cur_lr=cur_lr, label=label_dict, task_key=task_key
+                    **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key
                 )
                 loss.backward()
+                if self.gradient_max_norm > 0.:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.wrapper.parameters(), self.gradient_max_norm)
+                    if not torch.isfinite(grad_norm).all():
+                        # check local gradnorm single GPU case, trigger NanDetector
+                        raise FloatingPointError("gradients are Nan/Inf")
                 self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == "LKF":
@@ -222,7 +262,7 @@ class Trainer(object):
                     model_pred = {"energy": p_energy, "force": p_force}
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     loss, more_loss = module.loss[task_key](
-                            model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                            model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
                         )
                 elif isinstance(self.loss, DenoiseLoss):
                     KFOptWrapper = KFOptimizerWrapper(
@@ -231,13 +271,14 @@ class Trainer(object):
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     model_pred = KFOptWrapper.update_denoise_coord(input_dict, label_dict["clean_coord"], 1, module.loss[task_key].mask_loss_coord, label_dict["coord_mask"])
                     loss, more_loss = module.loss[task_key](
-                        model_pred, label_dict, input_dict["natoms"], learning_rate=cur_lr
+                        model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
                     )
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
 
             # Log and persist
             if _step_id % self.disp_freq == 0:
+                self.wrapper.eval()
                 # training
                 train_results = {}
                 valid_results = {}
@@ -266,7 +307,7 @@ class Trainer(object):
                         input_dict, label_dict = self.get_data(is_train=False)
                         _, loss, more_loss = self.wrapper(
                             **input_dict,
-                            cur_lr=cur_lr,
+                            cur_lr=pref_lr,
                             label=label_dict,
                             task_key=task_key,
                         )
@@ -306,7 +347,7 @@ class Trainer(object):
                 self.latest_model = self.latest_model.with_name(f"{self.latest_model.stem}_{_step_id+1}{self.latest_model.suffix}")
                 logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.latest_model)
+                self.save_model(self.latest_model, lr=cur_lr, step=_step_id)
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
@@ -326,13 +367,18 @@ class Trainer(object):
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
-                module = self.wrapper.module if dist.is_initialized() else self.wrapper
-                torch.save(module.state_dict(), self.save_ckpt)
-            logging.info(f"Trained model weight has been saved to {self.save_ckpt}")
+                self.save_model(self.save_ckpt, lr=0, step=self.num_steps)
+            logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
         if fout:
             fout.close()
 
+    def save_model(self, save_path, lr=0., step=0):
+        module = self.wrapper.module if dist.is_initialized() else self.wrapper
+        module.train_infos['lr'] = lr
+        module.train_infos['step'] = step
+        torch.save(module.state_dict(), save_path)
+        
     def get_data(self, is_train=True):
         if is_train:
             try:

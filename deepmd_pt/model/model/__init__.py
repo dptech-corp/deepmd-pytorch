@@ -6,6 +6,7 @@ from .dpa2_ener import EnergyModelDPA2
 from .dpa1_denoise import DenoiseModelDPA1
 from .dpa1_force import ForceModelDPA1
 from .dpa2_force import ForceModelDPA2
+from .dpau_ener import EnergyModelDPAUni
 
 
 def get_model(model_params, sampled=None):
@@ -18,6 +19,8 @@ def get_model(model_params, sampled=None):
                     return EnergyModelDPA1(model_params, sampled)
                 elif "direct" in model_params["fitting_net"].get("type", "ener"):
                     return ForceModelDPA1(model_params, sampled)
+            elif model_params["descriptor"]["type"] == "se_uni":
+                return EnergyModelDPAUni(model_params, sampled)
             else:
                 raise NotImplementedError
         else:
