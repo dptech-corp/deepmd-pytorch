@@ -2,9 +2,10 @@ import numpy as np
 import os
 import torch
 
-GLOBAL_NP_FLOAT_PRECISION = np.float64
-GLOBAL_PT_FLOAT_PRECISION = torch.float64
-GLOBAL_ENER_FLOAT_PRECISION = np.float64
+PRECISION = os.environ.get("PRECISION", "float64")
+GLOBAL_NP_FLOAT_PRECISION = getattr(np, PRECISION)
+GLOBAL_PT_FLOAT_PRECISION = getattr(torch, PRECISION)
+GLOBAL_ENER_FLOAT_PRECISION = getattr(np, PRECISION)
 
 # Make sure DDP uses correct device if applicable
 LOCAL_RANK = os.environ.get("LOCAL_RANK")
