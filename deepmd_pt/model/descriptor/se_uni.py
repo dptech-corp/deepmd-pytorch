@@ -553,7 +553,7 @@ class DescrptSeUni(Descriptor):
       mixed_type = merged.systems[0].mixed_type
       if mixed_type:
         keys.append("real_natoms_vec")
-      for item in merged.dataloaders:  # 逐个 system 的分析
+      for item in merged.dataloaders:  #sample from each system, the intermediate results would not be saved
           system = sample_system(keys, nbatch, item)
           index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
           extended_coord = torch.gather(system['coord'], dim=1, index=index)
