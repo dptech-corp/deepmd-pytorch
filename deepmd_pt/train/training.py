@@ -392,7 +392,10 @@ class Trainer(object):
                 )
                 batch_data = next(iter(self.validation_data))
         for key in batch_data.keys():
-            batch_data[key] = batch_data[key].to(DEVICE)
+            if type(batch_data[key]) in [list, tuple]:
+                batch_data[key] = tuple([data.to(DEVICE) for data in batch_data[key]])
+            else:
+                batch_data[key] = batch_data[key].to(DEVICE)
         input_dict = {}
         for item in [
             "coord",

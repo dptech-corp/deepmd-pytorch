@@ -68,6 +68,7 @@ class DeepmdDataSystem(object):
         self._natoms = len(self._atom_type)
 
         self._type_map = self._load_type_map(sys_path)
+        self._sepABindex = self._load_sepABindex(sys_path)
         self.enforce_type_map = False
         if type_map is not None and self._type_map is not None:
             if not self.mixed_type:
@@ -276,6 +277,19 @@ class DeepmdDataSystem(object):
             else:
                 return None
 
+    def _load_sepABindex(self, sys_path):
+        if not self.file is None:
+            tmp = self.file['sepABindex.raw'][:].astype(int)
+            return tmp
+        else:
+            fname = os.path.join(sys_path, 'sepABindex.raw')
+            if os.path.isfile(fname):
+                with open(fname, 'r') as fin:
+                    content = fin.read()
+                return np.array(content.split()).astype(int)
+            else:
+                return None
+
     def _check_mode(self, sys_path):
         return os.path.isfile(sys_path + "/real_atom_types.npy")
 
@@ -309,6 +323,8 @@ class DeepmdDataSystem(object):
                     high_prec=self._data_dict[kk]['high_prec'],
                     must=self._data_dict[kk]['must']
                 )
+            data['find_sepABindex'] = np.float32(1.0) if self._sepABindex else np.float32(0.0)
+            data['sepABindex'] = self._sepABindex
             if self.mixed_type:
                 # nframes x natoms
                 atom_type_mix = self._load_type_mix(set_name)
@@ -353,10 +369,12 @@ class DeepmdDataSystem(object):
             nframes = self.file[set_name][f"coord.npy"].shape[0]
             if fast:
                 return nframes
-            for key in ['coord', 'energy', 'force', 'box', 'sepABindex']:
+            for key in ['coord', 'energy', 'force', 'box']:
                 data[key] = self.file[set_name][f"{key}.npy"][:]
                 if self._data_dict[key]['atomic']:
                     data[key] = data[key].reshape(nframes, self._natoms, -1)[:, self._idx_map, :]
+            data['find_sepABindex'] = np.float32(1.0) if self._sepABindex else np.float32(0.0)
+            data['sepABindex'] = self._sepABindex
             if self.mixed_type:
                 # nframes x natoms
                 atom_type_mix = self._load_type_mix(set_name)
@@ -499,7 +517,7 @@ class DeepmdDataSystem(object):
     # note: this function needs to be optimized for single frame process
     def single_preprocess(self, batch, sid):
         for kk in self._data_dict.keys():
-            if "find_" in kk:
+            if "find_" in kk or "sepABindex" in kk:
                 pass
             else:
                 batch[kk] = torch.tensor(batch[kk][sid], dtype=env.GLOBAL_PT_FLOAT_PRECISION,
@@ -509,6 +527,8 @@ class DeepmdDataSystem(object):
         for kk in ['type', 'real_natoms_vec']:
             if kk in batch.keys():
                 batch[kk] = torch.tensor(batch[kk][sid], dtype=torch.long, device=env.PREPROCESS_DEVICE)
+        if batch["find_sepABindex"]:
+            sepABindex = int(batch.pop('sepABindex')[0])
         clean_coord = batch.pop('coord')
         clean_type = batch.pop('type')
         nloc = clean_type.shape[0]
@@ -532,8 +552,7 @@ class DeepmdDataSystem(object):
             else:
                 _coord = coord.clone()
 
-            if "sepABindex" in self._data_dict.keys():
-                sepABindex = int(self._data_dict["sepABindex"][0])
+            if batch["find_sepABindex"]:
                 batch['coord'] = (_coord, _coord[:sepABindex], _coord[sepABindex:])
                 batch['atype'] = (clean_type, clean_type[:sepABindex], clean_type[sepABindex:])
                 batch['selected'], batch['selected_loc'], batch['selected_type'], batch['shift'], batch['mapping'] = \

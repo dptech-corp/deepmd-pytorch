@@ -180,10 +180,40 @@ def collate_tensor_fn(batch):
     if torch.utils.data.get_worker_info() is not None:
         # If we're in a background process, concatenate directly into a
         # shared memory tensor to avoid an extra copy
-        numel = sum(x.numel() for x in batch)
-        storage = elem._typed_storage()._new_shared(numel, device=elem.device)
-        out = elem.new(storage).resize_(len(batch), *list(elem.size()))
-    return torch.stack(batch, 0, out=out)
+        if type(elem) == tuple:
+            col = []
+            for i in range(len(elem)):
+                numel = sum(x[i].numel() for x in batch)
+                storage = elem[i]._typed_storage()._new_shared(numel, device=elem[i].device)
+                out = elem[i].new(storage).resize_(len(batch), *list(elem[i].size()))
+                col.append(torch.stack([x[i] for x in batch], 0, out=out))
+            return tuple(col)
+        else:
+            numel = sum(x.numel() for x in batch)
+            storage = elem._typed_storage()._new_shared(numel, device=elem.device)
+            out = elem.new(storage).resize_(len(batch), *list(elem.size()))
+            return torch.stack(batch, 0, out=out)
+
+
+def collate_with_padding(batch_value, key):
+    natoms_extended = max([d.shape[0] for d in batch_value])
+    n_frames = len(batch_value)
+    if key == "shift":
+        result = torch.zeros(
+            (n_frames, natoms_extended, 3),
+            dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+            device=env.PREPROCESS_DEVICE,
+        )
+    else:
+        result = torch.zeros(
+            (n_frames, natoms_extended),
+            dtype=torch.long,
+            device=env.PREPROCESS_DEVICE,
+        )
+    for i in range(len(batch_value)):
+        natoms_tmp = batch_value[i].shape[0]
+        result[i, :natoms_tmp] = batch_value[i]
+    return result
 
 
 def collate_batch(batch):
@@ -191,26 +221,10 @@ def collate_batch(batch):
     result = example.copy()
     for key in example.keys():
         if key == "shift" or key == "mapping":
-            natoms_extended = max([d[key].shape[0] for d in batch])
-            n_frames = len(batch)
-            list = []
-            for x in range(n_frames):
-                list.append(batch[x][key])
-            if key == "shift":
-                result[key] = torch.zeros(
-                    (n_frames, natoms_extended, 3),
-                    dtype=env.GLOBAL_PT_FLOAT_PRECISION,
-                    device=env.PREPROCESS_DEVICE,
-                )
+            if type(example[key]) == tuple:
+                result[key] = tuple([collate_with_padding(arr, key) for arr in zip(*[d[key] for d in batch])])
             else:
-                result[key] = torch.zeros(
-                    (n_frames, natoms_extended),
-                    dtype=torch.long,
-                    device=env.PREPROCESS_DEVICE,
-                )
-            for i in range(len(batch)):
-                natoms_tmp = list[i].shape[0]
-                result[key][i, :natoms_tmp] = list[i]
+                result[key] = collate_with_padding([d[key] for d in batch], key)
         elif "find_" in key:
             result[key] = batch[0][key]
         else:
