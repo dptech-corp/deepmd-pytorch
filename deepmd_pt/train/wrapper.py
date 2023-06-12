@@ -59,9 +59,9 @@ class ModelWrapper(torch.nn.Module):
             assert task_key is not None, \
                 f"Multitask model must specify the inference task! Supported tasks are {list(self.model.keys())}."
         if type(coord) in [list, tuple]:
-            model_preds = [self.model[task_key](coord[i], atype[i], natoms[i], mapping[i], shift[i], selected[i], selected_type[i],
+            model_preds = [self.model[task_key](coord[i], atype[i], natoms, mapping[i], shift[i], selected[i], selected_type[i],
                                                 selected_loc=selected_loc[i], box=box) for i in range(len(coord))]
-            model_pred = model_preds[0] - model_preds[1] - model_preds[2]
+            model_pred = {"energy": model_preds[0]["energy"] - model_preds[1]["energy"] - model_preds[2]["energy"]}
         else:
             model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, selected, selected_type,
                                               selected_loc=selected_loc, box=box)
