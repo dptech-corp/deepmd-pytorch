@@ -13,7 +13,7 @@ from deepmd_pt.model.model import BaseModel
 
 class EnergyModelDPA2(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, training_data, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -65,7 +65,7 @@ class EnergyModelDPA2(BaseModel):
         fitting_param['use_tebd'] = True
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, training_data, sampled=sampled)
 
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 

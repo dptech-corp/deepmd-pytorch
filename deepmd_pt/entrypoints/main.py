@@ -64,8 +64,9 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
     else:
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split)
-        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+        #data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
+        #sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+        sampled = True
         if noise_settings is not None:
             train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                      type_split=type_split, noise_settings=noise_settings)

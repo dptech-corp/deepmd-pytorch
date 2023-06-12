@@ -9,27 +9,27 @@ from .dpa2_force import ForceModelDPA2
 from .dpau_ener import EnergyModelDPAUni
 
 
-def get_model(model_params, sampled=None):
+def get_model(model_params, training_data=None, sampled=None):
     if model_params.get("fitting_net", None) is not None:
         if model_params.get("backbone", None) is None:
             if model_params["descriptor"]["type"] == "se_e2_a":
-                return EnergyModelSeA(model_params, sampled)
+                return EnergyModelSeA(model_params, training_data, sampled)
             elif model_params["descriptor"]["type"] == "se_atten":
                 if model_params["fitting_net"].get("type", "ener") == "ener":
-                    return EnergyModelDPA1(model_params, sampled)
+                    return EnergyModelDPA1(model_params,training_data, sampled)
                 elif "direct" in model_params["fitting_net"].get("type", "ener"):
-                    return ForceModelDPA1(model_params, sampled)
+                    return ForceModelDPA1(model_params, training_data, sampled)
             elif model_params["descriptor"]["type"] == "se_uni":
-                return EnergyModelDPAUni(model_params, sampled)
+                return EnergyModelDPAUni(model_params, training_data, sampled)
             else:
                 raise NotImplementedError
         else:
             if model_params["fitting_net"].get("type", "ener") == "ener":
-                return EnergyModelDPA2(model_params, sampled)
+                return EnergyModelDPA2(model_params, training_data, sampled)
             elif "direct" in model_params["fitting_net"].get("type", "ener"):
-                return ForceModelDPA2(model_params, sampled)
+                return ForceModelDPA2(model_params, training_data, sampled)
     else:
         if model_params.get("backbone", None) is None:
-            return DenoiseModelDPA1(model_params, sampled)
+            return DenoiseModelDPA1(model_params,training_data, sampled)
         else:
-            return DenoiseModelDPA2(model_params, sampled)
+            return DenoiseModelDPA2(model_params, training_data,sampled)

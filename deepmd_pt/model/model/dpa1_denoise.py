@@ -10,7 +10,7 @@ from deepmd_pt.model.model import BaseModel
 
 class DenoiseModelDPA1(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, training_data, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -43,7 +43,7 @@ class DenoiseModelDPA1(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        self.compute_or_load_stat(model_params, {}, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, {}, ntypes, training_data, sampled=sampled)
 
         assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
         # Denoise and predict

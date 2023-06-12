@@ -32,8 +32,7 @@ def get_dataset(config):
                               },
                               'type_map': type_map
                           })
-    data_stat_nbatch = model_config.get('data_stat_nbatch', 10)
-    sampled = make_stat_input(dataset.systems, dataset.dataloaders, data_stat_nbatch)
+    sampled = True
     return dataset, sampled
 
 
@@ -74,11 +73,12 @@ class TestSaveLoadDPA1(unittest.TestCase):
     def create_wrapper(self, read: bool):
         model_config = copy.deepcopy(self.config['model'])
         sampled = copy.deepcopy(self.sampled)
+        dataset = self.dataset
         model_config["resuming"] = read
         model_config["stat_file_dir"] = "stat_files"
         model_config["stat_file"] = "stat.npz"
         model_config["stat_file_path"] = os.path.join(model_config["stat_file_dir"], model_config["stat_file"])
-        model = EnergyModelDPA1(model_config, sampled).to(env.DEVICE)
+        model = EnergyModelDPA1(model_config, dataset, sampled).to(env.DEVICE)
         return ModelWrapper(model, self.loss)
 
     def get_data(self):

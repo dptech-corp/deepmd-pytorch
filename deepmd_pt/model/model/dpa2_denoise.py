@@ -12,7 +12,7 @@ from deepmd_pt.model.model import BaseModel
 
 class DenoiseModelDPA2(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, training_data, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -45,7 +45,7 @@ class DenoiseModelDPA2(BaseModel):
         self.descriptor = DescrptSeAtten(**descriptor_param)
 
         # Statistics
-        self.compute_or_load_stat(model_params, {}, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, {}, ntypes, training_data, sampled=sampled)
 
         # BackBone
         backbone_param = model_params.pop('backbone')

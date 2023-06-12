@@ -11,7 +11,7 @@ from deepmd_pt.model.model import BaseModel
 
 class EnergyModelSeA(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, training_data, sampled=None):
         """Based on components, construct a model for energy.
 
         Args:
@@ -37,7 +37,7 @@ class EnergyModelSeA(BaseModel):
         fitting_param['embedding_width'] = self.descriptor.dim_out
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, training_data, sampled=sampled)
 
         self.fitting_net = EnergyFittingNet(**fitting_param)
 

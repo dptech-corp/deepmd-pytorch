@@ -13,7 +13,7 @@ from deepmd_pt.model.model import BaseModel
 
 class ForceModelDPA1(BaseModel):
 
-    def __init__(self, model_params, sampled=None):
+    def __init__(self, model_params, training_data, sampled=None):
         """Based on components, construct a DPA-1 model for energy.
 
         Args:
@@ -57,7 +57,7 @@ class ForceModelDPA1(BaseModel):
         self.fitting_net_force = DipoleFittingNetType(**fitting_param)
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(model_params, fitting_param, ntypes, training_data, sampled=sampled)
 
         if fitting_type == 'direct_force_ener':
             self.fitting_net_ener = EnergyFittingNetType(**fitting_param)
