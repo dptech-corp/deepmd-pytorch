@@ -21,7 +21,7 @@ class Evoformer3bBackBone(BackBone):
         super(Evoformer3bBackBone, self).__init__()
         self.encoder = Evoformer3bEncoder(**kwargs)
 
-    def forward(self, atomic_feature, pair=None, nlist=None, attn_mask=None, pair_mask=None):
+    def forward_local(self, atomic_feature, pair=None, nlist=None, attn_mask=None, pair_mask=None):
         """Encoder the atomic and pair representations.
 
         Args:
@@ -36,4 +36,21 @@ class Evoformer3bBackBone(BackBone):
         """
         atomic_feature, pair = self.encoder(atomic_feature, pair=pair, nlist=nlist, attn_mask=attn_mask,
                                             pair_mask=pair_mask)
+        return atomic_feature, pair
+
+    def forward(self, atomic_feature, pair=None, attn_mask=None, pair_mask=None, atom_mask=None):
+        """Encoder the atomic and pair representations.
+
+        Args:
+        - atomic_feature: Atomic representation with shape [ncluster, natoms, atomic_dim].
+        - pair: Pair representation with shape [ncluster, natoms, natoms, pair_dim].
+        - attn_mask: Attention mask (with -inf for softmax) with shape [ncluster, head, natoms, natoms].
+        - pair_mask: Pair mask (with 1 for real atom pair and 0 for padding) with shape [ncluster, natoms, natoms].
+
+        Returns:
+        - atomic_feature: Atomic representation after encoder with shape [ncluster, natoms, atomic_dim].
+        - pair: Pair representation with shape [ncluster, natoms, natoms, pair_dim].
+        """
+        atomic_feature, pair = self.encoder(atomic_feature, pair=pair, attn_mask=attn_mask,
+                                            pair_mask=pair_mask, atom_mask=atom_mask)
         return atomic_feature, pair

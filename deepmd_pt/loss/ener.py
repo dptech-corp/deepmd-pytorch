@@ -75,8 +75,13 @@ class EnergyStdLoss(TaskLoss):
             else:
                 force_target_mask = None
             if not self.use_l1_all:
-                diff_f = label['force'] - model_pred['force']
-                l2_force_loss = torch.mean(torch.square(diff_f))
+                if force_target_mask is not None:
+                    diff_f = (label['force'] - model_pred['force']) * force_target_mask
+                    force_cnt = force_target_mask.squeeze(-1).sum(-1)
+                    l2_force_loss = torch.mean(torch.square(diff_f).mean(-1).sum(-1)/force_cnt)
+                else:
+                    diff_f = label['force'] - model_pred['force']
+                    l2_force_loss = torch.mean(torch.square(diff_f))
                 more_loss['l2_force_loss'] = l2_force_loss.detach()
                 loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
                 rmse_f = l2_force_loss.sqrt()

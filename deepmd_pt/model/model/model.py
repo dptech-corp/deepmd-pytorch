@@ -43,9 +43,13 @@ class BaseModel(torch.nn.Module):
                     logging.info(f'Saving stat file to {model_params["stat_file_path"]}')
                     if not os.path.exists(model_params["stat_file_dir"]):
                         os.mkdir(model_params["stat_file_dir"])
-                    np.savez_compressed(model_params["stat_file_path"],
-                                        sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
-                                        bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
+                    if sumr is not None:
+                        np.savez_compressed(model_params["stat_file_path"],
+                                            sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
+                                            bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
+                    else:
+                        np.savez_compressed(model_params["stat_file_path"],
+                                            bias_atom_e=fitting_param['bias_atom_e'], type_map=model_params['type_map'])
             else:  # load stat
                 try:
                     stats = np.load(model_params["stat_file_path"])
@@ -61,9 +65,12 @@ class BaseModel(torch.nn.Module):
                 assert not missing_type, \
                     f"These type are not in stat file: {missing_type}! Please change the stat file path!"
                 idx_map = [stat_type_map.index(i) for i in target_type_map]
-                sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
-                                                 stats["sumn"][idx_map], stats["sumr2"][idx_map], \
-                                                 stats["suma2"][idx_map]
+                if "sumr" in stats:
+                    sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
+                                                     stats["sumn"][idx_map], stats["sumr2"][idx_map], \
+                                                     stats["suma2"][idx_map]
+                else:
+                    sumr, suma, sumn, sumr2, suma2 = None, None, None, None, None
                 if not set_zero_energy_bias:
                     fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
                 else:

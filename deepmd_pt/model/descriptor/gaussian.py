@@ -23,6 +23,8 @@ class DescrptGaussian(Descriptor):
                  pair_embed_dim,
                  sel,
                  ntypes: int,
+                 sel2: int = None,
+                 atomic_sum_gbf: bool = True,
                  **kwargs):
         """Construct an embedding net of type `gaussian`.
 
@@ -32,16 +34,24 @@ class DescrptGaussian(Descriptor):
         self.gbf_proj = NonLinear(kernel_num, pair_embed_dim)
         self.embed_dim = embed_dim
         self.pair_embed_dim = pair_embed_dim
-        if kernel_num != self.embed_dim:
-            self.edge_proj = torch.nn.Linear(kernel_num, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        else:
-            self.edge_proj = None
+        self.atomic_sum_gbf = atomic_sum_gbf
+        if self.atomic_sum_gbf:
+            if kernel_num != self.embed_dim:
+                self.edge_proj = torch.nn.Linear(kernel_num, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            else:
+                self.edge_proj = None
 
         if isinstance(sel, int):
             sel = [sel]
         self.ntypes = ntypes
         self.sec = torch.tensor(sel)  # 每种元素在邻居中的位移
         self.nnei = sum(sel)  # 总的邻居数量
+        self.nnei2 = None
+        if sel2 is not None:
+            if isinstance(sel2, int):
+                sel2 = [sel2]
+            self.sec2 = torch.tensor(sel2)  # 每种元素在邻居中的位移
+            self.nnei2 = sum(sel2)  # 总的邻居数量
 
     @property
     def dim_out(self):
@@ -58,7 +68,7 @@ class DescrptGaussian(Descriptor):
         return self.pair_embed_dim
 
     def compute_input_stats(self, merged):
-        pass
+        return None, None, None, None, None
 
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
         pass
@@ -102,7 +112,7 @@ class DescrptGaussian(Descriptor):
         attn_bias = gbf_result + edge_feature
         return atom_feature, attn_bias, diff
 
-    def forward(self, coord, atom_feature, edge_type_2dim, edge_feature):
+    def forward_old_global(self, coord, atom_feature, edge_type_2dim, edge_feature):
         ## global forward
         """Calculate decoded embedding for each atom.
 
@@ -114,15 +124,51 @@ class DescrptGaussian(Descriptor):
         dist = delta_pos.norm(dim=-1).view(-1, nloc, nloc)
         # [nframes, nloc, nloc, K]
         gbf_feature = self.gbf(dist, edge_type_2dim)
-        edge_features = gbf_feature
-        # [nframes, nloc, K]
-        sum_edge_features = edge_features.sum(dim=-2)
-        if self.edge_proj is not None:
-            sum_edge_features = self.edge_proj(sum_edge_features)
-        # [nframes, nloc, embed_dim]
-        atom_feature = atom_feature + sum_edge_features
+        if self.atomic_sum_gbf:
+            edge_features = gbf_feature
+            # [nframes, nloc, K]
+            sum_edge_features = edge_features.sum(dim=-2)
+            if self.edge_proj is not None:
+                sum_edge_features = self.edge_proj(sum_edge_features)
+            # [nframes, nloc, embed_dim]
+            atom_feature = atom_feature + sum_edge_features
 
         # [nframes, nloc, nloc, pair_dim]
+        gbf_result = self.gbf_proj(gbf_feature)
+
+        attn_bias = gbf_result + edge_feature
+        return atom_feature, attn_bias, delta_pos
+
+    def forward(self, coord_selected, atom_feature, edge_type_2dim, edge_feature):
+        ## local cluster forward
+        """Calculate decoded embedding for each atom.
+        Args:
+        - coord_selected: Clustered atom coordinates with shape [nframes*nloc, natoms, 3].
+        - atom_feature: Previous calculated atomic features with shape [nframes*nloc, natoms, embed_dim].
+        - edge_type_2dim: Edge index for gbf calculation with shape [nframes*nloc, natoms, natoms, 2].
+        - edge_feature: Previous calculated edge features with shape [nframes*nloc, natoms, natoms, pair_dim].
+        Returns:
+        - atom_feature: Updated atomic features with shape [nframes*nloc, natoms, embed_dim].
+        - attn_bias: Updated edge features as attention bias with shape [nframes*nloc, natoms, natoms, pair_dim].
+        - delta_pos: Delta position for force/vector prediction with shape [nframes*nloc, natoms, natoms, 3].
+        """
+        ncluster, natoms, _ = coord_selected.shape
+        # ncluster x natoms x natoms x 3
+        delta_pos = coord_selected.unsqueeze(1) - coord_selected.unsqueeze(2)
+        # (ncluster x natoms x natoms
+        dist = delta_pos.norm(dim=-1).view(-1, natoms, natoms)
+        # [ncluster, natoms, natoms, K]
+        gbf_feature = self.gbf(dist, edge_type_2dim)
+        if self.atomic_sum_gbf:
+            edge_features = gbf_feature
+            # [ncluster, natoms, K]
+            sum_edge_features = edge_features.sum(dim=-2)
+            if self.edge_proj is not None:
+                sum_edge_features = self.edge_proj(sum_edge_features)
+            # [ncluster, natoms, embed_dim]
+            atom_feature = atom_feature + sum_edge_features
+
+        # [ncluster, natoms, natoms, pair_dim]
         gbf_result = self.gbf_proj(gbf_feature)
 
         attn_bias = gbf_result + edge_feature

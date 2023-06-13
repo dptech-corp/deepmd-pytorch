@@ -1277,46 +1277,46 @@ class NodeTaskHead(nn.Module):
         delta_pos: Tensor,
         attn_mask: Tensor = None,
     ) -> Tensor:
-        nframes, nloc, _ = query.size()
+        ncluster, natoms, _ = query.size()
         query = self.layer_norm(query)
-        # [nframes, nloc, nloc, pair_dim]
+        # [ncluster, natoms, natoms, pair_dim]
         pair = self.pair_norm(pair)
 
-        # [nframes, attn_head, nloc, head_dim]
+        # [ncluster, attn_head, natoms, head_dim]
         q = (
-            self.q_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
+            self.q_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
             * self.scaling
         )
-        # [nframes, attn_head, nloc, head_dim]
-        k = self.k_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
-        v = self.v_proj(query).view(nframes, nloc, self.num_heads, -1).transpose(1, 2)
-        # [nframes, attn_head, nloc, nloc]
+        # [ncluster, attn_head, natoms, head_dim]
+        k = self.k_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
+        v = self.v_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
+        # [ncluster, attn_head, natoms, natoms]
         attn = q @ k.transpose(-1, -2)
         del q, k
-        # [nframes, attn_head, nloc, nloc]
+        # [ncluster, attn_head, natoms, natoms]
         bias = self.linear_bias(pair).permute(0, 3, 1, 2).contiguous()
 
-        # [nframes, attn_head, nloc, nloc]
+        # [ncluster, attn_head, natoms, natoms]
         attn_probs = softmax_dropout(
             attn,
             self.dropout,
             self.training,
             mask=attn_mask,
             bias=bias.contiguous(),
-        ).view(nframes, self.num_heads, nloc, nloc)
+        ).view(ncluster, self.num_heads, natoms, natoms)
 
-        # delta_pos: [nframes, nloc, nloc, 3]
-        # [nframes, attn_head, nloc, nloc, 3]
+        # delta_pos: [ncluster, natoms, natoms, 3]
+        # [ncluster, attn_head, natoms, natoms, 3]
         rot_attn_probs = attn_probs.unsqueeze(-1) * delta_pos.unsqueeze(1).type_as(
             attn_probs
         )
-        # [nframes, attn_head, 3, nloc, nloc]
+        # [ncluster, attn_head, 3, natoms, natoms]
         rot_attn_probs = rot_attn_probs.permute(0, 1, 4, 2, 3)
-        # [nframes, attn_head, 3, nloc, head_dim]
+        # [ncluster, attn_head, 3, natoms, head_dim]
         x = rot_attn_probs @ v.unsqueeze(2)
-        # [nframes, nloc, 3, embed_dim]
-        x = x.permute(0, 3, 2, 1, 4).contiguous().view(nframes, nloc, 3, -1)
-        cur_force = self.force_proj(x).view(nframes, nloc, 3)
+        # [ncluster, natoms, 3, embed_dim]
+        x = x.permute(0, 3, 2, 1, 4).contiguous().view(ncluster, natoms, 3, -1)
+        cur_force = self.force_proj(x).view(ncluster, natoms, 3)
         return cur_force
 
 
@@ -1416,7 +1416,7 @@ class OuterProduct(nn.Module):
         ab = self.linear_in(m)
         ab = ab * op_mask
         a, b = ab.chunk(2, dim=-1)
-        # [nframes, nloc, nnei, d_pair]
+        # [ncluster, natoms, natoms, d_pair]
         z = self._opm(a, b)
         z *= op_norm
         return z
@@ -1838,7 +1838,7 @@ class Evoformer3bEncoderLayer(nn.Module):
     def forward(self,
                 x: torch.Tensor,
                 pair: torch.Tensor,
-                nlist: torch.Tensor,
+                nlist: torch.Tensor = None,
                 attn_mask: Optional[torch.Tensor] = None,
                 pair_mask: Optional[torch.Tensor] = None,
                 op_mask: float = 1.0,
@@ -1847,14 +1847,14 @@ class Evoformer3bEncoderLayer(nn.Module):
         """Encoder the atomic and pair representations.
 
         Args:
-        - x: Atomic representation with shape [nframes, nloc, embed_dim].
-        - pair: Pair representation with shape [nframes, nloc, nnei, pair_dim].
-        - attn_mask: Attention mask with shape [nframes, head, nloc, nnei].
-        - pair_mask: Neighbor mask with shape [nframes, nloc, nnei].
+        - x: Atomic representation with shape [ncluster, natoms, embed_dim].
+        - pair: Pair representation with shape [ncluster, natoms, natoms, pair_dim].
+        - attn_mask: Attention mask with shape [ncluster, head, natoms, natoms].
+        - pair_mask: Neighbor mask with shape [ncluster, natoms, natoms].
 
         Returns:
         """
-        # [nframes, nloc, embed_dim]
+        # [ncluster, natoms, embed_dim]
         residual = x
         if self.pre_ln:
             x = self.self_attn_layer_norm(x)
@@ -1961,10 +1961,10 @@ class Evoformer3bEncoder(nn.Module):
             ]
         )
 
-    def forward(
+    def forward_global(
             self,
             x,
-            pair, nlist, attn_mask=None, pair_mask=None
+            pair, nlist=None, attn_mask=None, pair_mask=None
     ):
         nframes, nloc, nnei = pair.shape[:-1]
         # TODO check
@@ -1975,6 +1975,29 @@ class Evoformer3bEncoder(nn.Module):
                 x,
                 pair,
                 nlist=nlist,
+                attn_mask=attn_mask,
+                pair_mask=pair_mask,
+                op_mask=op_mask,
+                op_norm=op_norm
+            )
+        return x, pair
+
+    def forward(
+            self,
+            x,
+            pair, attn_mask=None, pair_mask=None, atom_mask=None
+    ):
+        # [ncluster, natoms, 1]
+        op_mask = atom_mask.unsqueeze(-1)
+        op_mask = op_mask * (op_mask.size(-2) ** -0.5)
+        eps = 1e-3
+        # [ncluster, natoms, natoms, 1]
+        op_norm = 1.0 / (eps + torch.einsum("...bc,...dc->...bdc", op_mask, op_mask))
+        for layer in self.layers:
+            x, pair = layer(
+                x,
+                pair,
+                nlist=None,
                 attn_mask=attn_mask,
                 pair_mask=pair_mask,
                 op_mask=op_mask,
