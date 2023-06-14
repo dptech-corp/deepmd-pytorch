@@ -50,7 +50,8 @@ class DipoleFittingNetType(TaskBaseMethod):
         - vec_out: output vector. Its shape is [nframes, nloc, 3].
         """
         nframes, nloc, _ = inputs.size()
-        inputs = torch.concat([inputs, atype_tebd], dim=-1)
+        if atype_tebd is not None:
+          inputs = torch.concat([inputs, atype_tebd], dim=-1)
         vec_out = self.filter_layers[0](inputs)  # Shape is [nframes, nloc, m1]
         assert list(vec_out.size()) == [nframes, nloc, self.out_dim]
         vec_out = vec_out.view(-1, 1, self.out_dim)

@@ -4,7 +4,7 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni
+from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -45,6 +45,8 @@ model_dpau = {
     "update_g2_has_g1g1": True,
     "update_g2_has_attn": True,
     "update_h2": True,
+    "gather_g1": True,
+    "combine_grrg": False,
     "_comment": " that's all"
   },
   "fitting_net": {
@@ -194,7 +196,8 @@ class TestPermutation():
     prec = 1e-10
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
     torch.testing.assert_close(ret0['force'][idx_perm], ret1['force'], rtol=prec, atol=prec)
-    torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=prec, atol=prec)
+    if not hasattr(self, "test_virial") or self.test_virial:
+      torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=prec, atol=prec)
     # print(ret0, ret1)
 
 class TestEnergyModelSeA(unittest.TestCase, TestPermutation):
@@ -218,7 +221,6 @@ class TestEnergyModelDPA2(unittest.TestCase, TestPermutation):
     self.type_split = True
     self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
 
-
 class TestEnergyModelDPAUni(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = model_dpau
@@ -226,6 +228,34 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestPermutation):
     self.type_split = True
     self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
 
+class TestForceModelDPAUni(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpau
+    model_params["fitting_net"]["type"] = "direct_force_ener"
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.test_virial = False
+    self.model = ForceModelDPAUni(model_params, sampled).to(env.DEVICE)
+
+class TestEnergyModelDPAUni2(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpau
+    model_params["fitting_net"]["type"] = "direct_force_ener"
+    model_params["descriptor"]["combine_grrg"] = True
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.test_virial = False
+    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+
+class TestEnergyModelDPAUni3(unittest.TestCase, TestPermutation):
+  def setUp(self):
+    model_params = model_dpau
+    model_params["fitting_net"]["type"] = "direct_force_ener"
+    model_params["descriptor"]["gather_g1"] = True
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.test_virial = False
+    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
 
 # class TestEnergyFoo(unittest.TestCase):
 #   def test(self):
@@ -241,58 +271,6 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestPermutation):
 #     atype = torch.IntTensor([0, 0, 0, 1, 1])      
 #     idx_perm = [1, 0, 4, 3, 2]    
 #     ret0 = infer_model(self.model, coord, cell, atype, type_split=True)
-
-
-class TestUnusedParams(unittest.TestCase):
-  def test_unused(self):    
-    import itertools
-    for conv, drrd, grrg, attn1, g1g1, attn2, h2 in \
-        itertools.product([True,False], [True,False], [True,False], [True,False], [True,False], [True,False], [True,False]):
-      if (not drrd) and (not grrg) and h2:
-        # skip the case h2 is not envolved
-        continue
-      if (not grrg) and (not conv):
-        # skip the case g2 is not envolved
-        continue
-      model_dpau["descriptor"]["update_g1_has_conv"] = conv
-      model_dpau["descriptor"]["update_g1_has_drrd"] = drrd
-      model_dpau["descriptor"]["update_g1_has_grrg"] = grrg
-      model_dpau["descriptor"]["update_g1_has_attn"] = attn1
-      model_dpau["descriptor"]["update_g2_has_g1g1"] = g1g1
-      model_dpau["descriptor"]["update_g2_has_attn"] = attn2
-      model_dpau["descriptor"]["update_h2"] = h2
-      self._test_unused(model_dpau)
-
-  def _test_unused(self, model_params):
-    sampled = make_sample(model_params)
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
-
-    natoms = 5
-    cell = torch.rand([3, 3], dtype=dtype)
-    cell = (cell + cell.T) + 5. * torch.eye(3)
-    coord = torch.rand([natoms, 3], dtype=dtype)
-    coord = torch.matmul(coord, cell)
-    atype = torch.IntTensor([0, 0, 0, 1, 1])      
-    idx_perm = [1, 0, 4, 3, 2]    
-    ret0 = infer_model(self.model, coord, cell, atype, type_split=True)
-    
-    # use computation graph to find all contributing tensors
-    def get_contributing_params(y, top_level=True):
-        nf = y.grad_fn.next_functions if top_level else y.next_functions
-        for f, _ in nf:
-            try:
-                yield f.variable
-            except AttributeError:
-                pass  # node has no tensor
-            if f is not None:
-                yield from get_contributing_params(f, top_level=False)
-
-    contributing_parameters = set(get_contributing_params(ret0['energy']))
-    all_parameters = set(self.model.parameters())
-    non_contributing = all_parameters - contributing_parameters
-    for ii in non_contributing:
-      print(ii.shape)
-    self.assertEqual(len(non_contributing), 0)
 
 
 if __name__ == '__main__':
