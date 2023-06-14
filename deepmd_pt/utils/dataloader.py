@@ -228,6 +228,9 @@ def collate_batch(batch):
         elif "find_" in key:
             result[key] = batch[0][key]
         else:
-            result[key] = collate_tensor_fn([d[key] for d in batch])
+            if type(example[key]) == tuple:
+                result[key] = tuple([collate_tensor_fn(arr) for arr in zip(*[d[key] for d in batch])])
+            else:
+                result[key] = collate_tensor_fn([d[key] for d in batch])
 
     return result

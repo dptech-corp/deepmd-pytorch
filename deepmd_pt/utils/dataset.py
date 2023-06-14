@@ -255,7 +255,19 @@ class DeepmdDataSystem(object):
             natoms_vec[ii] = np.count_nonzero(self._atom_type == ii)
         tmp = [natoms, natoms]
         tmp = np.append(tmp, natoms_vec)
-        return tmp.astype(np.int32)
+
+        if self._sepABindex:
+            natoms1, natoms2 = self._sepABindex, natoms - self._sepABindex
+            natoms_vec1, natoms_vec2 = np.zeros(ntypes).astype(int), np.zeros(ntypes).astype(int)
+            for ii in range(ntypes):
+                natoms_vec1[ii] = np.count_nonzero(self._atom_type[:self._sepABindex] == ii)
+                natoms_vec2[ii] = np.count_nonzero(self._atom_type[self._sepABindex:] == ii)
+            tmp1, tmp2 = [natoms1, natoms1], [natoms2, natoms2]
+            tmp1 = np.append(tmp1, natoms_vec1)
+            tmp2 = np.append(tmp2, natoms_vec2)
+            return (tmp.astype(np.int32), tmp1.astype(np.int32), tmp2.astype(np.int32))
+        else:
+            return tmp.astype(np.int32)
 
     def _load_type(self, sys_path):
         if not self.file is None:
@@ -554,6 +566,7 @@ class DeepmdDataSystem(object):
 
             if batch["find_sepABindex"]:
                 batch['coord'] = (_coord, _coord[:sepABindex], _coord[sepABindex:])
+                batch['box'] = (box, box, box)
                 batch['atype'] = (clean_type, clean_type[:sepABindex], clean_type[sepABindex:])
                 batch['selected'], batch['selected_loc'], batch['selected_type'], batch['shift'], batch['mapping'] = \
                     zip(*[make_env_mat(_coord, atype, region, rcut, sec, pbc=self.pbc, type_split=self.type_split)
@@ -701,7 +714,10 @@ class DeepmdDataSetForLoader(Dataset):
     def __getitem__(self, index):
         """Get a frame from the selected system."""
         b_data = self._data_system._get_item(index)
-        b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
+        if type(self._natoms_vec) in [tuple, list]:
+            b_data['natoms'] = tuple([torch.tensor(_natoms_vec, device=env.PREPROCESS_DEVICE) for _natoms_vec in self._natoms_vec])
+        else:
+            b_data['natoms'] = torch.tensor(self._natoms_vec, device=env.PREPROCESS_DEVICE)
         return b_data
 
 
