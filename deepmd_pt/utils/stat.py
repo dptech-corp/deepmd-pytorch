@@ -8,6 +8,36 @@ from deepmd_pt.utils.dataloader import BufferedIterator
 from tqdm import trange
 
 
+def parse_sys_stat(sys_stat, keys):
+    for key in keys:
+        if key == "mapping" or key == "shift":
+            extend = max(d.shape[1] for d in sys_stat[key])
+            for jj in range(len(sys_stat[key])):
+                l = []
+                item = sys_stat[key][jj]
+                for ii in range(item.shape[0]):
+                    l.append(item[ii])
+                n_frames = len(item)
+                if key == "shift":
+                    shape = torch.zeros(
+                        (n_frames, extend, 3),
+                        dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+                        device=env.PREPROCESS_DEVICE,
+                    )
+                else:
+                    shape = torch.zeros(
+                        (n_frames, extend),
+                        dtype=torch.long,
+                        device=env.PREPROCESS_DEVICE,
+                    )
+                for i in range(len(item)):
+                    natoms_tmp = l[i].shape[0]
+                    shape[i, :natoms_tmp] = l[i]
+                sys_stat[key][jj] = shape
+        sys_stat[key] = torch.cat(sys_stat[key], dim=0)
+    return sys_stat
+
+
 def make_stat_input(datasets, dataloaders, nbatches):
     """Pack data for statistics.
 
@@ -46,33 +76,16 @@ def make_stat_input(datasets, dataloaders, nbatches):
             for dd in stat_data:
                 if dd in keys:
                     sys_stat[dd].append(stat_data[dd])
-        for key in keys:
-            if key == "mapping" or key == "shift":
-                extend = max(d.shape[1] for d in sys_stat[key])
-                for jj in range(len(sys_stat[key])):
-                    l = []
-                    item = sys_stat[key][jj]
-                    for ii in range(item.shape[0]):
-                        l.append(item[ii])
-                    n_frames = len(item)
-                    if key == "shift":
-                        shape = torch.zeros(
-                            (n_frames, extend, 3),
-                            dtype=env.GLOBAL_PT_FLOAT_PRECISION,
-                            device=env.PREPROCESS_DEVICE,
-                        )
-                    else:
-                        shape = torch.zeros(
-                            (n_frames, extend),
-                            dtype=torch.long,
-                            device=env.PREPROCESS_DEVICE,
-                        )
-                    for i in range(len(item)):
-                        natoms_tmp = l[i].shape[0]
-                        shape[i, :natoms_tmp] = l[i]
-                    sys_stat[key][jj] = shape           
-            sys_stat[key] = torch.cat(sys_stat[key], dim=0)
-        lst.append(sys_stat)
+
+        if type(sys_stat["coord"][0]) == tuple:
+            sys_stat1, sys_stat2 = sys_stat.copy(), sys_stat.copy()
+            for key in keys:
+                sys_stat[key], sys_stat1[key], sys_stat2[key] = zip(*sys_stat[key])
+            for stat in [sys_stat, sys_stat1, sys_stat2]:
+                lst.append(parse_sys_stat(stat, keys))
+        else:
+            sys_stat = parse_sys_stat(sys_stat, keys)
+            lst.append(sys_stat)
     return lst
 
 
