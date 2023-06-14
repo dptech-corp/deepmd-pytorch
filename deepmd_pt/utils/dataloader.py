@@ -47,11 +47,20 @@ class DpLoaderSet(Dataset):
             logging.info(f"Constructing DataLoaders from {len(systems)} systems")
 
         def construct_dataset(system):
+            if model_params["descriptor"].get("type") != "hybrid":
+                rcut = model_params["descriptor"]["rcut"]
+                sel = model_params["descriptor"]["sel"]
+            else:
+                rcut = []
+                sel = []
+                for ii in model_params["descriptor"]["list"]:
+                    rcut.append(ii["rcut"])
+                    sel.append(ii["sel"])
             return DeepmdDataSetForLoader(
                 system=system,
                 type_map=model_params["type_map"],
-                rcut=model_params["descriptor"]["rcut"],
-                sel=model_params["descriptor"]["sel"],
+                rcut=rcut,
+                sel=sel,
                 type_split=type_split,
                 noise_settings=noise_settings,
             )
@@ -176,14 +185,28 @@ class BufferedIterator(object):
 
 def collate_tensor_fn(batch):
     elem = batch[0]
-    out = None
-    if torch.utils.data.get_worker_info() is not None:
-        # If we're in a background process, concatenate directly into a
-        # shared memory tensor to avoid an extra copy
-        numel = sum(x.numel() for x in batch)
-        storage = elem._typed_storage()._new_shared(numel, device=elem.device)
-        out = elem.new(storage).resize_(len(batch), *list(elem.size()))
-    return torch.stack(batch, 0, out=out)
+    if not isinstance(elem, list):
+        out = None
+        if torch.utils.data.get_worker_info() is not None:
+            # If we're in a background process, concatenate directly into a
+            # shared memory tensor to avoid an extra copy
+            numel = sum(x.numel() for x in batch)
+            storage = elem._typed_storage()._new_shared(numel, device=elem.device)
+            out = elem.new(storage).resize_(len(batch), *list(elem.size()))
+        return torch.stack(batch, 0, out=out)
+    else:
+        out_hybrid = []
+        for ii, hybrid_item in enumerate(elem):
+            out = None
+            tmp_batch = [x[ii] for x in batch]
+            if torch.utils.data.get_worker_info() is not None:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum(x.numel() for x in tmp_batch)
+                storage = hybrid_item._typed_storage()._new_shared(numel, device=hybrid_item.device)
+                out = hybrid_item.new(storage).resize_(len(tmp_batch), *list(hybrid_item.size()))
+            out_hybrid.append(torch.stack(tmp_batch, 0, out=out))
+        return out_hybrid
 
 
 def collate_batch(batch):

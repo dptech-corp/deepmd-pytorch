@@ -74,8 +74,8 @@ class DenoiseModelDPA1(BaseModel):
         nlist_tebd = self.type_embedding(selected_type)
         nnei_mask = selected != -1
 
-        descriptor, env_mat, diff = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd,
-                                                    nlist_tebd)
+        descriptor, env_mat, diff, _ = self.descriptor(extended_coord, selected, atype, selected_type,
+                                                    atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
         logits = self.type_predict_net(descriptor)
         model_predict = {'updated_coord': updated_coord,

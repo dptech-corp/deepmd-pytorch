@@ -8,6 +8,8 @@ from .dpa1_force import ForceModelDPA1
 from .dpa2_force import ForceModelDPA2
 from .dpau_ener import EnergyModelDPAUni
 from .dpau_force import ForceModelDPAUni
+from .hybrid_ener import EnergyModelHybrid
+from .hybrid_force import ForceModelHybrid
 
 
 def get_model(model_params, sampled=None):
@@ -25,6 +27,11 @@ def get_model(model_params, sampled=None):
                     return EnergyModelDPAUni(model_params, sampled)
                 elif "direct" in model_params["fitting_net"].get("type", "ener"):
                     return ForceModelDPAUni(model_params, sampled)
+            elif model_params["descriptor"]["type"] == "hybrid":
+                if model_params["fitting_net"].get("type", "ener") == "ener":
+                    return EnergyModelHybrid(model_params, sampled)
+                elif "direct" in model_params["fitting_net"].get("type", "ener"):
+                    return ForceModelHybrid(model_params, sampled)
             else:
                 raise NotImplementedError
         else:

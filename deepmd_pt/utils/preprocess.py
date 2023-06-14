@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import torch
 from deepmd_pt.utils import env
+from typing import Union
 
 
 class Region3D(object):
@@ -221,7 +222,7 @@ def compute_smooth_weight(distance, rmin: float, rmax: float):
 def make_env_mat(coord,
                  atype,
                  region,
-                 rcut: float,
+                 rcut: Union[float, list],
                  sec,
                  pbc=True,
                  type_split=True,
@@ -234,8 +235,12 @@ def make_env_mat(coord,
         merged_mapping: mapping from nall index to nloc index, [nall]
     """
     # 将盒子外的原子，通过镜像挪入盒子内
+    hybrid = isinstance(rcut, list)
+    _rcut = rcut
+    if hybrid:
+        _rcut = max(rcut)
     if pbc:
-        merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
+        merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, _rcut)
         merged_coord = coord[merged_mapping] - merged_coord_shift
         if merged_coord.shape[0] <= coord.shape[0]:
             logging.warning('No ghost atom is added for system ')
@@ -246,6 +251,17 @@ def make_env_mat(coord,
         merged_coord = coord.clone()
 
     # 构建邻居列表，并按 sel_a 筛选
-    selected, selected_loc, selected_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
-                                                                merged_mapping, type_split=type_split, min_check=min_check)
+    if not hybrid:
+        selected, selected_loc, selected_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
+                                                                    merged_mapping, type_split=type_split, min_check=min_check)
+    else:
+        selected, selected_loc, selected_type = [], [], []
+        for ii, single_rcut in enumerate(rcut):
+            selected_tmp, selected_loc_tmp, selected_type_tmp = build_neighbor_list(coord.shape[0], merged_coord, merged_atype,
+                                                                        single_rcut, sec[ii],
+                                                                        merged_mapping, type_split=type_split,
+                                                                        min_check=min_check)
+            selected.append(selected_tmp)
+            selected_loc.append(selected_loc_tmp)
+            selected_type.append(selected_type_tmp)
     return selected, selected_loc, selected_type, merged_coord_shift, merged_mapping

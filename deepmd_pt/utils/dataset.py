@@ -99,6 +99,12 @@ class DeepmdDataSystem(object):
         self._sys_path = sys_path
         self.rcut = rcut
         self.sec = sec
+        if isinstance(rcut, float):
+            self.hybrid = False
+        elif isinstance(rcut, list):
+            self.hybrid = True
+        else:
+            RuntimeError("Unkown rcut type!")
         self.sets = [None for i in range(len(self._sys_path))]
 
         self.nframes = 0
@@ -643,7 +649,7 @@ def _make_idx_map(atom_type):
 
 class DeepmdDataSetForLoader(Dataset):
 
-    def __init__(self, system: str, type_map: str, rcut=None, sel=None, weight=None, type_split=True,
+    def __init__(self, system: str, type_map: str, rcut, sel, weight=None, type_split=True,
                  noise_settings=None):
         """Construct DeePMD-style dataset containing frames cross different systems.
 
@@ -653,10 +659,16 @@ class DeepmdDataSetForLoader(Dataset):
         - type_map: Atom types.
         """
         self._type_map = type_map
-        if sel is not None:
+        if not isinstance(rcut, list):
             if isinstance(sel, int):
                 sel = [sel]
             sec = torch.cumsum(torch.tensor(sel), dim=0)
+        else:
+            sec = []
+            for sel_item in sel:
+                if isinstance(sel_item, int):
+                    sel_item = [sel_item]
+                sec.append(torch.cumsum(torch.tensor(sel_item), dim=0))
         self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,
                                              type_split=type_split, noise_settings=noise_settings)
         self.mixed_type = self._data_system.mixed_type
