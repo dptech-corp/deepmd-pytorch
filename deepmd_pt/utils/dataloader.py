@@ -177,11 +177,10 @@ class BufferedIterator(object):
 def collate_tensor_fn(batch):
     elem = batch[0]
     out = None
-    if torch.utils.data.get_worker_info() is not None:
-        # If we're in a background process, concatenate directly into a
-        # shared memory tensor to avoid an extra copy
-        if type(elem) == tuple:
-            col = []
+
+    if type(elem) == tuple:
+        col = []
+        if torch.utils.data.get_worker_info() is not None:
             for i in range(len(elem)):
                 numel = sum(x[i].numel() for x in batch)
                 storage = elem[i]._typed_storage()._new_shared(numel, device=elem[i].device)
@@ -189,10 +188,17 @@ def collate_tensor_fn(batch):
                 col.append(torch.stack([x[i] for x in batch], 0, out=out))
             return tuple(col)
         else:
+            for i in range(len(elem)):
+                col.append(torch.stack([x[i] for x in batch], 0, out=out))
+            return tuple(col)
+    else:
+        if torch.utils.data.get_worker_info() is not None:
+            # If we're in a background process, concatenate directly into a
+            # shared memory tensor to avoid an extra copy
             numel = sum(x.numel() for x in batch)
             storage = elem._typed_storage()._new_shared(numel, device=elem.device)
             out = elem.new(storage).resize_(len(batch), *list(elem.size()))
-            return torch.stack(batch, 0, out=out)
+        return torch.stack(batch, 0, out=out)
 
 
 def collate_with_padding(batch_value, key):

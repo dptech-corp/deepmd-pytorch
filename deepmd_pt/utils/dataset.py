@@ -260,8 +260,8 @@ class DeepmdDataSystem(object):
             natoms1, natoms2 = self._sepABindex, natoms - self._sepABindex
             natoms_vec1, natoms_vec2 = np.zeros(ntypes).astype(int), np.zeros(ntypes).astype(int)
             for ii in range(ntypes):
-                natoms_vec1[ii] = np.count_nonzero(self._atom_type[:self._sepABindex] == ii)
-                natoms_vec2[ii] = np.count_nonzero(self._atom_type[self._sepABindex:] == ii)
+                natoms_vec1[ii] = np.count_nonzero(self._atom_type[:self._sepABindex[0]] == ii)
+                natoms_vec2[ii] = np.count_nonzero(self._atom_type[self._sepABindex[0]:] == ii)
             tmp1, tmp2 = [natoms1, natoms1], [natoms2, natoms2]
             tmp1 = np.append(tmp1, natoms_vec1)
             tmp2 = np.append(tmp2, natoms_vec2)
