@@ -70,10 +70,10 @@ class EnergyModelDPAUni(BaseModel):
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)
-        descriptor, env_mat, _ = self.descriptor(
-          extended_coord, 
-          atype,
+        descriptor, env_mat, _, _ = self.descriptor(
+          extended_coord,
           nlist,
+          atype,
           nlist_type,
           nlist_loc,
         )

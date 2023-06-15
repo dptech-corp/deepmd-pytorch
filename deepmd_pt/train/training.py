@@ -392,7 +392,10 @@ class Trainer(object):
                 )
                 batch_data = next(iter(self.validation_data))
         for key in batch_data.keys():
-            batch_data[key] = batch_data[key].to(DEVICE)
+            if not isinstance(batch_data[key], list):
+                batch_data[key] = batch_data[key].to(DEVICE)
+            else:
+                batch_data[key] = [item.to(DEVICE) for item in batch_data[key]]
         input_dict = {}
         for item in [
             "coord",

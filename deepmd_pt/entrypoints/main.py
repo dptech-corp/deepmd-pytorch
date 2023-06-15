@@ -50,14 +50,35 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
     # noise_settings = None
     validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
                                   type_split=type_split, noise_settings=noise_settings)
+    hybrid_descrpt = model_params["descriptor"]["type"] == "hybrid"
+    has_stat_file_path = True
+    if not hybrid_descrpt:
+        default_stat_file_name = f'stat_file_rcut{model_params["descriptor"]["rcut"]:.2f}_'\
+            f'smth{model_params["descriptor"]["rcut_smth"]:.2f}_'\
+            f'sel{model_params["descriptor"]["sel"]}.npz'
+        model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
+        model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
+        model_params["stat_file_path"] = os.path.join(model_params["stat_file_dir"], model_params["stat_file"])
+        if not os.path.exists(model_params["stat_file_path"]):
+            has_stat_file_path = False
+    else:
+        default_stat_file_name = []
+        for descrpt in model_params["descriptor"]["list"]:
+            default_stat_file_name.append(f'stat_file_rcut{descrpt["rcut"]:.2f}_'
+                                          f'smth{descrpt["rcut_smth"]:.2f}_'
+                                          f'sel{descrpt["sel"]}_{descrpt["type"]}.npz')
+        model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
+        model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
+        assert isinstance(model_params["stat_file"], list), "Stat file of hybrid descriptor must be a list!"
+        stat_file_path = []
+        for stat_file_path_item in model_params["stat_file"]:
+            single_file_path = os.path.join(model_params["stat_file_dir"], stat_file_path_item)
+            stat_file_path.append(single_file_path)
+            if not os.path.exists(single_file_path):
+                has_stat_file_path = False
+        model_params["stat_file_path"] = stat_file_path
 
-    default_stat_file_name = f'stat_file_rcut{model_params["descriptor"]["rcut"]:.2f}_'\
-        f'smth{model_params["descriptor"]["rcut_smth"]:.2f}_'\
-        f'sel{model_params["descriptor"]["sel"]}.npz'
-    model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
-    model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
-    model_params["stat_file_path"] = os.path.join(model_params["stat_file_dir"], model_params["stat_file"])
-    if ckpt or os.path.exists(model_params["stat_file_path"]):
+    if ckpt or has_stat_file_path:
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split, noise_settings=noise_settings)
         sampled = None

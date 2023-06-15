@@ -118,7 +118,7 @@ class DescrptSeA(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, selected, atype):
+    def forward(self, extended_coord, selected, atype, selected_type=None, selected_loc=None, atype_tebd=None, nlist_tebd=None):
         """Calculate decoded embedding for each atom.
 
         Args:

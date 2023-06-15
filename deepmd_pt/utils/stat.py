@@ -70,8 +70,15 @@ def make_stat_input(datasets, dataloaders, nbatches):
                     for i in range(len(item)):
                         natoms_tmp = l[i].shape[0]
                         shape[i, :natoms_tmp] = l[i]
-                    sys_stat[key][jj] = shape           
-            sys_stat[key] = torch.cat(sys_stat[key], dim=0)
+                    sys_stat[key][jj] = shape
+            if not isinstance(sys_stat[key][0], list):
+                sys_stat[key] = torch.cat(sys_stat[key], dim=0)
+            else:
+                sys_stat_list = []
+                for ii, _ in enumerate(sys_stat[key][0]):
+                    tmp_stat = [x[ii] for x in sys_stat[key]]
+                    sys_stat_list.append(torch.cat(tmp_stat, dim=0))
+                sys_stat[key] = sys_stat_list
         lst.append(sys_stat)
     return lst
 

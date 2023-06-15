@@ -168,7 +168,7 @@ class DescrptSeAtten(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd):
+    def forward(self, extended_coord, selected, atype, selected_type, selected_loc=None, atype_tebd=None, nlist_tebd=None):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -203,13 +203,9 @@ class DescrptSeAtten(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
-        if not self.return_rot:
-            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
-                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff
-        else:
-            return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
-                   ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
-                   rot_mat.view(-1, self.filter_neuron[-1], 3)
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
+               ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
+               rot_mat.view(-1, self.filter_neuron[-1], 3)
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

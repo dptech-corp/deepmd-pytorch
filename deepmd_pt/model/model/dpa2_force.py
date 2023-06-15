@@ -98,7 +98,8 @@ class ForceModelDPA2(BaseModel):
         nnei_mask = selected != -1
         padding_selected_loc = selected_loc * nnei_mask
 
-        descriptor, env_mat, _, rot_mat = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd, nlist_tebd)
+        descriptor, env_mat, _, rot_mat = self.descriptor(extended_coord, selected, atype, selected_type,
+                                                          atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep = \
             self.backbone(descriptor, env_mat, padding_selected_loc, selected_type, nnei_mask)
         force_out = self.fitting_net_force(transformed_atomic_rep, atype, atype_tebd, rot_mat)
