@@ -4,7 +4,7 @@ import torch.nn as nn
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten, DescrptGaussian
 from deepmd_pt.model.task import DenoiseNet, TypePredictNet
-from deepmd_pt.model.network import TypeEmbedNet, EnergyHead, Embedding, NodeTaskHead
+from deepmd_pt.model.network import TypeEmbedNet, EnergyHead, Embedding, NodeTaskHead, Linear
 from deepmd_pt.model.backbone import Evoformer3bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -25,6 +25,7 @@ class DenoiseModelDPA2Iter(BaseModel):
         # Descriptor + Type Embedding Net
         ntypes = len(model_params['type_map'])
         self.ntypes = ntypes
+        descriptor_param0 = model_params.pop('descriptor_0')
         descriptor_param = model_params.pop('descriptor')
         type_embedding_param = model_params.pop('type_embedding', None)
         if type_embedding_param is None:
@@ -32,34 +33,43 @@ class DenoiseModelDPA2Iter(BaseModel):
         else:
             tebd_dim = type_embedding_param['neuron'][-1]
             self.tebd_dim = tebd_dim
-        self.descriptor_type = descriptor_param['type']
-        assert self.descriptor_type in ['gaussian'], 'Only descriptor `gaussian` is supported for DPA-2-iter!'
+        self.descriptor2_type = descriptor_param['type']
+        assert self.descriptor2_type in ['gaussian'], 'Only descriptor `gaussian` is supported for DPA-2-iter!'
         descriptor_param['ntypes'] = ntypes
+        descriptor_param0['ntypes'] = ntypes
+        descriptor_param0['tebd_dim'] = self.tebd_dim
         descriptor_param['num_pair'] = 2 * ntypes
         descriptor_param['embed_dim'] = self.tebd_dim
         self.do_tag_embedding = descriptor_param.pop('do_tag_embedding', True)
         self.tag_ener_pref = descriptor_param.pop('tag_ener_pref', True)
-        self.descriptor = DescrptGaussian(**descriptor_param)
+        self.descriptor2 = DescrptGaussian(**descriptor_param)
+
+        self.conat_two_desc = descriptor_param0.get("add", "sum") == "concat"
+        self.pre_add = descriptor_param0.get("pre_add", True)
+        if self.pre_add:
+            self.descriptor = DescrptSeAtten(**descriptor_param0)
+            self.dec_proj = Linear(self.descriptor.dim_out, self.tebd_dim, bias=False, init="glorot")
+
         self.atom_type_embedding = nn.Embedding(ntypes + 1, self.tebd_dim, padding_idx=ntypes, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         # self.atom_type_embedding = TypeEmbedNet(ntypes, self.tebd_dim)
         if self.do_tag_embedding:
             self.tag_encoder = nn.Embedding(3, self.tebd_dim)
             self.tag_encoder2 = nn.Embedding(2, self.tebd_dim)
-            self.tag_type_embedding = TypeEmbedNet(10, self.descriptor.dim_emb)
+            self.tag_type_embedding = TypeEmbedNet(10, self.descriptor2.dim_emb)
         else:
             print('not do tag embedding!!')
-        self.edge_type_embedding = nn.Embedding((ntypes + 1) * (ntypes + 1), self.descriptor.dim_emb, padding_idx=(ntypes + 1) * (ntypes + 1) - 1, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.edge_type_embedding = nn.Embedding((ntypes + 1) * (ntypes + 1), self.descriptor2.dim_emb, padding_idx=(ntypes + 1) * (ntypes + 1) - 1, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
         # BackBone
         backbone_param = model_params.pop('backbone')
         backbone_type = backbone_param.pop('type')
-        backbone_param['atomic_dim'] = self.descriptor.dim_out
-        backbone_param['pair_dim'] = self.descriptor.dim_emb
-        if self.descriptor.nnei2 is None:
-            backbone_param['nnei'] = self.descriptor.nnei
+        backbone_param['atomic_dim'] = self.descriptor2.dim_out
+        backbone_param['pair_dim'] = self.descriptor2.dim_emb
+        if self.descriptor2.nnei2 is None:
+            backbone_param['nnei'] = self.descriptor2.nnei
         else:
-            backbone_param['nnei'] = self.descriptor.nnei2
-        self.pair_embed_dim = self.descriptor.dim_emb
+            backbone_param['nnei'] = self.descriptor2.nnei2
+        self.pair_embed_dim = self.descriptor2.dim_emb
         self.attention_heads = backbone_param['attn_head']
         self.num_block = backbone_param.get('num_block', 1)
         if backbone_type == 'evo-iter':
@@ -221,9 +231,18 @@ class DenoiseModelDPA2Iter(BaseModel):
         nnei1 = selected.shape[-1]
         # nframes x nloc x nnei1
         nnei1_mask = selected != -1
+        atype_tebd = self.atom_type_embedding(atype)
+        nlist_tebd = self.atom_type_embedding(selected_type)
+
+        if self.pre_add:
+            # nframes x nloc x embed_out
+            descriptor, env_mat, _ = self.descriptor(extended_coord, selected, atype, selected_type, atype_tebd,
+                                                     nlist_tebd)
+            # nframes x nloc x tebd_dim
+            atomic_long = self.dec_proj(descriptor)
 
         # Neighborhood 2
-        nnei2 = self.descriptor.nnei2
+        nnei2 = self.descriptor2.nnei2
         # nframes x nloc x (1 + nnei2)
         selected2 = torch.cat([torch.arange(0, nloc, device=selected.device).reshape(1, nloc, 1).expand(nframes, -1, -1), selected[:, :, :nnei2]], dim=-1)
         selected_loc2 = torch.cat([torch.arange(0, nloc, device=selected_loc.device).reshape(1, nloc, 1).expand(nframes, -1, -1), selected_loc[:, :, :nnei2]], dim=-1)
@@ -246,6 +265,9 @@ class DenoiseModelDPA2Iter(BaseModel):
         # Atomic feature
         # [(nframes x nloc) x (1 + nnei2) x tebd_dim]
         atom_feature = self.atom_type_embedding(selected_type2).reshape(nframes * nloc, 1 + nnei2, self.tebd_dim)
+        if self.pre_add:
+            atomic_long = torch.gather(atomic_long, dim=1, index=selected_loc2.reshape(nframes, -1).unsqueeze(-1).expand(-1, -1, self.tebd_dim)).reshape(nframes * nloc, 1 + nnei2, self.tebd_dim)
+            atom_feature = atom_feature + atomic_long / 2
         # Optional: GRRG or mean of gbf TODO
 
         atom_feature = atom_feature * nnei2_mask.reshape(nframes * nloc, 1 + nnei2, 1)
@@ -271,7 +293,7 @@ class DenoiseModelDPA2Iter(BaseModel):
 
         # Update pair features (or and atomic features) with gbf features
         # delta_pos: [(nframes x nloc) x (1 + nnei2) x (1 + nnei2) x 3].
-        atomic_feature, pair_feature, delta_pos = self.descriptor(coord_selected, atom_feature, edge_type_2dim, edge_feature)
+        atomic_feature, pair_feature, delta_pos = self.descriptor2(coord_selected, atom_feature, edge_type_2dim, edge_feature)
         # [(nframes x nloc) x (1 + nnei2) x (1 + nnei2) x pair_dim]
         attn_bias = pair_feature
 
