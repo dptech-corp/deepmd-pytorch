@@ -63,9 +63,12 @@ class BaseModel(torch.nn.Module):
                     assert not missing_type, \
                         f"These type are not in stat file {model_params['stat_file_path']}: {missing_type}! Please change the stat file path!"
                     idx_map = [stat_type_map.index(i) for i in target_type_map]
-                    sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
-                                                     stats["sumn"][idx_map], stats["sumr2"][idx_map], \
-                                                     stats["suma2"][idx_map]
+                    if stats["sumr"].size:
+                        sumr, suma, sumn, sumr2, suma2 = stats["sumr"][idx_map], stats["suma"][idx_map], \
+                                                         stats["sumn"][idx_map], stats["sumr2"][idx_map], \
+                                                         stats["suma2"][idx_map]
+                    else:
+                        sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
                     fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
                 else:
                     sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
@@ -78,9 +81,12 @@ class BaseModel(torch.nn.Module):
                         assert not missing_type, \
                             f"These type are not in stat file {file_path}: {missing_type}! Please change the stat file path!"
                         idx_map = [stat_type_map.index(i) for i in target_type_map]
-                        sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp = stats["sumr"][idx_map], stats["suma"][idx_map], \
-                                                                             stats["sumn"][idx_map], stats["sumr2"][idx_map], \
-                                                                             stats["suma2"][idx_map]
+                        if stats["sumr"].size:
+                            sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp = stats["sumr"][idx_map], stats["suma"][idx_map], \
+                                                                                 stats["sumn"][idx_map], stats["sumr2"][idx_map], \
+                                                                                 stats["suma2"][idx_map]
+                        else:
+                            sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp = [], [], [], [], []
                         sumr.append(sumr_tmp)
                         suma.append(suma_tmp)
                         sumn.append(sumn_tmp)

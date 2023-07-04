@@ -15,6 +15,7 @@ class Descriptor(torch.nn.Module):
         Descriptor base method.
         """
         super(Descriptor, self).__init__()
+        self.local_cluster = False
 
     @property
     def dim_out(self):
@@ -22,6 +23,13 @@ class Descriptor(torch.nn.Module):
         Returns the output dimension of this descriptor
         """
         return self.filter_neuron[-1] * self.axis_neuron
+
+    @property
+    def dim_in(self):
+        """
+        Returns the atomic input dimension of this descriptor
+        """
+        return self.tebd_dim
 
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.

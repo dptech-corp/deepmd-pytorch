@@ -59,7 +59,7 @@ class EnergyModelHybrid(BaseModel):
                 descriptor_list.append(DescrptSeUni(**descriptor_param_item))
             else:
                 RuntimeError("Unsupported descriptor type!")
-        self.descriptor = DescrptHybrid(descriptor_list, descriptor_param['list'])
+        self.descriptor = DescrptHybrid(descriptor_list, descriptor_param)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
@@ -99,7 +99,7 @@ class EnergyModelHybrid(BaseModel):
             nlist_tebd.append(self.type_embedding(selected_type_item))
 
         descriptor, _, _, _ = self.descriptor(extended_coord, selected, atype, selected_type,
-                                                 selected_loc=selected_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
+                                              nlist_loc=selected_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)

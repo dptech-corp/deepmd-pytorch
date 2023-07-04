@@ -8,6 +8,7 @@ from .dpa1_force import ForceModelDPA1
 from .dpa2_force import ForceModelDPA2
 from .dpau_ener import EnergyModelDPAUni
 from .dpau_force import ForceModelDPAUni
+from .dpa2_lcc_force import ForceModelDPA2Lcc
 from .hybrid_ener import EnergyModelHybrid
 from .hybrid_force import ForceModelHybrid
 
@@ -30,8 +31,11 @@ def get_model(model_params, sampled=None):
             elif model_params["descriptor"]["type"] == "hybrid":
                 if model_params["fitting_net"].get("type", "ener") == "ener":
                     return EnergyModelHybrid(model_params, sampled)
-                elif "direct" in model_params["fitting_net"].get("type", "ener"):
+                elif model_params["fitting_net"].get("type", "ener") in ["atten_vec_lcc", "direct_force", "direct_force_ener"]:
                     return ForceModelHybrid(model_params, sampled)
+            elif model_params["descriptor"]["type"] == "gaussian_lcc":
+                if model_params["fitting_net"].get("type", "ener") == "atten_vec_lcc":
+                    return ForceModelDPA2Lcc(model_params, sampled)
             else:
                 raise NotImplementedError
         else:

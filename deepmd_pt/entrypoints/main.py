@@ -78,7 +78,7 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
                 has_stat_file_path = False
         model_params["stat_file_path"] = stat_file_path
 
-    if ckpt or has_stat_file_path:
+    if ckpt or finetune_model or has_stat_file_path:
         train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
                                  type_split=type_split, noise_settings=noise_settings)
         sampled = None

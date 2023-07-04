@@ -140,7 +140,7 @@ class Trainer(object):
             self.wrapper = torch.jit.script(self.wrapper)
         # resuming and finetune
         if model_params["resuming"] and (self.rank == 0):
-            ntest = model_params.get("data_bias_nsample", 10)
+            ntest = model_params.get("data_bias_nsample", 1)
             origin_model = finetune_model if finetune_model is not None else resume_from
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model)
@@ -165,20 +165,31 @@ class Trainer(object):
                     logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
             self.wrapper.load_state_dict(state_dict)
             # finetune
-            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
-                assert model_params["descriptor"]["type"] in [
-                    "se_atten"
-                ] and model_params["fitting_net"].get("type", "ener") in [
-                    "ener"
-                ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener', 'direct_force_ener', 'atten_vec_lcc']:
+                # assert model_params["descriptor"]["type"] in [
+                #     "se_atten"
+                # ] and model_params["fitting_net"].get("type", "ener") in [
+                #     "ener"
+                # ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
                 old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
-                self.model.fitting_net.change_energy_bias(
-                    config,
-                    self.model,
-                    old_type_map,
-                    new_type_map,
-                    ntest=ntest,
-                )
+                if model_params["fitting_net"].get("type", "ener") in ['ener', 'atten_vec_lcc']:
+                    self.model.fitting_net.change_energy_bias(
+                        config,
+                        self.model,
+                        old_type_map,
+                        new_type_map,
+                        ntest=ntest,
+                        bias_shift=model_params.get("bias_shift", "statistic"),
+                    )
+                else:
+                    self.model.fitting_net_ener.change_energy_bias(
+                        config,
+                        self.model,
+                        old_type_map,
+                        new_type_map,
+                        ntest=ntest,
+                        bias_shift=model_params.get("bias_shift", "statistic"),
+                    )
 
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)

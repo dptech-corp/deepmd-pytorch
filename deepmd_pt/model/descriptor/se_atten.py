@@ -104,6 +104,13 @@ class DescrptSeAtten(Descriptor):
         return self.filter_neuron[-1] * self.axis_neuron
 
     @property
+    def dim_in(self):
+        """
+        Returns the atomic input dimension of this descriptor
+        """
+        return self.tebd_dim
+
+    @property
     def dim_emb(self):
         """
         Returns the output dimension of embedding
@@ -168,7 +175,7 @@ class DescrptSeAtten(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, selected, atype, selected_type, selected_loc=None, atype_tebd=None, nlist_tebd=None):
+    def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc=None, atype_tebd=None, nlist_tebd=None, seq_input=None):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -181,19 +188,23 @@ class DescrptSeAtten(Descriptor):
         - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
-        nloc = selected.shape[1]
+        nframes, nloc = nlist.shape[:2]
         dmatrix, diff = prod_env_mat_se_a(
-            extended_coord, selected, atype,
+            extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,
         )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
-
+        # [nframes, nloc, tebd_dim]
+        if seq_input is not None:
+            if seq_input.shape[0] == nframes * nloc:
+                seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
+            atype_tebd += seq_input
 
         ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
                                     nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
-        nei_mask = selected_type != self.ntypes
+        nei_mask = nlist_type != self.ntypes
         ret = self.dpa1_attention(ret, nei_mask, input_r)  # shape is [nframes*nloc, self.neei, out_size]
         inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
         xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
