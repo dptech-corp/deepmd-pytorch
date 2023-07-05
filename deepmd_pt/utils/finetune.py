@@ -1,5 +1,6 @@
 import logging
 import torch
+from deepmd_pt.utils.env import DEVICE
 
 def load_model_params(ckpt, finetune_model, config):
     """Load model_params according to the pretrained one.
@@ -10,7 +11,7 @@ def load_model_params(ckpt, finetune_model, config):
     """
     model_params = config['model']
     if finetune_model is not None:
-        state_dict = torch.load(finetune_model)
+        state_dict = torch.load(finetune_model, map_location=DEVICE)
         last_model_params = state_dict['_extra_state']['model_params']
         old_type_map, new_type_map = last_model_params['type_map'], model_params['type_map']
         assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."
