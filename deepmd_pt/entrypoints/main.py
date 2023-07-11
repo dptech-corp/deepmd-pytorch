@@ -11,19 +11,12 @@ from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from torch.distributed.elastic.multiprocessing.errors import record
 
-from deepmd_pt.utils.finetune import load_model_params
+from deepmd_pt.utils.finetune import change_finetune_model_params
 from deepmd_pt.utils.stat import make_stat_input
+from deepmd_pt.utils.multi_task import preprocess_shared_params
 
 
 def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
-    config = load_model_params(ckpt, finetune_model, config)
-    training_params = config['training']
-    model_params = config['model']
-    training_dataset_params = training_params['training_data']
-    type_split = True
-    if model_params['descriptor']['type'] in ['se_atten', 'se_uni']:
-        type_split = False
-    validation_dataset_params = training_params.pop('validation_data')
     # Initialize DDP
     local_rank = os.environ.get('LOCAL_RANK')
     if local_rank is not None:
@@ -31,67 +24,100 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
         assert dist.is_nccl_available()
         dist.init_process_group(backend='nccl')
 
-    training_systems = training_dataset_params['systems']
-    validation_systems = validation_dataset_params['systems']
+    multi_task = "model_dict" in config["model"]
+    config["model"] = change_finetune_model_params(ckpt, finetune_model, config["model"], multi_task=multi_task)
+    config["model"]["resuming"] = (finetune_model is not None) or (ckpt is not None)
+    shared_links = None
+    if multi_task:
+        config["model"], shared_links = preprocess_shared_params(config["model"])
 
-    # noise params
-    noise_settings = None
-    if config['loss'].get('type', 'ener') == 'denoise':
-        noise_settings = {"noise_type": config['loss'].pop("noise_type", "uniform"),
-                          "noise": config['loss'].pop("noise", 1.0),
-                          "noise_mode": config['loss'].pop("noise_mode", "fix_num"),
-                          "mask_num": config['loss'].pop("mask_num", 8),
-                          "mask_prob": config['loss'].pop("mask_prob", 0.15),
-                          "same_mask": config['loss'].pop("same_mask", False),
-                          "mask_coord": config['loss'].pop("mask_coord", False),
-                          "mask_type": config['loss'].pop("mask_type", False),
-                          "max_fail_num": config['loss'].pop("max_fail_num", 10),
-                          "mask_type_idx": len(model_params["type_map"]) - 1}
-    # noise_settings = None
-    validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params,
-                                  type_split=type_split, noise_settings=noise_settings)
-    hybrid_descrpt = model_params["descriptor"]["type"] == "hybrid"
-    has_stat_file_path = True
-    if not hybrid_descrpt:
-        default_stat_file_name = f'stat_file_rcut{model_params["descriptor"]["rcut"]:.2f}_'\
-            f'smth{model_params["descriptor"]["rcut_smth"]:.2f}_'\
-            f'sel{model_params["descriptor"]["sel"]}.npz'
-        model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
-        model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
-        model_params["stat_file_path"] = os.path.join(model_params["stat_file_dir"], model_params["stat_file"])
-        if not os.path.exists(model_params["stat_file_path"]):
-            has_stat_file_path = False
-    else:
-        default_stat_file_name = []
-        for descrpt in model_params["descriptor"]["list"]:
-            default_stat_file_name.append(f'stat_file_rcut{descrpt["rcut"]:.2f}_'
-                                          f'smth{descrpt["rcut_smth"]:.2f}_'
-                                          f'sel{descrpt["sel"]}_{descrpt["type"]}.npz')
-        model_params["stat_file_dir"] = training_params.get("stat_file_dir", "stat_files")
-        model_params["stat_file"] = training_params.get("stat_file", default_stat_file_name)
-        assert isinstance(model_params["stat_file"], list), "Stat file of hybrid descriptor must be a list!"
-        stat_file_path = []
-        for stat_file_path_item in model_params["stat_file"]:
-            single_file_path = os.path.join(model_params["stat_file_dir"], stat_file_path_item)
-            stat_file_path.append(single_file_path)
-            if not os.path.exists(single_file_path):
+    def prepare_trainer_input_single(model_params_single, data_dict_single, loss_dict_single, suffix=''):
+        training_dataset_params = data_dict_single['training_data']
+        type_split = False
+        if model_params_single['descriptor']['type'] in ['se_e2_a']:
+            type_split = True
+        validation_dataset_params = data_dict_single['validation_data']
+        training_systems = training_dataset_params['systems']
+        validation_systems = validation_dataset_params['systems']
+
+        # noise params
+        noise_settings = None
+        if loss_dict_single.get('type', 'ener') == 'denoise':
+            noise_settings = {"noise_type": loss_dict_single.pop("noise_type", "uniform"),
+                              "noise": loss_dict_single.pop("noise", 1.0),
+                              "noise_mode": loss_dict_single.pop("noise_mode", "fix_num"),
+                              "mask_num": loss_dict_single.pop("mask_num", 8),
+                              "mask_prob": loss_dict_single.pop("mask_prob", 0.15),
+                              "same_mask": loss_dict_single.pop("same_mask", False),
+                              "mask_coord": loss_dict_single.pop("mask_coord", False),
+                              "mask_type": loss_dict_single.pop("mask_type", False),
+                              "max_fail_num": loss_dict_single.pop("max_fail_num", 10),
+                              "mask_type_idx": len(model_params_single["type_map"]) - 1}
+        # noise_settings = None
+
+        # stat files
+        hybrid_descrpt = model_params_single["descriptor"]["type"] == "hybrid"
+        has_stat_file_path = True
+        if not hybrid_descrpt:
+            default_stat_file_name = f'stat_file_rcut{model_params_single["descriptor"]["rcut"]:.2f}_' \
+                                     f'smth{model_params_single["descriptor"]["rcut_smth"]:.2f}_' \
+                                     f'sel{model_params_single["descriptor"]["sel"]}.npz'
+            model_params_single["stat_file_dir"] = data_dict_single.get("stat_file_dir", f"stat_files{suffix}")
+            model_params_single["stat_file"] = data_dict_single.get("stat_file", default_stat_file_name)
+            model_params_single["stat_file_path"] = os.path.join(model_params_single["stat_file_dir"], model_params_single["stat_file"])
+            if not os.path.exists(model_params_single["stat_file_path"]):
                 has_stat_file_path = False
-        model_params["stat_file_path"] = stat_file_path
+        else:
+            default_stat_file_name = []
+            for descrpt in model_params_single["descriptor"]["list"]:
+                default_stat_file_name.append(f'stat_file_rcut{descrpt["rcut"]:.2f}_'
+                                              f'smth{descrpt["rcut_smth"]:.2f}_'
+                                              f'sel{descrpt["sel"]}_{descrpt["type"]}.npz')
+            model_params_single["stat_file_dir"] = data_dict_single.get("stat_file_dir", f"stat_files{suffix}")
+            model_params_single["stat_file"] = data_dict_single.get("stat_file", default_stat_file_name)
+            assert isinstance(model_params_single["stat_file"], list), "Stat file of hybrid descriptor must be a list!"
+            stat_file_path = []
+            for stat_file_path_item in model_params_single["stat_file"]:
+                single_file_path = os.path.join(model_params_single["stat_file_dir"], stat_file_path_item)
+                stat_file_path.append(single_file_path)
+                if not os.path.exists(single_file_path):
+                    has_stat_file_path = False
+            model_params_single["stat_file_path"] = stat_file_path
 
-    if ckpt or finetune_model or has_stat_file_path:
-        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
-                                 type_split=type_split, noise_settings=noise_settings)
-        sampled = None
-    else:
-        train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
-                                 type_split=type_split)
-        data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-        sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
-        if noise_settings is not None:
-            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params,
+        # validation and training data
+        validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params_single,
+                                      type_split=type_split, noise_settings=noise_settings)
+        if ckpt or finetune_model or has_stat_file_path:
+            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
                                      type_split=type_split, noise_settings=noise_settings)
+            sampled = None
+        else:
+            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
+                                     type_split=type_split)
+            data_stat_nbatch = model_params_single.get('data_stat_nbatch', 10)
+            sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+            if noise_settings is not None:
+                train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
+                                         type_split=type_split, noise_settings=noise_settings)
+        return train_data, validation_data, sampled
+
+    if not multi_task:
+        train_data, validation_data, sampled = \
+            prepare_trainer_input_single(config['model'],
+                                         config['training'],
+                                         config['loss'])
+    else:
+        train_data, validation_data, sampled = {}, {}, {}
+        for model_key in config['model']['model_dict']:
+            train_data[model_key], validation_data[model_key], sampled[model_key] = \
+                prepare_trainer_input_single(config['model']['model_dict'][model_key],
+                                             config['training']['data_dict'][model_key],
+                                             config['loss_dict'][model_key],
+                                             suffix=f'_{model_key}')
+
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data,
-                               resume_from=ckpt, force_load=force_load, finetune_model=finetune_model)
+                               resume_from=ckpt, force_load=force_load, finetune_model=finetune_model,
+                               shared_links=shared_links)
     return trainer
 
 

@@ -81,7 +81,7 @@ class ForceModelHybrid(BaseModel):
             self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
             if fitting_type == 'direct_force_ener':
-                self.fitting_net_ener = EnergyFittingNetType(**fitting_param)
+                self.fitting_net = EnergyFittingNetType(**fitting_param)
 
         elif self.fitting_type == 'atten_vec_lcc':
             assert self.descriptor.hybrid_mode == 'sequential', \
@@ -130,7 +130,7 @@ class ForceModelHybrid(BaseModel):
             force_out = self.fitting_net_force(atomic_rep, atype, atype_tebd, rot_mat)
             model_predict = {'force': force_out}
             if self.fitting_type == 'direct_force_ener':
-                atom_energy = self.fitting_net_ener(atomic_rep, atype, atype_tebd)
+                atom_energy = self.fitting_net(atomic_rep, atype, atype_tebd)
                 energy = atom_energy.sum(dim=1)
                 model_predict['energy'] = energy
             return model_predict

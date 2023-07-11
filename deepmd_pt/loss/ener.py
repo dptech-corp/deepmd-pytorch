@@ -50,6 +50,8 @@ class EnergyStdLoss(TaskLoss):
         pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
+        # more_loss['log_keys'] = []  # showed when validation on the fly
+        # more_loss['test_keys'] = []  # showed when doing dp test
         atom_norm = 1. / natoms[0, 0]
         if self.has_e and 'energy' in model_pred and 'energy' in label:
             if not self.use_l1_all:
@@ -58,10 +60,12 @@ class EnergyStdLoss(TaskLoss):
                 loss += atom_norm * (pref_e * l2_ener_loss)
                 rmse_e = l2_ener_loss.sqrt() * atom_norm
                 more_loss['rmse_e'] = rmse_e.detach()
+                # more_loss['log_keys'].append('rmse_e')
             else:  # use l1 and for all atoms
                 l1_ener_loss = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="sum")
                 loss += (pref_e * l1_ener_loss)
                 more_loss['mae_e'] = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="mean").detach()
+                # more_loss['log_keys'].append('rmse_e')
             if mae:
                 mae_e = torch.mean(torch.abs(model_pred['energy'] - label['energy'])) * atom_norm
                 more_loss['mae_e'] = mae_e.detach()

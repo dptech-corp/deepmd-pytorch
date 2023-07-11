@@ -35,7 +35,7 @@ def preprocess_shared_params(model_config):
         shared_level = 0
         if ":" in key_in_dict:
             shared_key = key_in_dict.split(":")[0]
-            shared_level = key_in_dict.split(":")[1]
+            shared_level = int(key_in_dict.split(":")[1])
         assert shared_key in shared_dict, \
             f"Appointed {shared_type} {shared_key} are not in the shared_dict! Please check the input params."
         if index is None:

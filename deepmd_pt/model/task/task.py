@@ -18,6 +18,18 @@ class TaskBaseMethod(torch.nn.Module):
         """
         raise NotImplementedError
 
+    def share_params(self, base_class, shared_level, resume=False):
+        assert self.__class__ == base_class.__class__, "Only fitting nets of the same type can share params!"
+        if shared_level == 0:
+            # link buffers
+            if hasattr(self, 'bias_atom_e'):
+                self.bias_atom_e = base_class.bias_atom_e
+            # the following will successfully link all the params except buffers, which need manually link.
+            for item in self._modules:
+                self._modules[item] = base_class._modules[item]
+        else:
+            raise NotImplementedError
+
     def change_energy_bias(self, config, model, old_type_map, new_type_map, bias_shift='delta', ntest=10):
         """Change the energy bias according to the input data and the pretrained model.
 

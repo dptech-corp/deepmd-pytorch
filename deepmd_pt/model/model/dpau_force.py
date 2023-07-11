@@ -48,16 +48,16 @@ class ForceModelDPAUni(BaseModel):
         self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
         if self.fitting_type == 'direct_force_ener':
-          self.fitting_net_ener = EnergyFittingNetType(**fitting_param)
+            self.fitting_net = EnergyFittingNetType(**fitting_param)
 
     def forward(
-        self, 
-        coord, atype, natoms, 
-        mapping, shift, 
-        selected, 
-        selected_type,
-        selected_loc: Optional[torch.Tensor] = None, 
-        box: Optional[torch.Tensor] = None):
+            self,
+            coord, atype, natoms,
+            mapping, shift,
+            selected,
+            selected_type,
+            selected_loc: Optional[torch.Tensor] = None,
+            box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -76,16 +76,16 @@ class ForceModelDPAUni(BaseModel):
         extended_coord = extended_coord - shift
         # extended_coord.requires_grad_(True)
         descriptor, env_mat, _, rot_mat = self.descriptor(
-          extended_coord,
-          nlist,
-          atype,
-          nlist_type,
-          nlist_loc,
+            extended_coord,
+            nlist,
+            atype,
+            nlist_type,
+            nlist_loc,
         )
         force_out = self.fitting_net_force(descriptor, atype, None, rot_mat)
         model_predict = {'force': force_out}
         if self.fitting_type == 'direct_force_ener':
-          atom_energy = self.fitting_net_ener(descriptor, atype, None)
-          energy = atom_energy.sum(dim=1)
-          model_predict['energy'] = energy
+            atom_energy = self.fitting_net(descriptor, atype, None)
+            energy = atom_energy.sum(dim=1)
+            model_predict['energy'] = energy
         return model_predict

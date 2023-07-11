@@ -78,6 +78,16 @@ class DescrptHybrid(Descriptor):
         else:
             raise RuntimeError
 
+    def share_params(self, base_class, shared_level, resume=False):
+        assert self.__class__ == base_class.__class__, "Only descriptors of the same type can share params!"
+        if shared_level == 0:
+            for ii, des in enumerate(self.descriptor_list):
+                self.descriptor_list[ii].share_params(base_class.descriptor_list[ii], shared_level, resume=resume)
+            if self.hybrid_mode == "sequential":
+                self.sequential_transform = base_class.sequential_transform
+        else:
+            raise NotImplementedError
+
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
         """

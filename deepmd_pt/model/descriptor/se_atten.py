@@ -169,6 +169,11 @@ class DescrptSeAtten(Descriptor):
             dstd = np.tile(dstdunit, [self.nnei, 1])
             all_davg.append(davg)
             all_dstd.append(dstd)
+        self.sumr = sumr
+        self.suma = suma
+        self.sumn = sumn
+        self.sumr2 = sumr2
+        self.suma2 = suma2
         if not self.set_davg_zero:
             mean = np.stack(all_davg)
             self.mean.copy_(torch.tensor(mean, device=env.DEVICE))

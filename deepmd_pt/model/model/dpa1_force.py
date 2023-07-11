@@ -60,7 +60,7 @@ class ForceModelDPA1(BaseModel):
         self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
         if fitting_type == 'direct_force_ener':
-            self.fitting_net_ener = EnergyFittingNetType(**fitting_param)
+            self.fitting_net = EnergyFittingNetType(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc=None, box=None):
         """Return total energy of the system.
@@ -88,7 +88,7 @@ class ForceModelDPA1(BaseModel):
         force_out = self.fitting_net_force(descriptor, atype, atype_tebd, rot_mat)
         model_predict = {'force': force_out}
         if self.fitting_type == 'direct_force_ener':
-            atom_energy = self.fitting_net_ener(descriptor, atype, atype_tebd)
+            atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
             energy = atom_energy.sum(dim=1)
             model_predict['energy'] = energy
 

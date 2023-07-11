@@ -518,6 +518,15 @@ class TypeEmbedNet(nn.Module):
         """
         return self.embedding(atype)
 
+    def share_params(self, base_class, shared_level, resume=False):
+        assert self.__class__ == base_class.__class__, "Only TypeEmbedNet of the same type can share params!"
+        if shared_level == 0:
+            # the following will successfully link all the params except buffers, which need manually link.
+            for item in self._modules:
+                self._modules[item] = base_class._modules[item]
+        else:
+            raise NotImplementedError
+
 
 @torch.jit.script
 def gaussian(x, mean, std: float):

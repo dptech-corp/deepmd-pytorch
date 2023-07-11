@@ -36,6 +36,25 @@ class Descriptor(torch.nn.Module):
         """
         raise NotImplementedError
 
+    def share_params(self, base_class, shared_level, resume=False):
+        assert self.__class__ == base_class.__class__, "Only descriptors of the same type can share params!"
+        if shared_level == 0:
+            # link buffers
+            if hasattr(self, 'mean') and not resume:
+                # in case of change params during resume
+                sumr_base, suma_base, sumn_base, sumr2_base, suma2_base = \
+                    base_class.sumr, base_class.suma, base_class.sumn, base_class.sumr2, base_class.suma2
+                sumr, suma, sumn, sumr2, suma2 = self.sumr, self.suma, self.sumn, self.sumr2, self.suma2
+                base_class.init_desc_stat(sumr_base + sumr, suma_base + suma, sumn_base + sumn, sumr2_base + sumr2, suma2_base + suma2)
+                self.mean = base_class.mean
+                self.stddev = base_class.stddev
+            # self.load_state_dict(base_class.state_dict()) # this does not work, because it only inits the model
+            # the following will successfully link all the params except buffers
+            for item in self._modules:
+                self._modules[item] = base_class._modules[item]
+        else:
+            raise NotImplementedError
+
     def forward(self, **kwargs):
         """Calculate descriptor.
         """
