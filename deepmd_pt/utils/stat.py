@@ -80,7 +80,10 @@ def make_stat_input(datasets, dataloaders, nbatches):
         if type(sys_stat["coord"][0]) == tuple:
             sys_stat1, sys_stat2 = sys_stat.copy(), sys_stat.copy()
             for key in keys:
-                sys_stat[key], sys_stat1[key], sys_stat2[key] = zip(*sys_stat[key])
+                if type(sys_stat[key][0]) == tuple:
+                    sys_stat[key], sys_stat1[key], sys_stat2[key] = [list(stat) for stat in zip(*sys_stat[key])]
+                else:
+                    sys_stat1[key] = sys_stat2[key] = sys_stat[key]
             for stat in [sys_stat, sys_stat1, sys_stat2]:
                 lst.append(parse_sys_stat(stat, keys))
         else:

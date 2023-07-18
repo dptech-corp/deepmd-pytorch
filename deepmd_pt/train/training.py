@@ -311,7 +311,7 @@ class Trainer(object):
                             task_key=task_key,
                         )
                         # more_loss.update({"rmse": math.sqrt(loss)})
-                        natoms = input_dict["natoms"][0, 0]
+                        natoms = input_dict["natoms"][0, 0] if type(input_dict["natoms"]) != tuple else input_dict["natoms"][0][0, 0]
                         sum_natoms += natoms
                         for k, v in more_loss.items():
                             if 'l2_' not in k:

@@ -47,7 +47,7 @@ class EnergyStdLoss(TaskLoss):
         pref_v = self.limit_pref_v + (self.start_pref_v - self.limit_pref_v) * coef
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
-        atom_norm = 1. / natoms[0, 0]
+        atom_norm = 1. / natoms[0, 0] if type(natoms) != tuple else natoms[0][0, 0]
         if self.has_e and 'energy' in model_pred and 'energy' in label:
             l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
             more_loss['l2_ener_loss'] = l2_ener_loss.detach()
