@@ -384,8 +384,13 @@ class DescrptSeUni(Descriptor):
         # nb x nloc x ng1
         atype_tebd = self.type_embd(atype) + seq_input
       else:
-        # nb x nloc x ng1
-        atype_tebd = seq_input        
+        # nb x nloc x ng1        
+        atype_tebd = seq_input
+        # wasted evalueation of type_embd, 
+        # since whether seq_input is None or not can only be 
+        # known at runtime, we cannot decide whether create the
+        # type embedding net or not at `__init__`
+        foo = self.type_embd(atype)
     else:
       # nb x nloc x ng1
       atype_tebd = self.type_embd(atype)
