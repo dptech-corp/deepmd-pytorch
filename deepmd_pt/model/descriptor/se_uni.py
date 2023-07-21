@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import logging
 try:
     from typing import Final
 except:
@@ -29,12 +30,14 @@ class Atten2Map(torch.nn.Module):
       ni,
       nd,
       nh,
+      has_gate: bool = False,   # apply gate to attn map
   ):
     super(Atten2Map, self).__init__()
     self.ni = ni
     self.nd = nd
     self.nh = nh
     self.mapqk = mylinear(ni, nd * 2 * nh, bias=False)
+    self.has_gate = has_gate
 
   def forward(
       self,
@@ -54,6 +57,9 @@ class Atten2Map(torch.nn.Module):
     # g2k = torch.nn.functional.normalize(g2k, dim=-1)
     # nb x nloc x nh x nnei x nnei
     attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
+    if self.has_gate:
+      gate = torch.matmul(h2, torch.transpose(h2, -1, -2)).unsqueeze(-3)
+      attnw = attnw * gate
     # mask the attenmap, nb x nloc x 1 x 1 x nnei
     attnw_mask = ~nlist_mask.unsqueeze(2).unsqueeze(2)
     # mask the attenmap, nb x nloc x 1 x nnei x 1
@@ -223,6 +229,7 @@ class DescrptSeUni(Descriptor):
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
+      attn2_has_gate: bool = True,
       attn_dotr: bool = True,
       activation: str = "tanh",
       update_style: str = "res_avg",
@@ -276,10 +283,17 @@ class DescrptSeUni(Descriptor):
     self.add_type_ebd_to_seq = add_type_ebd_to_seq
     if self.smooth and self.update_g1_has_attn:
       raise RuntimeError(
-        "current implementation of g1 update with attn is not smooth",
-        "plz set `smooth` to False if you intend to set",
-        "`update_g1_has_attn` to True"
+        "current implementation of g1 update with attn is not smooth ",
+        "plz set `smooth` to False if you intend to set ",
+        "`update_g1_has_attn` to True."
       )
+    if self.smooth and (not attn2_has_gate):
+      logging.warn(
+        "Your want to use a strictly smooth model, but at the same time "
+        "setting `attn2_has_gate` to False, which will make the model "
+        "slightly discontinuous. We force the `attn2_has_gate` to True. "
+      )
+      attn2_has_gate = True
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -304,7 +318,7 @@ class DescrptSeUni(Descriptor):
       self.proj_g1g1g2 = self._linear_layers(tmp_g1_h, self.g2_hiddens, bias=False)
     if update_g2_has_attn:
       self.attn2g_map = torch.nn.ModuleList(
-        [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
+        [Atten2Map(ii, attn2_hidden, attn2_nhead, attn2_has_gate) for ii in self.g2_hiddens])
       self.attn2_mh_apply = torch.nn.ModuleList(
         [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
       self.attn2_lm = torch.nn.ModuleList(

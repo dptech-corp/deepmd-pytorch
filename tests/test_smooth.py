@@ -48,6 +48,8 @@ model_dpau = {
     "update_h2": False,
     "gather_g1": True,
     "combine_grrg": False,
+    "attn2_has_gate" : True,
+    "smooth" : True,
     "_comment": " that's all"
   },
   "fitting_net": {
