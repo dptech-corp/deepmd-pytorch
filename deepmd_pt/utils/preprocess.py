@@ -174,9 +174,9 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
     if not type_split:
         sec = sec[-1:]
     lst = []
-    selected = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
-    selected_loc = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
-    selected_type = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    nlist = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    nlist_loc = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    nlist_type = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
     for i, nnei in enumerate(sec):
         if i > 0:
             nnei = nnei - sec[i - 1]
@@ -203,10 +203,10 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
         else:
             start = sec[i - 1]
         end = min(sec[i], start + indices.shape[1])
-        selected[:, start:end] = indices[:, :nnei]
-        selected_loc[:, start:end] = indices_loc[:, :nnei]
-        selected_type[:, start:end] = atype[indices[:, :nnei]] * mask + -1 * (1 - mask)
-    return selected, selected_loc, selected_type
+        nlist[:, start:end] = indices[:, :nnei]
+        nlist_loc[:, start:end] = indices_loc[:, :nnei]
+        nlist_type[:, start:end] = atype[indices[:, :nnei]] * mask + -1 * (1 - mask)
+    return nlist, nlist_loc, nlist_type
 
 
 def compute_smooth_weight(distance, rmin: float, rmax: float):
@@ -230,7 +230,7 @@ def make_env_mat(coord,
     """Based on atom coordinates, return environment matrix.
 
     Returns
-        selected: nlist, [nloc, nnei]
+        nlist: nlist, [nloc, nnei]
         merged_coord_shift: shift on nall atoms, [nall, 3]
         merged_mapping: mapping from nall index to nloc index, [nall]
     """
@@ -252,16 +252,18 @@ def make_env_mat(coord,
 
     # 构建邻居列表，并按 sel_a 筛选
     if not hybrid:
-        selected, selected_loc, selected_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
-                                                                    merged_mapping, type_split=type_split, min_check=min_check)
+        nlist, nlist_loc, nlist_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
+                                                           merged_mapping, type_split=type_split, min_check=min_check)
     else:
-        selected, selected_loc, selected_type = [], [], []
+        nlist, nlist_loc, nlist_type = [], [], []
         for ii, single_rcut in enumerate(rcut):
-            selected_tmp, selected_loc_tmp, selected_type_tmp = build_neighbor_list(coord.shape[0], merged_coord, merged_atype,
-                                                                        single_rcut, sec[ii],
-                                                                        merged_mapping, type_split=type_split,
-                                                                        min_check=min_check)
-            selected.append(selected_tmp)
-            selected_loc.append(selected_loc_tmp)
-            selected_type.append(selected_type_tmp)
-    return selected, selected_loc, selected_type, merged_coord_shift, merged_mapping
+            nlist_tmp, nlist_loc_tmp, nlist_type_tmp = build_neighbor_list(coord.shape[0], merged_coord,
+                                                                           merged_atype,
+                                                                           single_rcut, sec[ii],
+                                                                           merged_mapping,
+                                                                           type_split=type_split,
+                                                                           min_check=min_check)
+            nlist.append(nlist_tmp)
+            nlist_loc.append(nlist_loc_tmp)
+            nlist_type.append(nlist_type_tmp)
+    return nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping

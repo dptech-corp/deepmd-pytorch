@@ -346,7 +346,7 @@ class Trainer(object):
                     p_energy, p_force = KFOptWrapper.update_force(
                         input_dict, label_dict["force"], pref_f
                     )
-                    # [coord, atype, natoms, mapping, shift, selected, box]
+                    # [coord, atype, natoms, mapping, shift, nlist, box]
                     model_pred = {"energy": p_energy, "force": p_force}
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     loss, more_loss = module.loss[task_key](
@@ -552,9 +552,9 @@ class Trainer(object):
             "natoms",
             "mapping",
             "shift",
-            "selected",
-            "selected_loc",
-            "selected_type",
+            "nlist",
+            "nlist_loc",
+            "nlist_type",
             "box",
         ]:
             if item in batch_data:

@@ -60,8 +60,8 @@ class ForceModelDPA2Lcc(BaseModel):
 
         self.fitting_net = FittingNetAttenLcc(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type,
-                selected_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type,
+                nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -79,9 +79,9 @@ class ForceModelDPA2Lcc(BaseModel):
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         atype_tebd = self.type_embedding(atype)
-        selected_type[selected_type == -1] = self.ntypes
-        atomic_rep, pair_rep, delta_pos, _ = self.descriptor(extended_coord, selected, atype, selected_type,
-                                                             nlist_loc=selected_loc, atype_tebd=atype_tebd)
+        nlist_type[nlist_type == -1] = self.ntypes
+        atomic_rep, pair_rep, delta_pos, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
+                                                             nlist_loc=nlist_loc, atype_tebd=atype_tebd)
         energy_out, predict_force_nloc = self.fitting_net(atomic_rep, pair_rep, delta_pos, atype, nframes, nloc)
         force_target_mask = torch.ones_like(atype).type_as(predict_force_nloc).unsqueeze(-1)
 

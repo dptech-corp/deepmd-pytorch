@@ -26,9 +26,9 @@ def make_stat_input(datasets, dataloaders, nbatches):
         "atype",
         "natoms",
         "mapping",
-        "selected",
-        "selected_loc",
-        "selected_type",
+        "nlist",
+        "nlist_loc",
+        "nlist_type",
         "shift",
     ]
     if datasets[0].mixed_type:

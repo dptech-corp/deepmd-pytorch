@@ -100,15 +100,15 @@ class TaskBaseMethod(torch.nn.Module):
                 mapping = test_data['mapping'].to(DEVICE)
                 shift = test_data['shift'].to(DEVICE)
 
-                if isinstance(test_data['selected'], list):
-                    selected = [item.to(DEVICE) for item in test_data['selected']]
-                    selected_type = [item.to(DEVICE) for item in test_data['selected_type']]
-                    selected_loc = [item.to(DEVICE) for item in test_data['selected_loc']]
+                if isinstance(test_data['nlist'], list):
+                    nlist = [item.to(DEVICE) for item in test_data['nlist']]
+                    nlist_type = [item.to(DEVICE) for item in test_data['nlist_type']]
+                    nlist_loc = [item.to(DEVICE) for item in test_data['nlist_loc']]
                 else:
-                    selected = test_data['selected'].to(DEVICE)
-                    selected_type = test_data['selected_type'].to(DEVICE)
-                    selected_loc = test_data['selected_loc'].to(DEVICE)
-                ret = model(coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc)
+                    nlist = test_data['nlist'].to(DEVICE)
+                    nlist_type = test_data['nlist_type'].to(DEVICE)
+                    nlist_loc = test_data['nlist_loc'].to(DEVICE)
+                ret = model(coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc)
                 energy_predict.append(ret['energy'].reshape([nframes, 1]).detach().cpu().numpy())
         type_numbs = np.concatenate(type_numbs)
         energy_ground_truth = np.concatenate(energy_ground_truth)

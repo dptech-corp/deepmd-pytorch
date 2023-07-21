@@ -49,9 +49,9 @@ class EnergyModelDPAUni(BaseModel):
         self, 
         coord, atype, natoms, 
         mapping, shift, 
-        selected, 
-        selected_type,
-        selected_loc: Optional[torch.Tensor] = None, 
+        nlist,
+        nlist_type,
+        nlist_loc: Optional[torch.Tensor] = None,
         box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
@@ -63,7 +63,6 @@ class EnergyModelDPAUni(BaseModel):
         - energy: Energy per atom.
         - force: XYZ force per atom.
         """
-        nlist, nlist_type, nlist_loc = selected, selected_type, selected_loc
         index = mapping.unsqueeze(-1).expand(-1, -1, 3)
         # index nframes x nall x 3
         # coord nframes x nloc x 3

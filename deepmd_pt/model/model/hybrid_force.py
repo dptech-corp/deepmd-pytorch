@@ -97,8 +97,8 @@ class ForceModelHybrid(BaseModel):
 
             self.fitting_net = FittingNetAttenLcc(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor] = None,
-                selected_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor] = None,
+                nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -119,12 +119,12 @@ class ForceModelHybrid(BaseModel):
         atype_tebd = self.type_embedding(atype)
 
         nlist_tebd = []
-        for selected_type_item in selected_type:
-            selected_type_item[selected_type_item == -1] = self.ntypes
-            nlist_tebd.append(self.type_embedding(selected_type_item))
+        for nlist_type_item in nlist_type:
+            nlist_type_item[nlist_type_item == -1] = self.ntypes
+            nlist_tebd.append(self.type_embedding(nlist_type_item))
 
-        atomic_rep, pair_rep, delta_pos, rot_mat = self.descriptor(extended_coord, selected, atype, selected_type,
-                                                                   nlist_loc=selected_loc, atype_tebd=atype_tebd,
+        atomic_rep, pair_rep, delta_pos, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type,
+                                                                   nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                                    nlist_tebd=nlist_tebd)
         if self.fitting_type in ['direct_force', 'direct_force_ener']:
             force_out = self.fitting_net_force(atomic_rep, atype, atype_tebd, rot_mat)

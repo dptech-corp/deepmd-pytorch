@@ -79,7 +79,7 @@ class DescrptSeA(Descriptor):
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
             env_mat, _ = prod_env_mat_se_a(
-                extended_coord, system['selected'], system['atype'],
+                extended_coord, system['nlist'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth,
             )
@@ -123,7 +123,7 @@ class DescrptSeA(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, selected, atype, selected_type=None, selected_loc=None, atype_tebd=None, nlist_tebd=None):
+    def forward(self, extended_coord, nlist, atype, nlist_type=None, nlist_loc=None, atype_tebd=None, nlist_tebd=None):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -135,9 +135,9 @@ class DescrptSeA(Descriptor):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
-        nall = selected.shape[1]
+        nall = nlist.shape[1]
         dmatrix, _ = prod_env_mat_se_a(
-            extended_coord, selected, atype,
+            extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,
         )

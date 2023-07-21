@@ -444,14 +444,14 @@ class DeepmdDataSystem(object):
                 batch[kk] = torch.tensor(batch[kk], dtype=torch.long, device=env.PREPROCESS_DEVICE)
         batch['atype'] = batch.pop('type')
 
-        keys = ['selected', 'selected_loc', 'selected_type', 'shift', 'mapping']
+        keys = ['nlist', 'nlist_loc', 'nlist_type', 'shift', 'mapping']
         coord = batch['coord']
         atype = batch['atype']
         box = batch['box']
         rcut = self.rcut
         sec = self.sec
         assert batch['atype'].max() < len(self._type_map)
-        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
+        nlist, nlist_loc, nlist_type, shift, mapping = [], [], [], [], []
 
         for sid in trange(n_frames, disable=None):
             region = Region3D(box[sid])
@@ -459,17 +459,17 @@ class DeepmdDataSystem(object):
             _coord = normalize_coord(coord[sid], region, nloc)
             coord[sid] = _coord
             a, b, c, d, e = make_env_mat(_coord, atype[sid], region, rcut, sec, type_split=self.type_split)
-            selected.append(a)
-            selected_loc.append(b)
-            selected_type.append(c)
+            nlist.append(a)
+            nlist_loc.append(b)
+            nlist_type.append(c)
             shift.append(d)
             mapping.append(e)
-        selected = torch.stack(selected)
-        selected_loc = torch.stack(selected_loc)
-        selected_type = torch.stack(selected_type)
-        batch['selected'] = selected
-        batch['selected_loc'] = selected_loc
-        batch['selected_type'] = selected_type
+        nlist = torch.stack(nlist)
+        nlist_loc = torch.stack(nlist_loc)
+        nlist_type = torch.stack(nlist_type)
+        batch['nlist'] = nlist
+        batch['nlist_loc'] = nlist_loc
+        batch['nlist_type'] = nlist_type
         natoms_extended = max([item.shape[0] for item in shift])
         batch['shift'] = torch.zeros((n_frames, natoms_extended, 3), dtype=env.GLOBAL_PT_FLOAT_PRECISION,
                                      device=env.PREPROCESS_DEVICE)
@@ -519,7 +519,7 @@ class DeepmdDataSystem(object):
         nloc = clean_type.shape[0]
         rcut = self.rcut
         sec = self.sec
-        selected, selected_loc, selected_type, shift, mapping = [], [], [], [], []
+        nlist, nlist_loc, nlist_type, shift, mapping = [], [], [], [], []
         if self.pbc:
             box = batch['box']
             region = Region3D(box)
@@ -537,12 +537,12 @@ class DeepmdDataSystem(object):
             else:
                 _coord = coord.clone()
             batch['coord'] = _coord
-            selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec,
-                                                                                 pbc=self.pbc,
-                                                                                 type_split=self.type_split)
-            batch['selected'] = selected
-            batch['selected_loc'] = selected_loc
-            batch['selected_type'] = selected_type
+            nlist, nlist_loc, nlist_type, shift, mapping = make_env_mat(_coord, atype, region, rcut, sec,
+                                                                        pbc=self.pbc,
+                                                                        type_split=self.type_split)
+            batch['nlist'] = nlist
+            batch['nlist_loc'] = nlist_loc
+            batch['nlist_type'] = nlist_type
             batch['shift'] = shift
             batch['mapping'] = mapping
             return batch
@@ -612,20 +612,20 @@ class DeepmdDataSystem(object):
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord
                 try:
-                    selected, selected_loc, selected_type, shift, mapping = make_env_mat(_coord, masked_type, region,
-                                                                                         rcut, sec,
-                                                                                         pbc=self.pbc,
-                                                                                         type_split=self.type_split,
-                                                                                         min_check=True)
+                    nlist, nlist_loc, nlist_type, shift, mapping = make_env_mat(_coord, masked_type, region,
+                                                                                rcut, sec,
+                                                                                pbc=self.pbc,
+                                                                                type_split=self.type_split,
+                                                                                min_check=True)
                 except RuntimeError as e:
                     if i == self.max_fail_num - 1:
                         RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
                     continue
                 batch['atype'] = masked_type
                 batch['coord'] = noised_coord
-                batch['selected'] = selected
-                batch['selected_loc'] = selected_loc
-                batch['selected_type'] = selected_type
+                batch['nlist'] = nlist
+                batch['nlist_loc'] = nlist_loc
+                batch['nlist_type'] = nlist_type
                 batch['shift'] = shift
                 batch['mapping'] = mapping
                 return batch

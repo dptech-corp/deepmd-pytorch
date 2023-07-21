@@ -69,7 +69,7 @@ class EnergyModelDPA2(BaseModel):
 
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -87,15 +87,15 @@ class EnergyModelDPA2(BaseModel):
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)
         atype_tebd = self.type_embedding(atype)
-        selected_type[selected_type == -1] = self.ntypes
-        nlist_tebd = self.type_embedding(selected_type)
-        nnei_mask = selected != -1
-        padding_selected_loc = selected_loc * nnei_mask
+        nlist_type[nlist_type == -1] = self.ntypes
+        nlist_tebd = self.type_embedding(nlist_type)
+        nnei_mask = nlist != -1
+        padding_nlist_loc = nlist_loc * nnei_mask
 
-        descriptor, env_mat, diff, _ = self.descriptor(extended_coord, selected, atype, selected_type,
+        descriptor, env_mat, diff, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                                     atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep = \
-            self.backbone(descriptor, env_mat, padding_selected_loc, selected_type, nnei_mask)
+            self.backbone(descriptor, env_mat, padding_nlist_loc, nlist_type, nnei_mask)
 
         atom_energy = self.fitting_net(transformed_atomic_rep, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)

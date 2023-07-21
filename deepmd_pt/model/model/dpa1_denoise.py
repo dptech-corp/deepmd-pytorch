@@ -52,7 +52,7 @@ class DenoiseModelDPA1(BaseModel):
         # last type is `MASKED_TOKEN`
         # self.backbone.activation_function)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -70,11 +70,11 @@ class DenoiseModelDPA1(BaseModel):
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)
         atype_tebd = self.type_embedding(atype)
-        selected_type[selected_type == -1] = self.ntypes
-        nlist_tebd = self.type_embedding(selected_type)
-        nnei_mask = selected != -1
+        nlist_type[nlist_type == -1] = self.ntypes
+        nlist_tebd = self.type_embedding(nlist_type)
+        nnei_mask = nlist != -1
 
-        descriptor, env_mat, diff, _ = self.descriptor(extended_coord, selected, atype, selected_type,
+        descriptor, env_mat, diff, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                                     atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
         logits = self.type_predict_net(descriptor)

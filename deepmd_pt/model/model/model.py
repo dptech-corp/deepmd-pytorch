@@ -13,7 +13,7 @@ class BaseModel(torch.nn.Module):
         """
         super(BaseModel, self).__init__()
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, box):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, box):
         """Model output.
         """
         raise NotImplementedError

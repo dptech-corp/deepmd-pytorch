@@ -73,8 +73,8 @@ class EnergyModelHybrid(BaseModel):
 
         self.fitting_net = EnergyFittingNetType(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor] = None,
-                selected_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor] = None,
+                nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -94,12 +94,12 @@ class EnergyModelHybrid(BaseModel):
         atype_tebd = self.type_embedding(atype)
 
         nlist_tebd = []
-        for selected_type_item in selected_type:
-            selected_type_item[selected_type_item == -1] = self.ntypes
-            nlist_tebd.append(self.type_embedding(selected_type_item))
+        for nlist_type_item in nlist_type:
+            nlist_type_item[nlist_type_item == -1] = self.ntypes
+            nlist_tebd.append(self.type_embedding(nlist_type_item))
 
-        descriptor, _, _, _ = self.descriptor(extended_coord, selected, atype, selected_type,
-                                              nlist_loc=selected_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
+        descriptor, _, _, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
+                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
         atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)

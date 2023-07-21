@@ -41,7 +41,7 @@ class EnergyModelSeA(BaseModel):
 
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, selected, selected_type: Optional[torch.Tensor]=None, selected_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor]=None, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -58,7 +58,7 @@ class EnergyModelSeA(BaseModel):
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)
-        descriptor = self.descriptor(extended_coord, selected, atype)
+        descriptor = self.descriptor(extended_coord, nlist, atype)
         atom_energy = self.fitting_net(descriptor, atype)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)

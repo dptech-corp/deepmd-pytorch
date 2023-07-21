@@ -710,7 +710,7 @@ class DescrptSeUni(Descriptor):
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
             env_mat, _ = prod_env_mat_se_a(
-                extended_coord, system['selected'], system['atype'],
+                extended_coord, system['nlist'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth,
             )

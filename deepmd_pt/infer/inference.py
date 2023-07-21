@@ -82,9 +82,9 @@ class Tester(object):
             "natoms",
             "mapping",
             "shift",
-            "selected",
-            "selected_loc",
-            "selected_type",
+            "nlist",
+            "nlist_loc",
+            "nlist_type",
             "box",
         ]:
             if item in batch_data:

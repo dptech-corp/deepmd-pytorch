@@ -64,7 +64,8 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
                                      f'sel{model_params_single["descriptor"]["sel"]}.npz'
             model_params_single["stat_file_dir"] = data_dict_single.get("stat_file_dir", f"stat_files{suffix}")
             model_params_single["stat_file"] = data_dict_single.get("stat_file", default_stat_file_name)
-            model_params_single["stat_file_path"] = os.path.join(model_params_single["stat_file_dir"], model_params_single["stat_file"])
+            model_params_single["stat_file_path"] = os.path.join(model_params_single["stat_file_dir"],
+                                                                 model_params_single["stat_file"])
             if not os.path.exists(model_params_single["stat_file_path"]):
                 has_stat_file_path = False
         else:
@@ -85,21 +86,25 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
             model_params_single["stat_file_path"] = stat_file_path
 
         # validation and training data
-        validation_data = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'], model_params_single,
-                                      type_split=type_split, noise_settings=noise_settings)
+        validation_data_single = DpLoaderSet(validation_systems, validation_dataset_params['batch_size'],
+                                             model_params_single,
+                                             type_split=type_split, noise_settings=noise_settings)
         if ckpt or finetune_model or has_stat_file_path:
-            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
-                                     type_split=type_split, noise_settings=noise_settings)
-            sampled = None
+            train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
+                                            model_params_single,
+                                            type_split=type_split, noise_settings=noise_settings)
+            sampled_single = None
         else:
-            train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
-                                     type_split=type_split)
+            train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
+                                            model_params_single,
+                                            type_split=type_split)
             data_stat_nbatch = model_params_single.get('data_stat_nbatch', 10)
-            sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
+            sampled_single = make_stat_input(train_data_single.systems, train_data_single.dataloaders, data_stat_nbatch)
             if noise_settings is not None:
-                train_data = DpLoaderSet(training_systems, training_dataset_params['batch_size'], model_params_single,
-                                         type_split=type_split, noise_settings=noise_settings)
-        return train_data, validation_data, sampled
+                train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
+                                                model_params_single,
+                                                type_split=type_split, noise_settings=noise_settings)
+        return train_data_single, validation_data_single, sampled_single
 
     if not multi_task:
         train_data, validation_data, sampled = \
