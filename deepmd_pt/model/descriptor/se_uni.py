@@ -227,8 +227,18 @@ class DescrptSeUni(Descriptor):
       activation: str = "tanh",
       update_style: str = "res_avg",
       set_davg_zero: bool = True, # TODO
+      smooth: bool = True,
+      add_type_ebd_to_seq: bool = False,
       **kwargs,
   ):
+    """
+    smooth: 
+        If strictly smooth, cannot be used with update_g1_has_attn
+    add_type_ebd_to_seq:
+        At the presence of seq_input (optional input to forward), 
+        whether or not add an type embedding to seq_input. 
+        If no seq_input is given, it has no effect. 
+    """
     super(DescrptSeUni, self).__init__()
     self.epsilon = 1e-4 # protection of 1./nnei
     self.rcut = rcut
@@ -262,6 +272,14 @@ class DescrptSeUni(Descriptor):
     self.update_g2_has_g1g1 = update_g2_has_g1g1
     self.update_g2_has_attn = update_g2_has_attn
     self.update_style = update_style
+    self.smooth = smooth
+    self.add_type_ebd_to_seq = add_type_ebd_to_seq
+    if self.smooth and self.update_g1_has_attn:
+      raise RuntimeError(
+        "current implementation of g1 update with attn is not smooth",
+        "plz set `smooth` to False if you intend to set",
+        "`update_g1_has_attn` to True"
+      )
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -358,13 +376,19 @@ class DescrptSeUni(Descriptor):
     nlist_mask = (nlist != -1)
     masked_nlist_loc = nlist_loc * nlist_mask
 
-    # nb x nloc x ng1
-    atype_tebd = self.type_embd(atype)
     # [nframes, nloc, tebd_dim]
     if seq_input is not None:
       if seq_input.shape[0] == nframes * nloc:
         seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-      atype_tebd += seq_input
+      if self.add_type_ebd_to_seq:
+        # nb x nloc x ng1
+        atype_tebd = self.type_embd(atype) + seq_input
+      else:
+        # nb x nloc x ng1
+        atype_tebd = seq_input        
+    else:
+      # nb x nloc x ng1
+      atype_tebd = self.type_embd(atype)
 
     g1 = self.act(atype_tebd)
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
@@ -469,10 +493,14 @@ class DescrptSeUni(Descriptor):
     gg1 = self.proj_g1g2[ll](gg1).view(nb, nloc, nnei, ng2)
     # nb x nloc x nnei x ng2
     gg1 = self._apply_nlist_mask(gg1, nlist_mask)
-    # nb x nloc
-    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
+    if not self.smooth:
+      # normalized by number of neighbors, not smooth
+      # nb x nloc x 1
+      invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1)).unsqueeze(-1)
+    else:
+      invnnei = 1./float(nnei)
     # nb x nloc x ng2
-    g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei.unsqueeze(-1)
+    g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
     return g1_11
 
   def _cal_h2g2(self, g2, h2, nlist_mask):
@@ -483,10 +511,13 @@ class DescrptSeUni(Descriptor):
     ng2 = g2.shape[-1]
     # nb x nloc x nnei x ng2
     g2 = self._apply_nlist_mask(g2, nlist_mask)
-    # nb x nloc
-    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
-    # nb x nloc x 1 x 1
-    invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
+    if not self.smooth:
+      # nb x nloc
+      invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
+      # nb x nloc x 1 x 1
+      invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
+    else:
+      invnnei = 1./float(nnei)
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
       torch.transpose(h2, -1, -2), g2) * invnnei
