@@ -39,13 +39,14 @@ model_dpau = {
     "sel": [11],
     "rcut_smth": 3.5,
     "rcut": 4.0,
+    "nlayers": 3,
     "update_g1_has_conv": True,
     "update_g1_has_drrd": True,
     "update_g1_has_grrg": True,
-    "update_g1_has_attn": False,
+    "update_g1_has_attn": True,
     "update_g2_has_g1g1": True,
     "update_g2_has_attn": True,
-    "update_h2": False,
+    "update_h2": True,
     "gather_g1": True,
     "combine_grrg": False,
     "attn2_has_gate" : True,
@@ -149,7 +150,12 @@ class TestSmooth():
     coord = torch.tensor([0., 0., 0.,
                           4., 0., 0.,
                           0., 4., 0.,], dtype=dtype).view([natoms, 3])
-    epsilon = 1e-2
+    # displacement of atoms
+    epsilon = 1e-4
+    # required prec. relative prec is not checked.
+    rprec = 0
+    aprec = 1e-6
+
     coord0 = torch.clone(coord)
     coord1 = torch.clone(coord)
     coord1[1][0] -= epsilon
@@ -160,14 +166,12 @@ class TestSmooth():
     coord3[2][1] -= epsilon
     atype = torch.IntTensor([0, 1, 2])
 
-    # print(coord1, coord2)
+    # print(coord0 , coord1)
     ret0 = infer_model(self.model, coord0, cell, atype, type_split=self.type_split)
     ret1 = infer_model(self.model, coord1, cell, atype, type_split=self.type_split)
     ret2 = infer_model(self.model, coord2, cell, atype, type_split=self.type_split)
     ret3 = infer_model(self.model, coord3, cell, atype, type_split=self.type_split)
-    # print(ret1, ret2)
-    rprec = 0
-    aprec = 2e-3
+    # print(ret0['energy']- ret1['energy'])
     def compare(ret0, ret1):
       torch.testing.assert_close(1.+ret0['energy'], 1.+ret1['energy'], rtol=rprec, atol=aprec)
       torch.testing.assert_close(1.+ret0['force'], 1.+ret1['force'], rtol=rprec, atol=aprec)
