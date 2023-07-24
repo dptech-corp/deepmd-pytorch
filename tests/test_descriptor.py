@@ -115,7 +115,7 @@ class TestSeA(unittest.TestCase):
         nlist = nlist.reshape(bsz, -1, self.nnei)
 
         mapping = self.pt_batch['mapping'].cpu()
-        my_nlist = self.pt_batch['my_nlist'].view(bsz, -1).cpu()
+        my_nlist = self.pt_batch['nlist'].view(bsz, -1).cpu()
         mask = my_nlist == -1
         my_nlist = my_nlist * ~mask
         my_nlist = torch.gather(mapping, dim=-1, index=my_nlist)
