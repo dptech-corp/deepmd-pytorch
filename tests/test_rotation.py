@@ -31,7 +31,7 @@ class CheckSymmetry(DeepmdDataSystem):
 
 def get_data(batch):
     inputs = {}
-    for key in ['coord', 'atype', 'mapping', 'shift', 'selected', 'selected_type', 'box']:
+    for key in ['coord', 'atype', 'mapping', 'shift', 'nlist', 'nlist_type', 'box']:
         inputs[key] = batch[key].unsqueeze(0).to(env.DEVICE)
     inputs['natoms'] = None
     return inputs

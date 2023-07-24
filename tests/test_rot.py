@@ -216,6 +216,7 @@ class TestRot():
     ret1 = infer_model(self.model, coord_rot, cell, atype, type_split=self.type_split)
     prec = 1e-10
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
+    rmat = rmat.to(env.DEVICE)
     torch.testing.assert_close(torch.matmul(ret0['force'], rmat), ret1['force'], rtol=prec, atol=prec)
     if not hasattr(self, "test_virial") or self.test_virial:
       torch.testing.assert_close(
