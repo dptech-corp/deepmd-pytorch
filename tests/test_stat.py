@@ -124,7 +124,7 @@ class TestDataset(unittest.TestCase):
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
         sampled = self.my_sampled
         for sys in sampled:
-            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'selected', 'shift',
+            for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'nlist', 'shift',
                         'mapping']:
                 if key in sys.keys():
                     sys[key] = sys[key].to(env.DEVICE)

@@ -78,7 +78,7 @@ class DescrptSeA(Descriptor):
             index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
-            env_mat, _ = prod_env_mat_se_a(
+            env_mat, _, _ = prod_env_mat_se_a(
                 extended_coord, system['nlist'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth,
@@ -136,7 +136,7 @@ class DescrptSeA(Descriptor):
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
         nall = nlist.shape[1]
-        dmatrix, _ = prod_env_mat_se_a(
+        dmatrix, _, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,

@@ -215,6 +215,7 @@ def infer_model(
     atype,
     type_split: bool=True,
 ):
+  model = model.to(env.DEVICE)
   rcut = model.descriptor.rcut
   sec = model.descriptor.sec
   # sec = torch.cumsum(torch.tensor(sel, dtype=torch.int32), dim=0)
@@ -224,17 +225,17 @@ def infer_model(
   else:
     region = None
   # inputs: coord, atype, regin; rcut, sec
-  selected, selected_loc, selected_type, merged_coord_shift, merged_mapping = \
+  nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping = \
     make_env_mat(coord, atype, region, rcut, sec, type_split=type_split)
   # add batch dim
-  [batch_coord, batch_atype, batch_shift, batch_mapping, batch_selected, batch_selected_loc, batch_selected_type] = \
-    [torch.unsqueeze(ii,0) if not isinstance(ii, list) else [torch.unsqueeze(kk,0) for kk in ii] for ii in \
-     [coord, atype, merged_coord_shift, merged_mapping, selected, selected_loc, selected_type]]
+  [batch_coord, batch_atype, batch_shift, batch_mapping, batch_nlist, batch_nlist_loc, batch_nlist_type] = \
+    [torch.unsqueeze(ii,0).to(env.DEVICE) if not isinstance(ii, list) else [torch.unsqueeze(kk,0).to(env.DEVICE) for kk in ii] for ii in \
+     [coord, atype, merged_coord_shift, merged_mapping, nlist, nlist_loc, nlist_type]]
   # inference, assumes pbc
   ret = model(
     batch_coord, batch_atype, None, 
     batch_mapping, batch_shift, 
-    batch_selected, batch_selected_type, batch_selected_loc,
+    batch_nlist, batch_nlist_type, batch_nlist_loc,
     box=cell,
   )
   # remove the frame axis

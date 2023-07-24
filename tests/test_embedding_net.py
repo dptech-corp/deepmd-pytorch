@@ -116,7 +116,7 @@ class TestSeA(unittest.TestCase):
         extended_coord = extended_coord - self.torch_batch['shift']
         descriptor_out = descriptor(
             extended_coord,
-            self.torch_batch['selected'],
+            self.torch_batch['nlist'],
             self.torch_batch['atype']
         )
         my_embedding = descriptor_out.cpu().detach().numpy()

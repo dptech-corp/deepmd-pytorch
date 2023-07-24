@@ -278,7 +278,7 @@ class Trainer(object):
             )
         elif self.opt_type == "LKF":
             self.optimizer = LKFOptimizer(
-                self.wrapper.parameters(), 0.98, 0.99870, self.kf_blocksize
+                self.wrapper.parameters(), 0.98, 0.99870, self.opt_param['kf_blocksize']
             )
         else:
             raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
@@ -338,10 +338,10 @@ class Trainer(object):
                     KFOptWrapper = KFOptimizerWrapper(
                         self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                     )
-                    pref_e = self.kf_start_pref_e * (self.kf_limit_pref_e / self.kf_start_pref_e) ** (
+                    pref_e = self.opt_param['kf_start_pref_e'] * (self.opt_param['kf_limit_pref_e'] / self.opt_param['kf_start_pref_e']) ** (
                             _step_id / self.num_steps)
                     _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"], pref_e)
-                    pref_f = self.kf_start_pref_f * (self.kf_limit_pref_f / self.kf_start_pref_f) ** (
+                    pref_f = self.opt_param['kf_start_pref_f'] * (self.opt_param['kf_limit_pref_f'] / self.opt_param['kf_start_pref_f']) ** (
                             _step_id / self.num_steps)
                     p_energy, p_force = KFOptWrapper.update_force(
                         input_dict, label_dict["force"], pref_f

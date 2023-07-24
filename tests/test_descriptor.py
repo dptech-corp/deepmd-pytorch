@@ -97,9 +97,9 @@ class TestSeA(unittest.TestCase):
         index = self.pt_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(pt_coord, dim=1, index=index)
         extended_coord = extended_coord - self.pt_batch['shift']
-        my_d, _ = prod_env_mat_se_a(
+        my_d, _, _ = prod_env_mat_se_a(
             extended_coord.to(DEVICE),
-            self.pt_batch['selected'],
+            self.pt_batch['nlist'],
             self.pt_batch['atype'],
             avg_zero.reshape([-1, self.nnei, 4]).to(DEVICE),
             std_ones.reshape([-1, self.nnei, 4]).to(DEVICE),
@@ -115,10 +115,10 @@ class TestSeA(unittest.TestCase):
         nlist = nlist.reshape(bsz, -1, self.nnei)
 
         mapping = self.pt_batch['mapping'].cpu()
-        selected = self.pt_batch['selected'].view(bsz, -1).cpu()
-        mask = selected == -1
-        selected = selected * ~mask
-        my_nlist = torch.gather(mapping, dim=-1, index=selected)
+        my_nlist = self.pt_batch['nlist'].view(bsz, -1).cpu()
+        mask = my_nlist == -1
+        my_nlist = my_nlist * ~mask
+        my_nlist = torch.gather(mapping, dim=-1, index=my_nlist)
         my_nlist = my_nlist * ~mask - mask.long()
         my_nlist = my_nlist.cpu().view(bsz, -1, self.nnei).numpy()
         self.assertTrue(np.allclose(nlist, my_nlist))

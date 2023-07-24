@@ -130,7 +130,7 @@ class DescrptSeAtten(Descriptor):
             index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
             extended_coord = torch.gather(system['coord'], dim=1, index=index)
             extended_coord = extended_coord - system['shift']
-            env_mat, _ = prod_env_mat_se_a(
+            env_mat, _, _ = prod_env_mat_se_a(
                 extended_coord, system['nlist'], system['atype'],
                 self.mean, self.stddev,
                 self.rcut, self.rcut_smth,
@@ -194,7 +194,7 @@ class DescrptSeAtten(Descriptor):
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         nframes, nloc = nlist.shape[:2]
-        dmatrix, diff = prod_env_mat_se_a(
+        dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,

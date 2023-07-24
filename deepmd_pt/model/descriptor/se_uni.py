@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import logging
 try:
     from typing import Final
 except:
@@ -29,18 +30,23 @@ class Atten2Map(torch.nn.Module):
       ni,
       nd,
       nh,
+      has_gate: bool = False,   # apply gate to attn map
+      smooth: bool = True,
   ):
     super(Atten2Map, self).__init__()
     self.ni = ni
     self.nd = nd
     self.nh = nh
     self.mapqk = mylinear(ni, nd * 2 * nh, bias=False)
+    self.has_gate = has_gate
+    self.smooth = smooth
 
   def forward(
       self,
       g2,         # nb x nloc x nnei x ng2
       h2,         # nb x nloc x nnei x 3
       nlist_mask, # nb x nloc x nnei
+      sw          # nb x nloc x nnei
   ):
     nb, nloc, nnei, _, = g2.shape
     nd, nh = self.nd, self.nh
@@ -54,6 +60,9 @@ class Atten2Map(torch.nn.Module):
     # g2k = torch.nn.functional.normalize(g2k, dim=-1)
     # nb x nloc x nh x nnei x nnei
     attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
+    if self.has_gate:
+      gate = torch.matmul(h2, torch.transpose(h2, -1, -2)).unsqueeze(-3)
+      attnw = attnw * gate
     # mask the attenmap, nb x nloc x 1 x 1 x nnei
     attnw_mask = ~nlist_mask.unsqueeze(2).unsqueeze(2)
     # mask the attenmap, nb x nloc x 1 x nnei x 1
@@ -62,6 +71,11 @@ class Atten2Map(torch.nn.Module):
     attnw = torch.softmax(attnw, dim=-1)
     attnw = attnw.masked_fill(attnw_mask, float(0.0),)
     attnw = attnw.masked_fill(attnw_mask_c, float(0.0),)
+    if self.smooth :
+      attnw_sw = sw.unsqueeze(2).unsqueeze(2)
+      attnw_sw_c = sw.unsqueeze(2).unsqueeze(-1)
+      attnw = attnw * attnw_sw
+      attnw = attnw * attnw_sw_c
     # nb x nloc x nnei x nnei
     h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3.**0.5
     # nb x nloc x nh x nnei x nnei
@@ -142,6 +156,7 @@ class LocalAtten(torch.nn.Module):
       ni,
       nd,
       nh,
+      smooth,
   ):
     super(LocalAtten, self).__init__()
     self.ni = ni
@@ -150,12 +165,14 @@ class LocalAtten(torch.nn.Module):
     self.mapq = mylinear(ni, nd * 1 * nh, bias=False)
     self.mapkv = mylinear(ni, (nd + ni) * nh, bias=False)
     self.head_map = mylinear(ni * nh, ni)
+    self.smooth = smooth
 
   def forward(
       self,
       g1,         # nb x nloc x ng1
       gg1,        # nb x nloc x nnei x ng1
       nlist_mask, # nb x nloc x nnei
+      sw,         # nb x nloc x nnei
   ):
     nb, nloc, nnei = nlist_mask.shape
     ni, nd, nh = self.ni, self.nd, self.nh
@@ -178,11 +195,13 @@ class LocalAtten(torch.nn.Module):
     # nb x nloc x nh x nnei
     attnw = attnw.squeeze(-2)
     # mask the attenmap, nb x nloc x 1 x nnei
-    attnw_mask = ~nlist_mask.unsqueeze(2)
+    attnw_mask = ~nlist_mask.unsqueeze(-2)
     # nb x nloc x nh x nnei
     attnw = attnw.masked_fill(attnw_mask, float("-inf"),)
     attnw = torch.softmax(attnw, dim=-1)
     attnw = attnw.masked_fill(attnw_mask, float(0.0),)
+    if self.smooth:
+      attnw = attnw * sw.unsqueeze(-2)
 
     # nb x nloc x nh x ng1
     ret = torch.matmul(attnw.unsqueeze(-2), gg1v)\
@@ -223,12 +242,23 @@ class DescrptSeUni(Descriptor):
       attn1_nhead: int = 4,
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
+      attn2_has_gate: bool = False,
       attn_dotr: bool = True,
       activation: str = "tanh",
       update_style: str = "res_avg",
       set_davg_zero: bool = True, # TODO
+      smooth: bool = True,
+      add_type_ebd_to_seq: bool = False,
       **kwargs,
   ):
+    """
+    smooth: 
+        If strictly smooth, cannot be used with update_g1_has_attn
+    add_type_ebd_to_seq:
+        At the presence of seq_input (optional input to forward), 
+        whether or not add an type embedding to seq_input. 
+        If no seq_input is given, it has no effect. 
+    """
     super(DescrptSeUni, self).__init__()
     self.epsilon = 1e-4 # protection of 1./nnei
     self.rcut = rcut
@@ -262,6 +292,8 @@ class DescrptSeUni(Descriptor):
     self.update_g2_has_g1g1 = update_g2_has_g1g1
     self.update_g2_has_attn = update_g2_has_attn
     self.update_style = update_style
+    self.smooth = smooth
+    self.add_type_ebd_to_seq = add_type_ebd_to_seq
 
     def cal_1_dim(g1d, g2d, ax):
       ret = g1d
@@ -286,7 +318,7 @@ class DescrptSeUni(Descriptor):
       self.proj_g1g1g2 = self._linear_layers(tmp_g1_h, self.g2_hiddens, bias=False)
     if update_g2_has_attn:
       self.attn2g_map = torch.nn.ModuleList(
-        [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
+        [Atten2Map(ii, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth) for ii in self.g2_hiddens])
       self.attn2_mh_apply = torch.nn.ModuleList(
         [Atten2MultiHeadApply(ii, attn2_nhead) for ii in self.g2_hiddens])
       self.attn2_lm = torch.nn.ModuleList(
@@ -294,12 +326,12 @@ class DescrptSeUni(Descriptor):
          for ii in self.g2_hiddens])
     if update_h2:
       self.attn2h_map = torch.nn.ModuleList(
-        [Atten2Map(ii, attn2_hidden, attn2_nhead) for ii in self.g2_hiddens])
+        [Atten2Map(ii, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth) for ii in self.g2_hiddens])
       self.attn2_ev_apply = torch.nn.ModuleList(
         [Atten2EquiVarApply(ii, attn2_nhead) for ii in self.g2_hiddens])
     if update_g1_has_attn:
       self.loc_attn = torch.nn.ModuleList(
-        [LocalAtten(ii, attn1_hidden, attn1_nhead) for ii in self.g1_hiddens])
+        [LocalAtten(ii, attn1_hidden, attn1_nhead, self.smooth) for ii in self.g1_hiddens])
     if self.gather_g1:
       self.all_g1_proj = mylinear((self.nlayers+1)*g1_dim, g1_dim)
 
@@ -349,22 +381,34 @@ class DescrptSeUni(Descriptor):
     atype:              [nb, nloc]
     """
     nframes, nloc = nlist_loc.shape[:2]
-    # nb x nloc x nnei x 4
-    dmatrix, diff = prod_env_mat_se_a(
+    # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
+    dmatrix, diff, sw = prod_env_mat_se_a(
       extended_coord, nlist, atype,
       self.mean, self.stddev,
       self.rcut, self.rcut_smth)
     nlist_type[nlist_type == -1] = self.ntypes
     nlist_mask = (nlist != -1)
     masked_nlist_loc = nlist_loc * nlist_mask
+    sw = torch.squeeze(sw, -1)
 
-    # nb x nloc x ng1
-    atype_tebd = self.type_embd(atype)
     # [nframes, nloc, tebd_dim]
     if seq_input is not None:
       if seq_input.shape[0] == nframes * nloc:
         seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-      atype_tebd += seq_input
+      if self.add_type_ebd_to_seq:
+        # nb x nloc x ng1
+        atype_tebd = self.type_embd(atype) + seq_input
+      else:
+        # nb x nloc x ng1        
+        atype_tebd = seq_input
+        # wasted evalueation of type_embd, 
+        # since whether seq_input is None or not can only be 
+        # known at runtime, we cannot decide whether create the
+        # type embedding net or not at `__init__`
+        foo = self.type_embd(atype)
+    else:
+      # nb x nloc x ng1
+      atype_tebd = self.type_embd(atype)
 
     g1 = self.act(atype_tebd)
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
@@ -388,6 +432,7 @@ class DescrptSeUni(Descriptor):
         ll, g1, g2, h2,
         masked_nlist_loc,
         nlist_mask,
+        sw,
         update_chnnl_2=update_chnnl_2,
       )
       if self.gather_g1:
@@ -397,7 +442,7 @@ class DescrptSeUni(Descriptor):
       g1 = self.all_g1_proj(g1)
 
     # nb x nloc x 3 x ng2
-    h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
+    h2g2 = self._cal_h2g2(g2, h2, nlist_mask, sw)
     # (nb x nloc) x ng2 x 3
     rot_mat = torch.permute(h2g2, (0, 1, 3, 2))
 
@@ -432,13 +477,13 @@ class DescrptSeUni(Descriptor):
           track_running_stats=True, device=mydev, dtype=mydtype))
     return ret
 
-  def _update_h2(self, ll, g2, h2, nlist_mask):
+  def _update_h2(self, ll, g2, h2, nlist_mask, sw):
     nb, nloc, nnei, _ = g2.shape
     # # nb x nloc x nnei x nh2
     # h2_1 = self.attn2_ev_apply[ll](AA, h2)
     # h2_update.append(h2_1)
     # nb x nloc x nnei x nnei x nh
-    AAh = self.attn2h_map[ll](g2, h2, nlist_mask)
+    AAh = self.attn2h_map[ll](g2, h2, nlist_mask, sw)
     # nb x nloc x nnei x nh2
     h2_1 = self.attn2_ev_apply[ll](AAh, h2)
     return h2_1
@@ -461,7 +506,12 @@ class DescrptSeUni(Descriptor):
     # msk: nf x nloc x nnei
     return gg.masked_fill(~nlist_mask.unsqueeze(-1), float(0.))
 
-  def _update_g1_conv(self, ll, gg1, g2, nlist, nlist_mask):
+  def _apply_switch(self, gg, sw):
+    # gg:  nf x nloc x nnei x ng
+    # sw:  nf x nloc x nnei
+    return gg * sw.unsqueeze(-1)
+
+  def _update_g1_conv(self, ll, gg1, g2, nlist, nlist_mask, sw):
     nb, nloc, nnei, _ = g2.shape
     ng1 = gg1.shape[-1]
     ng2 = g2.shape[-1]
@@ -469,13 +519,18 @@ class DescrptSeUni(Descriptor):
     gg1 = self.proj_g1g2[ll](gg1).view(nb, nloc, nnei, ng2)
     # nb x nloc x nnei x ng2
     gg1 = self._apply_nlist_mask(gg1, nlist_mask)
-    # nb x nloc
-    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
+    if not self.smooth:
+      # normalized by number of neighbors, not smooth
+      # nb x nloc x 1
+      invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1)).unsqueeze(-1)
+    else:
+      gg1 = self._apply_switch(gg1, sw)
+      invnnei = 1./float(nnei)
     # nb x nloc x ng2
-    g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei.unsqueeze(-1)
+    g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
     return g1_11
 
-  def _cal_h2g2(self, g2, h2, nlist_mask):
+  def _cal_h2g2(self, g2, h2, nlist_mask, sw):
     # g2:  nf x nloc x nnei x ng2
     # h2:  nf x nloc x nnei x 3
     # msk: nf x nloc x nnei
@@ -483,10 +538,14 @@ class DescrptSeUni(Descriptor):
     ng2 = g2.shape[-1]
     # nb x nloc x nnei x ng2
     g2 = self._apply_nlist_mask(g2, nlist_mask)
-    # nb x nloc
-    invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
-    # nb x nloc x 1 x 1
-    invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
+    if not self.smooth:
+      # nb x nloc
+      invnnei = 1./(self.epsilon + torch.sum(nlist_mask, dim=-1))
+      # nb x nloc x 1 x 1
+      invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
+    else:
+      g2 = self._apply_switch(g2, sw)
+      invnnei = 1./float(nnei)
     # nb x nloc x 3 x ng2
     h2g2 = torch.matmul(
       torch.transpose(h2, -1, -2), g2) * invnnei
@@ -504,14 +563,14 @@ class DescrptSeUni(Descriptor):
     g1_13 = g1_13.view(nb, nloc, self.axis_dim*ng2)
     return g1_13
 
-  def _update_g1_grrg(self, ll, g2, h2, nlist_mask):
+  def _update_g1_grrg(self, ll, g2, h2, nlist_mask, sw):
     # g2:  nf x nloc x nnei x ng2
     # h2:  nf x nloc x nnei x 3
     # msk: nf x nloc x nnei
     nb, nloc, nnei, _ = g2.shape
     ng2 = g2.shape[-1]
     # nb x nloc x 3 x ng2
-    h2g2 = self._cal_h2g2(g2, h2, nlist_mask)
+    h2g2 = self._cal_h2g2(g2, h2, nlist_mask, sw)
     # nb x nloc x (axisxng2)
     g1_13 = self._cal_grrg(h2g2)
     return g1_13
@@ -521,10 +580,13 @@ class DescrptSeUni(Descriptor):
       g1,         # nb x nloc x ng1
       gg1,        # nb x nloc x nnei x ng1
       nlist_mask, # nb x nloc x nnei
+      sw,         # nb x nloc x nnei
   ):
     ret = g1.unsqueeze(-2) * gg1
     # nb x nloc x nnei x ng1
     ret = self._apply_nlist_mask(ret, nlist_mask)
+    if self.smooth:
+      ret = self._apply_switch(ret, sw)
     return ret
 
   def _apply_bn_uni(
@@ -581,6 +643,7 @@ class DescrptSeUni(Descriptor):
       h2,       # nf x nloc x nnei x 3
       nlist,    # nf x nloc x nnei
       nlist_mask,
+      sw,       # switch func, nf x nloc x nnei
       update_chnnl_2: bool=True,
   ):
     update_g2_has_attn = self.update_g2_has_attn
@@ -621,27 +684,27 @@ class DescrptSeUni(Descriptor):
 
       if update_g2_has_g1g1:
         g2_update.append(self.proj_g1g1g2[ll](
-          self._update_g2_g1g1(g1, gg1, nlist_mask)))
+          self._update_g2_g1g1(g1, gg1, nlist_mask, sw)))
 
       if update_g2_has_attn:
         # nb x nloc x nnei x nnei x nh
-        AAg = self.attn2g_map[ll](g2, h2, nlist_mask)
+        AAg = self.attn2g_map[ll](g2, h2, nlist_mask, sw)
         # nb x nloc x nnei x ng2
         g2_2 = self.attn2_mh_apply[ll](AAg, g2)
         g2_2 = self.attn2_lm[ll](g2_2)
         g2_update.append(g2_2)
 
       if update_h2:
-        h2_update.append(self._update_h2(ll, g2, h2, nlist_mask))
+        h2_update.append(self._update_h2(ll, g2, h2, nlist_mask, sw))
 
     if update_g1_has_conv:
-      g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask))
+      g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask, sw))
 
     if update_g1_has_grrg:
-      g1_mlp.append(self._update_g1_grrg(ll, g2, h2, nlist_mask))
+      g1_mlp.append(self._update_g1_grrg(ll, g2, h2, nlist_mask, sw))
 
     if update_g1_has_drrd:
-      g1_mlp.append(self._update_g1_grrg(ll, gg1, h2, nlist_mask))
+      g1_mlp.append(self._update_g1_grrg(ll, gg1, h2, nlist_mask, sw))
 
     # nb x nloc x [ng1+ng2+(axisxng2)+(axisxng1)]
     #                  conv   grrg      drrd
@@ -651,7 +714,7 @@ class DescrptSeUni(Descriptor):
     g1_update.append(g1_1)
 
     if update_g1_has_attn:
-      g1_update.append(self.loc_attn[ll](g1, gg1, nlist_mask))
+      g1_update.append(self.loc_attn[ll](g1, gg1, nlist_mask, sw))
 
 
     def list_update_res_avg(update_list):
@@ -701,7 +764,7 @@ class DescrptSeUni(Descriptor):
           index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
           extended_coord = torch.gather(system['coord'], dim=1, index=index)
           extended_coord = extended_coord - system['shift']
-          env_mat, _ = prod_env_mat_se_a(
+          env_mat, _, _ = prod_env_mat_se_a(
               extended_coord, system['nlist'], system['atype'],
               self.mean, self.stddev,
               self.rcut, self.rcut_smth,
