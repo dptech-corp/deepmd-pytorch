@@ -74,7 +74,10 @@ class Tester(object):
     def get_data(data):
         batch_data = next(iter(data))
         for key in batch_data.keys():
-            batch_data[key] = batch_data[key].to(DEVICE)
+            if type(batch_data[key]) in [list, tuple]:
+                batch_data[key] = tuple([data.to(DEVICE) for data in batch_data[key]])
+            else:
+                batch_data[key] = batch_data[key].to(DEVICE)
         input_dict = {}
         for item in [
             "coord",
@@ -124,7 +127,7 @@ class Tester(object):
                     break
                 model_pred, _, _ = self.wrapper(**input_dict)
                 _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0, mae=True)  # TODO: lr here is useless
-                natoms = input_dict["natoms"][0, 0]
+                natoms = input_dict["natoms"][0, 0] if type(input_dict["natoms"]) != tuple else input_dict["natoms"][0][0, 0]
                 sum_natoms += natoms
                 for k, v in more_loss.items():
                     if "mae" in k:
