@@ -11,9 +11,19 @@ from .dpau_force import ForceModelDPAUni
 from .dpa2_lcc_force import ForceModelDPA2Lcc
 from .hybrid_ener import EnergyModelHybrid
 from .hybrid_force import ForceModelHybrid
+from .ocpmodels.gemnet import GemNetTModel
 
 
 def get_model(model_params, sampled=None):
+    model_type = model_params.get("model_type", None)
+    if model_type == "ocpmodels":
+        if model_params["model_name"] == 'gemnet-dT':
+            return GemNetTModel(model_params, sampled)
+        else:
+            raise NotImplementedError()
+    elif model_type is not None:
+        raise NotImplementedError()
+
     if model_params.get("fitting_net", None) is not None:
         if model_params.get("backbone", None) is None:
             if model_params["descriptor"]["type"] == "se_e2_a":

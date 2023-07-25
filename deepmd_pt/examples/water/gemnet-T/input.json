@@ -1,0 +1,90 @@
+{
+ "_comment": "that's all",
+ "model": {
+  "type_map": ["O","H"],
+  "model_type": "ocpmodels",
+  "model_name": "gemnet-dT",
+  "params": {
+    "num_targets": 1,
+    "num_spherical": 7,
+    "num_radial": 128,
+    "num_blocks": 3,
+    "emb_size_atom": 512,
+    "emb_size_edge": 512,
+    "emb_size_trip": 64,
+    "emb_size_rbf": 16,
+    "emb_size_cbf": 16,
+    "emb_size_bil_trip": 64,
+    "num_before_skip": 1,
+    "num_after_skip": 2,
+    "num_concat": 1,
+    "num_atom": 3,
+    "regress_forces": true,
+    "direct_forces": true,
+    "cutoff": 6.0,
+    "max_neighbors": 50,
+    "rbf": {"name": "gaussian"},
+    "envelope": {"name": "polynomial", "exponent": 5},
+    "cbf": {"name": "spherical_harmonics"},
+    "extensive": true,
+    "use_pbc": true,
+    "output_init": "HeOrthogonal",
+    "activation": "swish",
+    "num_elements": 83,
+
+    "otf_graph": false
+  },
+  "descriptor": {
+    "type": "se_atten",
+    "sel": 120,
+    "rcut_smth": 0.5,
+    "rcut": 6.0
+  },
+  "_comment": " that's all"
+ },
+ "learning_rate": {
+  "type": "exp",
+  "decay_steps": 5000,
+  "start_lr": 0.001,
+  "stop_lr": 3.51e-08,
+  "_comment": "that's all"
+ },
+ "loss": {
+  "type": "ener",
+  "start_pref_e": 0.02,
+  "limit_pref_e": 1,
+  "start_pref_f": 1000,
+  "limit_pref_f": 1,
+  "_comment": " that's all"
+ },
+ "training": {
+  "training_data": {
+   "systems": [
+	   "../data/data_0",
+	   "../data/data_1",
+	   "../data/data_2"
+   ],
+   "batch_size": 1,
+   "_comment": "that's all"
+  },
+  "validation_data": {
+   "systems": [
+	   "../data/data_3"
+   ],
+   "batch_size": 1,
+   "numb_btch": 3,
+   "_comment": "that's all"
+  },
+  "wandb_config":{
+   "wandb_enabled": false,
+   "entity": "dp_model_engineering",
+   "project": "DPA"
+  },
+  "numb_steps": 1000000,
+  "seed": 10,
+  "disp_file": "lcurve.out",
+  "disp_freq": 100,
+  "save_freq": 1000,
+  "_comment": "that's all"
+ }
+}
