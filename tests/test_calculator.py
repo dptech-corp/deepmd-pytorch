@@ -4,7 +4,7 @@ import torch
 import unittest
 
 from deepmd_pt.calculator import DP
-from deepmd_pt.infer.inference import inference_multiconf, inference_singleconf
+from deepmd_pt.infer.inference import inference_multiconf, infer_model
 
 
 if sys.platform == "darwin":

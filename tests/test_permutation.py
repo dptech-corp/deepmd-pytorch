@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 import unittest
-from deepmd_pt.infer.inference import inference_singleconf
+from deepmd_pt.infer.inference import infer_model
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni, \
     EnergyModelHybrid, ForceModelHybrid
@@ -233,8 +233,8 @@ class TestPermutation():
         coord = torch.matmul(coord, cell)
         atype = torch.IntTensor([0, 0, 0, 1, 1])
         idx_perm = [1, 0, 4, 3, 2]
-        ret0 = inference_singleconf(self.model, coord, cell, atype, type_split=self.type_split)
-        ret1 = inference_singleconf(self.model, coord[idx_perm], cell, atype[idx_perm], type_split=self.type_split)
+        ret0 = infer_model(self.model, coord, cell, atype, type_split=self.type_split)
+        ret1 = infer_model(self.model, coord[idx_perm], cell, atype[idx_perm], type_split=self.type_split)
         prec = 1e-10
         torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
         torch.testing.assert_close(ret0['force'][idx_perm], ret1['force'], rtol=prec, atol=prec)

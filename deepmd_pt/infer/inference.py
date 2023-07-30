@@ -85,7 +85,7 @@ def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_
     return ret
 
 
-def inference_singleconf(model, coord, cell, atom_types, type_split=True, type_dict=None):
+def infer_model(model, coord, cell, atom_types, type_split=True, type_dict=None):
     """
     Run inference with deepmd model.
 

@@ -11,7 +11,7 @@ from typing import (
     Union,
 )
 
-from deepmd_pt.infer.inference import load_unwrapped_model, inference_multiconf, inference_singleconf
+from deepmd_pt.infer.inference import load_unwrapped_model, inference_multiconf, infer_model
 
 if TYPE_CHECKING:
     from ase import (
