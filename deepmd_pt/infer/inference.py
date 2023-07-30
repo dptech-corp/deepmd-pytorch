@@ -69,9 +69,11 @@ def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_
         [None for _ in range(coords.shape[0])]
     # build batch env_mat
     batch_selected, batch_selected_loc, batch_selected_type, batch_shift, batch_mapping = \
-        [torch.stack(tensors) for tensors in
+        [torch.stack(tensors) if type(tensors[0]) != list else
+         [torch.stack(tensor) for tensor in zip(*tensors)] for tensors in
          zip(*[make_env_mat(coord, batch_atype[0], region, rcut, sec, type_split=type_split, pbc=region is not None)
-               for coord, region in zip(batch_coord, batch_region)])]
+               for coord, region in zip(batch_coord, batch_region)])
+         ]
     # inference, assumes pbc
     ret = model(
         batch_coord, batch_atype, None,
