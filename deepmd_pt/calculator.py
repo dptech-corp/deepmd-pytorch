@@ -27,6 +27,8 @@ try:
 except:
     traceback.print_exc()
     Calculator = object
+    PropertyNotImplementedError = Exception
+    all_changes = []
 
 __all__ = ["DP"]
 
