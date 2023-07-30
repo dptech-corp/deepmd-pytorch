@@ -4,17 +4,105 @@ from copy import deepcopy
 from typing import Any, Dict
 
 import torch
+from torch.utils.data import DataLoader
+if torch.__version__.startswith("2"):
+    import torch._dynamo
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
 from deepmd_pt.utils.env import DEVICE, JIT
+from deepmd_pt.utils.preprocess import Region3D, make_env_mat
 from deepmd_pt.utils.stat import make_stat_input
-from torch.utils.data import DataLoader
 
-if torch.__version__.startswith("2"):
-    import torch._dynamo
+
+def load_unwrapped_model(ckpt):
+    """Load a model from a checkpoint.
+
+    Args:
+    - ckpt: The checkpoint path.
+
+    Returns:
+    - model: The model.
+    """
+    state_dict = torch.load(ckpt, map_location=DEVICE)
+    model_params = state_dict.pop("_extra_state")["model_params"]
+    model_params["resuming"] = True
+
+    state_dict_unwrap = {str(k)[14:]: v for k, v in state_dict.items()}  # Remove "model.Default." from the key
+    model = get_model(model_params).to(DEVICE)
+    model.load_state_dict(state_dict_unwrap)
+
+    type_dict = {element: i for i, element in enumerate(model_params["type_map"])}
+    return model, type_dict
+
+
+def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_dict=None):
+    """
+    Run inference with deepmd model.
+
+    Args:
+    - model: The model (torch.nn.Module).
+    - coords: The coordinates (n_confs × n_atoms × 3 array).
+    - cells: The cell vectors (n_confs × 3 × 3 array).
+    - atom_types: The atom types.
+    - type_split: Whether to split the atom types.
+    - type_dict: The type dictionary.
+
+    Returns:
+    - ret: The inference result.
+    """
+    rcut = model.descriptor.rcut
+    sec = model.descriptor.sec
+    # sec = torch.cumsum(torch.tensor(sel, dtype=torch.int32), dim=0)
+    # still problematic
+
+    if type(atom_types[0]) == str:
+        atom_types = [type_dict[k] for k in atom_types]
+    # inputs: coord, atype, regin; rcut, sec
+
+    # add batch dim for atom types
+    batch_coord, batch_atype = torch.tensor(coords), torch.unsqueeze(torch.tensor(atom_types), 0)
+    batch_region = \
+        [Region3D(cell) if cell is not None else None for cell in cells] if cells is not None else \
+        [None for _ in range(coords.shape[0])]
+    # build batch env_mat
+    batch_selected, batch_selected_loc, batch_selected_type, batch_shift, batch_mapping = \
+        [torch.stack(tensors) for tensors in
+         zip(*[make_env_mat(coord, batch_atype[0], region, rcut, sec, type_split=type_split, pbc=region is not None)
+               for coord, region in zip(batch_coord, batch_region)])]
+    # inference, assumes pbc
+    ret = model(
+        batch_coord, batch_atype, None,
+        batch_mapping, batch_shift,
+        batch_selected, batch_selected_type, batch_selected_loc,
+        box=cells
+    )
+
+    return ret
+
+
+def inference_singleconf(model, coord, cell, atom_types, type_split=True, type_dict=None):
+    """
+    Run inference with deepmd model.
+
+    Args:
+    - model: The model (torch.nn.Module).
+    - coord: The coordinates (n_atoms × 3 array).
+    - cell: The cell vectors (3 × 3 array).
+    - atom_types: The atom types.
+    - type_split: Whether to split the atom types.
+    - type_dict: The type dictionary.
+
+    Returns:
+    - ret: The inference result.
+    """
+    ret = inference_multiconf(model, coord[None, :, :], [cell], atom_types, type_split, type_dict)
+    ret1 = {}
+    for kk, vv in ret.items():
+        ret1[kk] = vv[0]
+    return ret1
 
 
 class Tester(object):

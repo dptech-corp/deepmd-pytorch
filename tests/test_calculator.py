@@ -1,11 +1,13 @@
 import os
+import sys
 import torch
 import unittest
 
-from deepmd_pt.calculator import DP
+from deepmd_pt.calculator import DP, inference_multiconf, inference_singleconf
 
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+if sys.platform == "darwin":
+    os.environ['KMP_DUPLICATE_LIB_OK']='True'
 dtype = torch.float64
 
 
@@ -24,8 +26,8 @@ class TestCalculator(unittest.TestCase):
         atomic_numbers = [1, 1, 1, 6, 6]
         idx_perm = [1, 0, 4, 3, 2]
 
-        ret0 = self.calculator.calculate_impl(coord[None, :, :], cell, atype, type_split=False)
-        ret1 = self.calculator.calculate_impl(coord[None, idx_perm, :], cell, atype[idx_perm], type_split=False)
+        ret0 = inference_multiconf(self.calculator.dp, coord[None, :, :], cell[None, :, :], atype, type_split=False)
+        ret1 = inference_multiconf(self.calculator.dp, coord[None, idx_perm, :], cell[None, :, :], atype[idx_perm], type_split=False)
         prec = 1e-10
         low_prec = 1e-4
         assert ret0['energy'].shape == (1, 1)
