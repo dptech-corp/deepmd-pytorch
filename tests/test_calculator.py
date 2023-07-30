@@ -3,7 +3,8 @@ import sys
 import torch
 import unittest
 
-from deepmd_pt.calculator import DP, inference_multiconf, inference_singleconf
+from deepmd_pt.calculator import DP
+from deepmd_pt.infer.inference import inference_multiconf, inference_singleconf
 
 
 if sys.platform == "darwin":
@@ -11,10 +12,24 @@ if sys.platform == "darwin":
 dtype = torch.float64
 
 
+def require_ase(func):
+    has_ase = True
+    try:
+        from ase.calculators.calculator import (
+            Calculator,
+            PropertyNotImplementedError,
+            all_changes,
+        )
+    except:
+        has_ase = False
+    return unittest.skipIf(not has_ase, reason="No ASE installed")(func)
+
+
 class TestCalculator(unittest.TestCase):
     def setUp(self) -> None:
-        self.calculator = DP(model="druglike/model_0620.pt")
+        self.calculator = DP(model="tests/druglike/model_0620.pt")
 
+    @require_ase
     def test_calculator(self):
         from ase import Atoms
 
@@ -45,7 +60,7 @@ class TestCalculator(unittest.TestCase):
             calculator=self.calculator,
         )
         e = ase_atoms.get_potential_energy()
-        torch.testing.assert_close(ret0['energy'][0][0], e, rtol=low_prec, atol=0.2)
+        torch.testing.assert_close(ret0['energy'][0][0], e, rtol=low_prec, atol=0.1)
 
 
 if __name__ == '__main__':
