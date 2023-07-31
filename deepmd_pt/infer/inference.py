@@ -38,7 +38,7 @@ def load_unwrapped_model(ckpt):
     return model, type_dict
 
 
-def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_dict=None):
+def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_dict=None, detach=False):
     """
     Run inference with deepmd model.
 
@@ -82,10 +82,10 @@ def inference_multiconf(model, coords, cells, atom_types, type_split=True, type_
         box=cells
     )
 
-    return ret
+    return ret if not detach else {k: v.detach().numpy() for k, v in ret.items()}
 
 
-def infer_model(model, coord, cell, atom_types, type_split=True, type_dict=None):
+def infer_model(model, coord, cell, atom_types, type_split=True, type_dict=None, detach=False):
     """
     Run inference with deepmd model.
 
@@ -100,7 +100,7 @@ def infer_model(model, coord, cell, atom_types, type_split=True, type_dict=None)
     Returns:
     - ret: The inference result.
     """
-    ret = inference_multiconf(model, coord[None, :, :], [cell], atom_types, type_split, type_dict)
+    ret = inference_multiconf(model, coord[None, :, :], [cell], atom_types, type_split, type_dict, detach=detach)
     ret1 = {}
     for kk, vv in ret.items():
         ret1[kk] = vv[0]
