@@ -36,9 +36,10 @@ class Trainer(object):
             training_data,
             sampled,
             validation_data=None,
-            resume_from=None,
-            force_load=False,
+            init_model=None,
+            restart_model=None,
             finetune_model=None,
+            force_load=False,
             shared_links=None,
     ):
         """Construct a DeePMD trainer.
@@ -46,6 +47,8 @@ class Trainer(object):
         Args:
         - config: The Dict-like configuration with training options.
         """
+        resume_model = init_model if init_model is not None else restart_model
+        self.restart_training = restart_model is not None
         model_params = config["model"]
         training_params = config["training"]
         self.multi_task = "model_dict" in model_params
@@ -202,47 +205,50 @@ class Trainer(object):
 
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model, self.loss, model_params=model_params)
+        self.start_step = 0
 
         # resuming and finetune
-        if model_params["resuming"] and (self.rank == 0):
+        if model_params["resuming"]:
             ntest = model_params.get("data_bias_nsample", 1)
-            origin_model = finetune_model if finetune_model is not None else resume_from
+            origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model)
-            if force_load:
-                input_keys = list(state_dict.keys())
-                target_keys = list(self.wrapper.state_dict().keys())
-                missing_keys = [item for item in target_keys if item not in input_keys]
-                if missing_keys:
-                    target_state_dict = self.wrapper.state_dict()
-                    slim_keys = []
-                    for item in missing_keys:
-                        state_dict[item] = target_state_dict[item].clone().detach()
-                        new_key = True
-                        for slim_key in slim_keys:
-                            if slim_key in item:
-                                new_key = False
-                                break
-                        if new_key:
-                            tmp_keys = '.'.join(item.split('.')[:3])
-                            slim_keys.append(tmp_keys)
-                    slim_keys = [i + '.*' for i in slim_keys]
-                    logging.warning(
-                        f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
-            self.wrapper.load_state_dict(state_dict)
-            # finetune
-            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',
-                                                                                                  'direct_force_ener',
-                                                                                                  'atten_vec_lcc']:
-                old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
-                self.model.fitting_net.change_energy_bias(
-                    config,
-                    self.model,
-                    old_type_map,
-                    new_type_map,
-                    ntest=ntest,
-                    bias_shift=model_params.get("bias_shift", "delta"),
-                )
+            self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
+            if self.rank == 0:
+                if force_load:
+                    input_keys = list(state_dict.keys())
+                    target_keys = list(self.wrapper.state_dict().keys())
+                    missing_keys = [item for item in target_keys if item not in input_keys]
+                    if missing_keys:
+                        target_state_dict = self.wrapper.state_dict()
+                        slim_keys = []
+                        for item in missing_keys:
+                            state_dict[item] = target_state_dict[item].clone().detach()
+                            new_key = True
+                            for slim_key in slim_keys:
+                                if slim_key in item:
+                                    new_key = False
+                                    break
+                            if new_key:
+                                tmp_keys = '.'.join(item.split('.')[:3])
+                                slim_keys.append(tmp_keys)
+                        slim_keys = [i + '.*' for i in slim_keys]
+                        logging.warning(
+                            f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
+                self.wrapper.load_state_dict(state_dict)
+                # finetune
+                if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',
+                                                                                                      'direct_force_ener',
+                                                                                                      'atten_vec_lcc']:
+                    old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
+                    self.model.fitting_net.change_energy_bias(
+                        config,
+                        self.model,
+                        old_type_map,
+                        new_type_map,
+                        ntest=ntest,
+                        bias_shift=model_params.get("bias_shift", "delta"),
+                    )
 
         # Multi-task share params
         if shared_links is not None:
@@ -274,7 +280,7 @@ class Trainer(object):
             )
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
-                lambda step: warm_up_linear(step, self.warmup_steps),
+                lambda step: warm_up_linear(step + self.start_step, self.warmup_steps),
             )
         elif self.opt_type == "LKF":
             self.optimizer = LKFOptimizer(
@@ -461,22 +467,24 @@ class Trainer(object):
                     self.print_on_training(fout, _step_id, cur_lr, train_results, valid_results)
 
             if (
-                    ((_step_id + 1) % self.save_freq == 0 and _step_id != 0)
+                    ((_step_id + 1) % self.save_freq == 0 and _step_id != self.start_step)
                     or (_step_id + 1) == self.num_steps
             ) and (self.rank == 0 or dist.get_rank() == 0):
                 # Handle the case if rank 0 aborted and re-assigned
                 self.latest_model = Path(self.save_ckpt)
                 self.latest_model = self.latest_model.with_name(
                     f"{self.latest_model.stem}_{_step_id + 1}{self.latest_model.suffix}")
-                logging.info(f"Saving model to {self.latest_model}")
                 module = self.wrapper.module if dist.is_initialized() else self.wrapper
                 self.save_model(self.latest_model, lr=cur_lr, step=_step_id)
+                logging.info(f"Saved model to {self.latest_model}")
 
         self.t0 = time.time()
         with logging_redirect_tqdm():
             for step_id in tqdm(
                     range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
             ):  # set to None to disable on non-TTY; disable on not rank 0
+                if step_id < self.start_step:
+                    continue
                 if self.multi_task:
                     model_index = dp_random.choice(
                         np.arange(len(self.model_keys)), p=np.array(self.model_prob)

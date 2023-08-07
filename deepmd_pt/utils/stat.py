@@ -83,7 +83,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
     return lst
 
 
-def compute_output_stats(energy, natoms, rcond=1e-3):
+def compute_output_stats(energy, natoms, rcond=None):
     """Update mean and stddev for descriptor elements.
 
     Args:

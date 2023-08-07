@@ -16,7 +16,7 @@ from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.utils.multi_task import preprocess_shared_params
 
 
-def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
+def get_trainer(config, init_model=None, restart_model=None, finetune_model=None, force_load=False):
     # Initialize DDP
     local_rank = os.environ.get('LOCAL_RANK')
     if local_rank is not None:
@@ -25,6 +25,7 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
         dist.init_process_group(backend='nccl')
 
     multi_task = "model_dict" in config["model"]
+    ckpt = init_model if init_model is not None else restart_model
     config["model"] = change_finetune_model_params(ckpt, finetune_model, config["model"], multi_task=multi_task)
     config["model"]["resuming"] = (finetune_model is not None) or (ckpt is not None)
     shared_links = None
@@ -120,8 +121,8 @@ def get_trainer(config, ckpt=None, force_load=False, finetune_model=None):
                                              config['loss_dict'][model_key],
                                              suffix=f'_{model_key}')
 
-    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data,
-                               resume_from=ckpt, force_load=force_load, finetune_model=finetune_model,
+    trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, init_model=init_model,
+                               restart_model=restart_model, finetune_model=finetune_model, force_load=force_load,
                                shared_links=shared_links)
     return trainer
 
@@ -130,7 +131,7 @@ def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = get_trainer(config, FLAGS.CKPT, FLAGS.force_load, FLAGS.finetune)
+    trainer = get_trainer(config, FLAGS.init_model, FLAGS.restart, FLAGS.finetune, FLAGS.force_load)
     trainer.run()
 
 
@@ -161,10 +162,30 @@ def main(args=None):
     subparsers = parser.add_subparsers(dest='command')
     train_parser = subparsers.add_parser('train', help='Train a model.')
     train_parser.add_argument('INPUT', help='A Json-format configuration file.')
-    train_parser.add_argument('CKPT', nargs='?', help='Resumes from checkpoint.')
+    parser_train_subgroup = train_parser.add_mutually_exclusive_group()
+    parser_train_subgroup.add_argument(
+        "-i",
+        "--init-model",
+        type=str,
+        default=None,
+        help="Initialize the model by the provided checkpoint.",
+    )
+    parser_train_subgroup.add_argument(
+        "-r",
+        "--restart",
+        type=str,
+        default=None,
+        help="Restart the training from the provided checkpoint.",
+    )
+    parser_train_subgroup.add_argument(
+        "-t",
+        "--finetune",
+        type=str,
+        default=None,
+        help="Finetune the frozen pretrained model.",
+    )
     train_parser.add_argument("--force-load", action="store_true",
                               help='Force load from ckpt, other missing tensors will init from scratch')
-    train_parser.add_argument("--finetune", help="The Finetune model.")
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
