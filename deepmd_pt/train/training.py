@@ -19,7 +19,6 @@ from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-
 import wandb as wb
 
 if torch.__version__.startswith("2"):
@@ -203,6 +202,10 @@ class Trainer(object):
                     self.loss[model_key] = \
                         get_loss(config["loss_dict"][model_key], config["learning_rate"]["start_lr"])
 
+        # JIT
+        if JIT:
+            self.model = torch.jit.script(self.model)
+
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model, self.loss, model_params=model_params)
         self.start_step = 0
@@ -254,8 +257,6 @@ class Trainer(object):
         if shared_links is not None:
             self.wrapper.share_params(shared_links, resume=model_params["resuming"])
 
-        if JIT:
-            self.wrapper = torch.jit.script(self.wrapper)
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)
             # DDP will guarantee the model parameters are identical across all processes
@@ -344,11 +345,13 @@ class Trainer(object):
                     KFOptWrapper = KFOptimizerWrapper(
                         self.wrapper, self.optimizer, 24, 6, dist.is_initialized()
                     )
-                    pref_e = self.opt_param['kf_start_pref_e'] * (self.opt_param['kf_limit_pref_e'] / self.opt_param['kf_start_pref_e']) ** (
-                            _step_id / self.num_steps)
+                    pref_e = self.opt_param['kf_start_pref_e'] * (
+                                self.opt_param['kf_limit_pref_e'] / self.opt_param['kf_start_pref_e']) ** (
+                                     _step_id / self.num_steps)
                     _ = KFOptWrapper.update_energy(input_dict, label_dict["energy"], pref_e)
-                    pref_f = self.opt_param['kf_start_pref_f'] * (self.opt_param['kf_limit_pref_f'] / self.opt_param['kf_start_pref_f']) ** (
-                            _step_id / self.num_steps)
+                    pref_f = self.opt_param['kf_start_pref_f'] * (
+                                self.opt_param['kf_limit_pref_f'] / self.opt_param['kf_start_pref_f']) ** (
+                                     _step_id / self.num_steps)
                     p_energy, p_force = KFOptWrapper.update_force(
                         input_dict, label_dict["force"], pref_f
                     )
@@ -493,18 +496,22 @@ class Trainer(object):
                 else:
                     model_key = "Default"
                 step(step_id, model_key)
+                if JIT:
+                    break
 
         if (
                 self.rank == 0 or dist.get_rank() == 0
         ):  # Handle the case if rank 0 aborted and re-assigned
+            if JIT:
+                pth_model_path = "frozen_model.pth"  # We use .pth to denote the frozen model
+                self.model.save(pth_model_path)
+                logging.info(f"Frozen model for inferencing has been saved to {pth_model_path}")
             try:
                 os.symlink(self.latest_model, self.save_ckpt)
             except OSError:
                 self.save_model(self.save_ckpt, lr=0, step=self.num_steps)
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
 
-            if JIT:
-                self.wrapper.save("torchscript_model.pt")
         if fout:
             fout.close()
 

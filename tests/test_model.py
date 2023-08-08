@@ -304,7 +304,7 @@ class TestEnergy(unittest.TestCase):
         loss, _ = my_loss(model_pred, label, batch['natoms'], cur_lr)
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
-        rtol = 1e-5;
+        rtol = 1e-5
         atol = 1e-8
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
         self.assertTrue(

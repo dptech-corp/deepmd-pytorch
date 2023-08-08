@@ -32,9 +32,9 @@ class Tester(object):
         # Data + Model
         dp_random.seed(training_params['seed'])
         self.dataset_params = training_params.pop('validation_data')
-        self.type_split = True
-        if model_params['descriptor']['type'] in ['se_atten', 'se_uni']:
-            self.type_split = False
+        self.type_split = False
+        if model_params['descriptor']['type'] in ['se_e2_a']:
+            self.type_split = True
         self.model_params = deepcopy(model_params)
 
         model_params["resuming"] = (ckpt is not None)  # should always be True for inferencing
@@ -74,7 +74,10 @@ class Tester(object):
     def get_data(data):
         batch_data = next(iter(data))
         for key in batch_data.keys():
-            batch_data[key] = batch_data[key].to(DEVICE)
+            if not isinstance(batch_data[key], list):
+                batch_data[key] = batch_data[key].to(DEVICE)
+            else:
+                batch_data[key] = [item.to(DEVICE) for item in batch_data[key]]
         input_dict = {}
         for item in [
             "coord",

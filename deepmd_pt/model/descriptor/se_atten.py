@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from torch import Tensor
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 
@@ -8,6 +9,7 @@ try:
     from typing import Final
 except:
     from torch.jit import Final
+from typing import Any, Union, Tuple, List
 
 from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
@@ -24,7 +26,7 @@ class DescrptSeAtten(Descriptor):
                  tebd_dim: int = 8,
                  tebd_input_mode: str = 'concat',
                  # set_davg_zero: bool = False,
-                 set_davg_zero: bool = True, # TODO
+                 set_davg_zero: bool = True,  # TODO
                  attn: int = 128,
                  attn_layer: int = 2,
                  attn_dotr: bool = True,

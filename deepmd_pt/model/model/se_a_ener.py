@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 import torch
-from typing import Optional, List
+from typing import Optional, List, Dict
 from deepmd_pt.model.descriptor import DescrptSeA
 from deepmd_pt.model.task import EnergyFittingNet
 from deepmd_pt.utils.stat import compute_output_stats
@@ -28,7 +28,8 @@ class EnergyModelSeA(BaseModel):
         if self.descriptor_type == 'se_e2_a':
             self.descriptor = DescrptSeA(**descriptor_param)
         else:
-            raise NotImplementedError(f'Only descriptor `se_e2_a` is supported for se_a model, got {self.descriptor_type}')
+            raise NotImplementedError(
+                f'Only descriptor `se_e2_a` is supported for se_a model, got {self.descriptor_type}')
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
@@ -41,7 +42,8 @@ class EnergyModelSeA(BaseModel):
 
         self.fitting_net = EnergyFittingNet(**fitting_param)
 
-    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor]=None, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
+    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor] = None,
+                nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
@@ -65,7 +67,7 @@ class EnergyModelSeA(BaseModel):
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
         extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
         assert extended_force is not None
-        virial = -torch.transpose(extended_coord, 1, 2)@extended_force
+        virial = -torch.transpose(extended_coord, 1, 2) @ extended_force
         mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
         force = torch.zeros_like(coord)
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')

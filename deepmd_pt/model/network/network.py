@@ -143,6 +143,8 @@ class ResidualLinear(nn.Module):
 
 
 class TypeFilter(nn.Module):
+    use_tebd: Final[bool]
+    tebd_mode: Final[str]
 
     def __init__(self, offset, length, neuron, return_G=False, tebd_dim=0, use_tebd=False, tebd_mode='concat'):
         """Construct a filter on the given element as neighbor.
@@ -171,13 +173,13 @@ class TypeFilter(nn.Module):
             deep_layers.append(one)
         self.deep_layers = nn.ModuleList(deep_layers)
 
+        deep_layers_t = []
         if use_tebd and tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
             self.neuron_t = [tebd_dim * 2] + neuron
-            deep_layers_t = []
             for ii in range(1, len(self.neuron_t)):
                 one = ResidualLinear(self.neuron_t[ii - 1], self.neuron_t[ii])
                 deep_layers_t.append(one)
-            self.deep_layers_t = nn.ModuleList(deep_layers_t)
+        self.deep_layers_t = nn.ModuleList(deep_layers_t)
 
         self.return_G = return_G
 
@@ -208,6 +210,7 @@ class TypeFilter(nn.Module):
 
         # dot the tebd output
         if self.use_tebd and self.tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
+            assert nlist_tebd is not None and atype_tebd is not None
             nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
             atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
             # [nframes * nloc * nnei, tebd_dim * 2]
@@ -665,6 +668,8 @@ class NeighborWiseAttention(nn.Module):
 
 
 class NeighborWiseAttentionLayer(nn.Module):
+    ffn: Final[bool]
+
     def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, post_ln=True,
                  ffn=False, ffn_embed_dim=1024, activation="tanh", scaling_factor=1.0,
                  head_num=1, normalize=True, temperature=None):
@@ -761,6 +766,7 @@ class GatedSelfAttetion(nn.Module):
         attn_weights = F.softmax(attn_weights, dim=-1)
         attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(-1), float(0.0))
         if self.dotr:
+            assert input_r is not None, "input_r must be provided when dotr is True!"
             angular_weight = torch.bmm(input_r, input_r.transpose(1, 2))
             attn_weights = attn_weights * angular_weight
         o = torch.bmm(attn_weights, v)

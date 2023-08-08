@@ -147,7 +147,7 @@ def freeze(FLAGS):
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
     model = torch.jit.script(inference.Tester(config, FLAGS.CKPT, 1).model)
-    torch.jit.save(model, 'frozen_model.pt', {
+    torch.jit.save(model, 'frozen_model.pth', {
         # TODO: _extra_files
     })
 
