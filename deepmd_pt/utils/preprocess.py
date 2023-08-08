@@ -89,9 +89,12 @@ def build_inside_clist(coord, region: Region3D, ncell):
     cell_offset[cell_offset < 0] = 0
     delta = cell_offset - ncell
     a2c = compute_serial_cid(cell_offset, ncell)  # cell id of atoms
+    print("a2c.shape: ", a2c.shape)
+    print("a2c: \n", a2c)
     arange = torch.arange(0, loc_ncell, 1, device=env.PREPROCESS_DEVICE)
     cellid = (a2c == arange.unsqueeze(-1))  # one hot cellid
     c2a = cellid.nonzero()
+    print(c2a)
     lst = []
     cnt = 0
     bincount = torch.bincount(a2c, minlength=loc_ncell)
@@ -99,6 +102,8 @@ def build_inside_clist(coord, region: Region3D, ncell):
         n = bincount[i]
         lst.append(c2a[cnt: cnt + n, 1])
         cnt += n
+    print("len(lst): ", len(lst))
+    print(lst)
     return a2c, lst
 
 
@@ -116,6 +121,7 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
     cell_size = to_face / ncell
     ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
+    print("ngcell: ", ngcell)
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
@@ -129,19 +135,27 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     mask_a = (xyz >= 0).all(dim=-1)
     mask_b = (xyz < ncell).all(dim=-1)
     mask = ~torch.logical_and(mask_a, mask_b)
+    print(mask)
+    print("mask.shape: ", mask.shape)
+    print("xyz shape before mask: ", xyz.shape)
     xyz = xyz[mask]  # cell coord
+    print("xyz shape after mask: ", xyz.shape)
     shift = compute_pbc_shift(xyz, ncell)
     coord_shift = region.inter2phys(shift.to(env.GLOBAL_PT_FLOAT_PRECISION))
     mirrored = shift * ncell + xyz
+    print("mirroed shape: ", mirrored.shape)
     cid = compute_serial_cid(mirrored, ncell)
 
     n_atoms = coord.shape[0]
     aid = [c2a[ci] + i * n_atoms for i, ci in enumerate(cid)]
+    print("cid length: ", len(cid))
+    print("aid length: ", len(aid))
     aid = torch.cat(aid)
     tmp = torch.div(aid, n_atoms, rounding_mode='trunc')
     aid = aid % n_atoms
     tmp_coord = coord[aid] - coord_shift[tmp]
     tmp_atype = atype[aid]
+    print("tmpe_coord.shape: ", tmp_coord.shape)
 
     # 合并内部原子和 Ghost 原子信息
     merged_coord = torch.cat([coord, tmp_coord])
