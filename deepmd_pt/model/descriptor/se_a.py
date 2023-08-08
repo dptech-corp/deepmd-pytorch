@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from typing import Optional, List, Dict
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 
@@ -66,6 +67,13 @@ class DescrptSeA(Descriptor):
         """
         return self.filter_neuron[-1] * self.axis_neuron
 
+    @property
+    def dim_in(self):
+        """
+        Returns the atomic input dimension of this descriptor
+        """
+        return 0
+
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
         """
@@ -123,7 +131,9 @@ class DescrptSeA(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, nlist, atype, nlist_type=None, nlist_loc=None, atype_tebd=None, nlist_tebd=None):
+    def forward(self, extended_coord, nlist, atype, nlist_type: Optional[torch.Tensor] = None,
+                nlist_loc: Optional[torch.Tensor] = None, atype_tebd: Optional[torch.Tensor] = None,
+                nlist_tebd: Optional[torch.Tensor] = None):
         """Calculate decoded embedding for each atom.
 
         Args:

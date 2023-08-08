@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from torch import Tensor
+from typing import Optional, List, Dict
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 
@@ -182,7 +182,9 @@ class DescrptSeAtten(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc=None, atype_tebd=None, nlist_tebd=None, seq_input=None):
+    def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc: Optional[torch.Tensor] = None,
+                atype_tebd: Optional[torch.Tensor] = None, nlist_tebd: Optional[torch.Tensor] = None,
+                seq_input: Optional[torch.Tensor] = None):
         """Calculate decoded embedding for each atom.
 
         Args:
