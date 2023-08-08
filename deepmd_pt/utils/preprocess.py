@@ -140,18 +140,27 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     print("xyz shape before mask: ", xyz.shape)
     xyz = xyz[mask]  # cell coord
     print("xyz shape after mask: ", xyz.shape)
+    print(xyz)
     shift = compute_pbc_shift(xyz, ncell)
+    print("shift: \n", shift)
     coord_shift = region.inter2phys(shift.to(env.GLOBAL_PT_FLOAT_PRECISION))
+    print("coord_shift: \n", coord_shift)
+    print("ncell: \n", ncell)
     mirrored = shift * ncell + xyz
     print("mirroed shape: ", mirrored.shape)
     cid = compute_serial_cid(mirrored, ncell)
+    print("cid.shape: \n", cid.shape)
+    print("cid: \n", cid)
 
     n_atoms = coord.shape[0]
+    print("n_atoms: ", n_atoms)
     aid = [c2a[ci] + i * n_atoms for i, ci in enumerate(cid)]
     print("cid length: ", len(cid))
     print("aid length: ", len(aid))
     aid = torch.cat(aid)
     tmp = torch.div(aid, n_atoms, rounding_mode='trunc')
+    print("aid: \n", aid)
+    print("tmp: \n", tmp)
     aid = aid % n_atoms
     tmp_coord = coord[aid] - coord_shift[tmp]
     tmp_atype = atype[aid]
@@ -177,7 +186,10 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
     nlist = [[] for _ in range(nloc)]
     coord_l = coord.view(-1, 1, 3)[:nloc]
     coord_r = coord.view(1, -1, 3)
+    print("coord_l.shape: ", coord_l.shape)
+    print("coord_r.shape: ", coord_r.shape)
     distance = coord_l - coord_r
+    print(distance)
     distance = torch.linalg.norm(distance, dim=-1)
     DISTANCE_INF = distance.max().detach() + rcut
     distance[:nloc, :nloc] += torch.eye(nloc, dtype=torch.bool, device=env.PREPROCESS_DEVICE) * DISTANCE_INF
@@ -219,6 +231,10 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
         selected[:, start:end] = indices[:, :nnei]
         selected_loc[:, start:end] = indices_loc[:, :nnei]
         selected_type[:, start:end] = atype[indices[:, :nnei]] * mask + -1 * (1 - mask)
+    print("selected.shape: ", selected.shape)
+    print(selected)
+    print("selected_loc.shape: ", selected_loc.shape)
+    print(selected_loc)
     return selected, selected_loc, selected_type
 
 
@@ -248,6 +264,7 @@ def make_env_mat(coord,
         merged_mapping: mapping from nall index to nloc index, [nall]
     """
     # 将盒子外的原子，通过镜像挪入盒子内
+    print("sec: \n", sec)
     if pbc:
         merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, rcut)
         merged_coord = coord[merged_mapping] - merged_coord_shift

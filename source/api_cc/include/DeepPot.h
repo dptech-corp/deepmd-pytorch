@@ -1,7 +1,4 @@
-#pragma once
-
 #include "common.h"
-#include "neighbor_list.h"
 
 namespace deepmd {
 /**
