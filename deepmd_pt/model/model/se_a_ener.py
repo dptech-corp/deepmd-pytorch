@@ -77,3 +77,14 @@ class EnergyModelSeA(BaseModel):
                          'virial': virial,
                          }
         return model_predict
+
+    @torch.jit.export
+    def get_rcut(self):
+        return self.descriptor.rcut
+
+    @torch.jit.export
+    def get_sec(self):
+        sec_ = []
+        for i in range(len(self.descriptor.sec)):
+            sec_.append(self.descriptor.sec[i])
+        return sec_
