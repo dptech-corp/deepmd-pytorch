@@ -238,6 +238,24 @@ class Trainer(object):
                         slim_keys = [i + '.*' for i in slim_keys]
                         logging.warning(
                             f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
+                elif model_params.get('finetune_multi_task', False):
+                    new_state_dict = {}
+                    model_branch_chosen = model_params['model_branch_chosen']
+                    new_fitting = model_params.get('new_fitting', False)
+                    target_state_dict = self.wrapper.state_dict()
+                    target_keys = [i for i in target_state_dict.keys() if i != '_extra_state']
+                    for item_key in target_keys:
+                        if new_fitting and '.fitting_net.' in item_key:
+                            # print(f'Keep {item_key} in old model!')
+                            new_state_dict[item_key] = target_state_dict[item_key].clone().detach()
+                        else:
+                            new_key = item_key.replace('.Default.', f'.{model_branch_chosen}.')
+                            # print(f'Replace {item_key} with {new_key} in pretrained_model!')
+                            new_state_dict[item_key] = state_dict[new_key].clone().detach()
+                    state_dict = new_state_dict
+                if finetune_model is not None:
+                    state_dict['_extra_state'] = self.wrapper.state_dict()['_extra_state']
+
                 self.wrapper.load_state_dict(state_dict)
                 # finetune
                 if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',

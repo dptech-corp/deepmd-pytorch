@@ -16,7 +16,7 @@ from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.utils.multi_task import preprocess_shared_params
 
 
-def get_trainer(config, init_model=None, restart_model=None, finetune_model=None, force_load=False):
+def get_trainer(config, init_model=None, restart_model=None, finetune_model=None, model_branch='', force_load=False):
     # Initialize DDP
     local_rank = os.environ.get('LOCAL_RANK')
     if local_rank is not None:
@@ -26,7 +26,7 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
 
     multi_task = "model_dict" in config["model"]
     ckpt = init_model if init_model is not None else restart_model
-    config["model"] = change_finetune_model_params(ckpt, finetune_model, config["model"], multi_task=multi_task)
+    config["model"] = change_finetune_model_params(ckpt, finetune_model, config["model"], multi_task=multi_task, model_branch=model_branch)
     config["model"]["resuming"] = (finetune_model is not None) or (ckpt is not None)
     shared_links = None
     if multi_task:
@@ -131,7 +131,7 @@ def train(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = get_trainer(config, FLAGS.init_model, FLAGS.restart, FLAGS.finetune, FLAGS.force_load)
+    trainer = get_trainer(config, FLAGS.init_model, FLAGS.restart, FLAGS.finetune, FLAGS.model_branch, FLAGS.force_load)
     trainer.run()
 
 
@@ -183,6 +183,13 @@ def main(args=None):
         type=str,
         default=None,
         help="Finetune the frozen pretrained model.",
+    )
+    train_parser.add_argument(
+        "-m",
+        "--model-branch",
+        type=str,
+        default='',
+        help="Model branch chosen for fine-tuning if multi-task. If not specified, it will re-init the fitting net.",
     )
     train_parser.add_argument("--force-load", action="store_true",
                               help='Force load from ckpt, other missing tensors will init from scratch')
