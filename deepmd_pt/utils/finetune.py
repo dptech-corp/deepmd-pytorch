@@ -35,6 +35,8 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
                       'The bias_shift will be statistic!')
             else:
                 model_branch_chosen = model_branch
+            assert model_branch_chosen in model_dict_params, f"No model branch named '{model_branch_chosen}'! " \
+                                                             f"Available ones are {list(model_dict_params.keys())}."
             old_type_map, new_type_map = model_dict_params[model_branch_chosen]['type_map'], model_config['type_map']
             assert set(new_type_map).issubset(
                 old_type_map), "Only support for smaller type map when finetuning or resuming."
