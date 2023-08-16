@@ -93,35 +93,29 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     at::Tensor merged_coord_shift_Tensor = torch::from_blob(merged_coord_shift.data(), {1, nall, 3}, options).to(device);
     inputs.push_back(merged_coord_shift_Tensor);
 
-    std::vector<std::vector<int64_t>> nlist_64;
-    for (const auto& inner_vec : nlist) {
-        std::vector<int64_t> temp;
-        for (int val : inner_vec) {
-            temp.push_back(static_cast<int64_t>(val));
+   std::vector<int64_t> nlist_64(natoms[0]*sec[ntype-1]);
+    for (int ii=0; ii<natoms[0]; ii++) {
+        for (int jj=0; jj<sec[ntype-1]; jj++) {
+            nlist_64[ii*sec[ntype-1]+jj] = nlist[ii][jj];
         }
-        nlist_64.push_back(temp);
     }
     at::Tensor nlist_Tensor = torch::from_blob(nlist_64.data(), {1, natoms[0], sec[ntype-1]}, int_options).to(device);
     inputs.push_back(nlist_Tensor);
 
-    std::vector<std::vector<int64_t>> nlist_loc_64;
-    for (const auto& inner_vec : nlist_loc) {
-        std::vector<int64_t> temp;
-        for (int val : inner_vec) {
-            temp.push_back(static_cast<int64_t>(val));
+    std::vector<int64_t> nlist_loc_64(natoms[0]*sec[ntype-1]);
+    for (int ii=0; ii<natoms[0]; ii++) {
+        for (int jj=0; jj<sec[ntype-1]; jj++) {
+            nlist_loc_64[ii*sec[ntype-1]+jj] = nlist_loc[ii][jj];
         }
-        nlist_loc_64.push_back(temp);
     }
     at::Tensor nlist_loc_Tensor = torch::from_blob(nlist_loc_64.data(), {1, natoms[0], sec[ntype-1]}, int_options).to(device);
     inputs.push_back(nlist_loc_Tensor);
 
-    std::vector<std::vector<int64_t>> nlist_type_64;
-    for (const auto& inner_vec : nlist_type) {
-        std::vector<int64_t> temp;
-        for (int val : inner_vec) {
-            temp.push_back(static_cast<int64_t>(val));
+    std::vector<int64_t> nlist_type_64(natoms[0]*sec[ntype-1]);
+    for (int ii=0; ii<natoms[0]; ii++) {
+        for (int jj=0; jj<sec[ntype-1]; jj++) {
+            nlist_type_64[ii*sec[ntype-1]+jj] = nlist_type[ii][jj];
         }
-        nlist_type_64.push_back(temp);
     }
     at::Tensor nlist_type_Tensor = torch::from_blob(nlist_type_64.data(), {1, natoms[0], sec[ntype-1]}, int_options).to(device);
     inputs.push_back(nlist_type_Tensor);
@@ -134,7 +128,6 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     c10::IValue force_ = outputs.at("force");
     c10::IValue virial_ = outputs.at("virial");
 
-    std::cout << energy_ << std::endl;
 }
 
 template void DeepPot::compute<double, double>(double& ener,
