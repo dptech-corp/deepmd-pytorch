@@ -74,7 +74,7 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     std::vector<torch::jit::IValue> inputs;
 
     at::Tensor coord_wrapped_Tensor = torch::from_blob(coord_wrapped.data(), {1, natoms[0], 3}, options).to(device);
-    for (int ii=0; ii<natoms[0]; ii++) { printf("%.4e %.4e %.4e\n", coord_wrapped[3*ii+0], coord_wrapped[3*ii+1], coord_wrapped[3*ii+2]); } printf("\n");
+    // for (int ii=0; ii<natoms[0]; ii++) { printf("%.4e %.4e %.4e\n", coord_wrapped[3*ii+0], coord_wrapped[3*ii+1], coord_wrapped[3*ii+2]); } printf("\n");
     inputs.push_back(coord_wrapped_Tensor);
 
     std::vector<int64_t> atype_64(atype.begin(), atype.end());
