@@ -1,5 +1,6 @@
 import logging
 import torch
+from deepmd_pt.utils.env import DEVICE
 
 def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=False):
     """Load model_params according to the pretrained one.
@@ -12,7 +13,7 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
         #TODO
         print('finetune mode need modification for multitask mode!')
     if finetune_model is not None:
-        state_dict = torch.load(finetune_model)
+        state_dict = torch.load(finetune_model, map_location=DEVICE)
         last_model_params = state_dict['_extra_state']['model_params']
         old_type_map, new_type_map = last_model_params['type_map'], model_config['type_map']
         assert set(new_type_map).issubset(old_type_map), "Only support for smaller type map when finetuning or resuming."

@@ -215,47 +215,42 @@ class Trainer(object):
             ntest = model_params.get("data_bias_nsample", 1)
             origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
-            state_dict = torch.load(origin_model)
-            self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
-            if self.rank == 0:
-                if force_load:
-                    input_keys = list(state_dict.keys())
-                    target_keys = list(self.wrapper.state_dict().keys())
-                    missing_keys = [item for item in target_keys if item not in input_keys]
-                    if missing_keys:
-                        target_state_dict = self.wrapper.state_dict()
-                        slim_keys = []
-                        for item in missing_keys:
-                            state_dict[item] = target_state_dict[item].clone().detach()
-                            new_key = True
-                            for slim_key in slim_keys:
-                                if slim_key in item:
-                                    new_key = False
-                                    break
-                            if new_key:
-                                tmp_keys = '.'.join(item.split('.')[:3])
-                                slim_keys.append(tmp_keys)
-                        slim_keys = [i + '.*' for i in slim_keys]
-                        logging.warning(
-                            f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
-                self.wrapper.load_state_dict(state_dict)
-                # finetune
-                if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',
-                                                                                                      'direct_force_ener',
-                                                                                                      'atten_vec_lcc']:
-                    old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
-                    self.model.fitting_net.change_energy_bias(
-                        config,
-                        self.model,
-                        old_type_map,
-                        new_type_map,
-                        ntest=ntest,
-                        bias_shift=model_params.get("bias_shift", "delta"),
-                    )
-
-        # Multi-task share params
-        if shared_links is not None:
-            self.wrapper.share_params(shared_links, resume=model_params["resuming"])
+            state_dict = torch.load(origin_model, map_location=DEVICE)
+            if force_load:
+                input_keys = list(state_dict.keys())
+                target_keys = list(self.wrapper.state_dict().keys())
+                missing_keys = [item for item in target_keys if item not in input_keys]
+                if missing_keys:
+                    target_state_dict = self.wrapper.state_dict()
+                    slim_keys = []
+                    for item in missing_keys:
+                        state_dict[item] = target_state_dict[item].clone().detach()
+                        new_key = True
+                        for slim_key in slim_keys:
+                            if slim_key in item:
+                                new_key = False
+                                break
+                        if new_key:
+                            tmp_keys = '.'.join(item.split('.')[:3])
+                            slim_keys.append(tmp_keys)
+                    slim_keys = [i + '.*' for i in slim_keys]
+                    logging.warning(f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
+            self.wrapper.load_state_dict(state_dict)
+            # finetune
+            if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener']:
+                assert model_params["descriptor"]["type"] in [
+                    "se_atten"
+                ] and model_params["fitting_net"].get("type", "ener") in [
+                    "ener"
+                ], "The finetune process only supports models pretrained with 'se_atten' descriptor and 'ener' fitting net!"
+                old_type_map, new_type_map = model_params['type_map'], model_params['new_type_map']
+                self.model.fitting_net.change_energy_bias(
+                    config,
+                    self.model,
+                    old_type_map,
+                    new_type_map,
+                    ntest=ntest,
+                )
 
         if dist.is_initialized():
             torch.cuda.set_device(LOCAL_RANK)
