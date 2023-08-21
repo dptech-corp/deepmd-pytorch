@@ -10,6 +10,7 @@ PairStyle(deepmd,PairDeepMD);
 #include "pair.h"
 #include "DeepPot.h"
 
+
 namespace LAMMPS_NS {
 
 class PairDeepMD : public Pair {
@@ -18,11 +19,17 @@ class PairDeepMD : public Pair {
   ~PairDeepMD() override;
   void compute(int, int) override;
   void settings(int, char **) override;
-//   void coeff(int, char **) override;
+  void coeff(int, char **) override;
 //   void init_style() override;
 
  protected:
   deepmd::DeepPot deep_pot;
+  virtual void allocate();
+  double **scale;
+
+ private:
+  unsigned numb_models;
+  int numb_types;
 };
 
 }    // namespace LAMMPS_NS
