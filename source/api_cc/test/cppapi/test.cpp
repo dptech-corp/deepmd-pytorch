@@ -39,6 +39,18 @@ int main() {
   std::vector<double> force, virial;
   dp.compute<double, double>(energy, force, virial, coord, atype, box);
 
+  printf("energy: %.6f\n", energy);
+  printf("force:\n");
+  for (int ii=0; ii<atype.size(); ii++) {
+    printf("%.6f %.6f %.6f\n", force[3*ii+0], force[3*ii+1], force[3*ii+2]);
+  }
+  printf("virial:\n");
+  for (int ii=0; ii<3; ii++) {
+    for (int jj=0; jj<3; jj++) {
+        printf("%.6f ", virial[3*ii+jj]);
+    }
+    printf("\n");
+  }
   return 0;
 
 }

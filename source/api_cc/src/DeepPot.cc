@@ -1,43 +1,11 @@
 #include "DeepPot.h"
 
-using namespace deepmd;
-
+namespace deepmd{
 DeepPot::DeepPot() {}
 
 DeepPot::~DeepPot() {  }//cublasDestroy(handle);}
 
-template <typename VALUETYPE>
-void DeepPot::init(const std::string& model) {
-    // cublasCreate(&handle);
 
-    try {
-        module = torch::jit::load(model);
-    }
-    catch (const c10::Error& e) {
-        std::cerr << "Error loading the model\n";
-    }
-
-
-    auto rcut_ = module.run_method("get_rcut").toDouble();
-    rcut = static_cast<VALUETYPE>(rcut_);
-
-    auto sec_ = module.run_method("get_sec");
-    std::vector<int64_t> values;
-    if (sec_.isTensorList()) {
-        auto tensor_list = sec_.toTensorList().vec();  // Extract the underlying vector
-        for (const at::Tensor& tensor : tensor_list) {
-            values.push_back(tensor.item<int64_t>());
-        }
-    } else {
-        std::cerr << "sec_ is not a tensor list\n";
-    }
-    sec.resize(values.size());
-    for (int ii=0; ii<values.size(); ii++) {
-        sec[ii] = static_cast<int>(values[ii]);
-    }
-    // rcut = 6.0;
-    // sec = std::vector<int> {46, 138};
-}
 
 template void DeepPot::init<double>(const std::string& model);
 
@@ -51,7 +19,7 @@ void DeepPot::compute(ENERGYVTYPE& ener,
 {
     auto device = torch::kCUDA;
     module.to(device);
-    
+
     std::vector<std::vector<int>> nlist, nlist_loc, nlist_type;
     std::vector<int> merged_mapping;
     std::vector<VALUETYPE> merged_coord_shift;
@@ -64,7 +32,6 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     for (int ii=0; ii<ntype; ii++) {
       natoms[ii+2] = std::count(atype.begin(), atype.end(), ii);
     }
-    // std::cout << natoms << std::endl;
 
     make_env_mat(nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping, coord_wrapped, coord, atype, box, rcut, sec);
     int nall = merged_mapping.size();
@@ -119,7 +86,7 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     }
     at::Tensor nlist_type_Tensor = torch::from_blob(nlist_type_64.data(), {1, natoms[0], sec[ntype-1]}, int_options).to(device);
     inputs.push_back(nlist_type_Tensor);
-    
+
     at::Tensor box_Tensor = torch::from_blob(const_cast<VALUETYPE*>(box.data()), {1, 9}, options).to(device);
     inputs.push_back(box_Tensor);
     c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
@@ -127,12 +94,23 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     c10::IValue energy_ = outputs.at("energy");
     c10::IValue force_ = outputs.at("force");
     c10::IValue virial_ = outputs.at("virial");
+    // std::cout << energy_ << std::endl;
+    // std::cout << force_ << std::endl;
+    ener = energy_.toTensor().item<double>();
+
+    torch::Tensor flat_force_ = force_.toTensor().view({-1});
+    torch::Tensor cpu_force_ = flat_force_.to(torch::kCPU);
+    force.assign(cpu_force_.data_ptr<double>(), cpu_force_.data_ptr<double>() + cpu_force_.numel());
+
+    torch::Tensor flat_virial_ = virial_.toTensor().view({-1});
+    torch::Tensor cpu_virial_ = flat_virial_.to(torch::kCPU);
+    virial.assign(cpu_virial_.data_ptr<double>(), cpu_virial_.data_ptr<double>() + cpu_virial_.numel());
 
 }
-
 template void DeepPot::compute<double, double>(double& ener,
             std::vector<double>& force,
             std::vector<double>& virial,
             const std::vector<double>& coord,
             const std::vector<int>& atype,
             const std::vector<double>& box);
+}
