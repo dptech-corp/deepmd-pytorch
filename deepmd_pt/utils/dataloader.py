@@ -36,6 +36,7 @@ class DpLoaderSet(Dataset):
         seed=10,
         type_split=True,
         noise_settings=None,
+        shuffle=True,
     ):
         setup_seed(seed)
         if isinstance(systems, str):
@@ -63,6 +64,7 @@ class DpLoaderSet(Dataset):
                 sel=sel,
                 type_split=type_split,
                 noise_settings=noise_settings,
+                shuffle=shuffle,
             )
 
         with Pool(
@@ -87,7 +89,7 @@ class DpLoaderSet(Dataset):
                 num_workers=0,  # Should be 0 to avoid too many threads forked
                 sampler=system_sampler,
                 collate_fn=collate_batch,
-                shuffle=(not dist.is_initialized()),
+                shuffle=(not dist.is_initialized()) and shuffle,
             )
             self.dataloaders.append(system_dataloader)
             for _ in range(len(system_dataloader)):

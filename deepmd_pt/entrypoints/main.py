@@ -139,7 +139,7 @@ def test(FLAGS):
     logging.info('Configuration path: %s', FLAGS.INPUT)
     with open(FLAGS.INPUT, 'r') as fin:
         config = json.load(fin)
-    trainer = inference.Tester(config, FLAGS.CKPT, FLAGS.numb_test)
+    trainer = inference.Tester(config, FLAGS.CKPT, FLAGS.numb_test, FLAGS.detail_file, FLAGS.shuffle_test)
     trainer.run()
 
 
@@ -198,6 +198,16 @@ def main(args=None):
     test_parser.add_argument('INPUT', help='A Json-format configuration file.')
     test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
     test_parser.add_argument("-n", "--numb-test", default=100, type=int, help="The number of data for test")
+    test_parser.add_argument(
+        "-d",
+        "--detail-file",
+        type=str,
+        default=None,
+        help="The prefix to files where details of energy, force and virial accuracy/accuracy per atom will be written",
+    )
+    test_parser.add_argument(
+        "--shuffle-test", action="store_true", default=False, help="Shuffle test data"
+    )
 
     freeze_parser = subparsers.add_parser('freeze', help='Freeze a model.')
     freeze_parser.add_argument('INPUT', help='A Json-format configuration file.')

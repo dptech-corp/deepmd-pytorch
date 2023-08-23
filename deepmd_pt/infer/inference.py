@@ -2,6 +2,8 @@ import logging
 import math
 from copy import deepcopy
 from typing import Any, Dict
+from pathlib import Path
+import numpy as np
 
 import torch
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
@@ -19,13 +21,15 @@ if torch.__version__.startswith("2"):
 
 class Tester(object):
 
-    def __init__(self, config: Dict[str, Any], ckpt, numb_test=100):
+    def __init__(self, config: Dict[str, Any], ckpt, numb_test=100, detail_file=None, shuffle_test=False):
         """Construct a DeePMD tester.
 
         Args:
         - config: The Dict-like configuration with training options.
         """
         self.numb_test = numb_test
+        self.detail_file = detail_file
+        self.shuffle_test = shuffle_test
         model_params = config['model']
         training_params = config['training']
 
@@ -104,36 +108,47 @@ class Tester(object):
         systems = self.dataset_params["systems"]
         system_results = {}
         global_sum_natoms = 0
-        for system in systems:
+        for cc, system in enumerate(systems):
             logging.info("# ---------------output of dp test--------------- ")
             logging.info(f"# testing system : {system}")
+            system_pred = []
+            system_label = []
             dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params,
-                                  type_split=self.type_split, noise_settings=self.noise_settings)
+                                  type_split=self.type_split, noise_settings=self.noise_settings, shuffle=self.shuffle_test)
             dataloader = DataLoader(
                 dataset,
-                sampler=torch.utils.data.RandomSampler(dataset),
+                sampler=None,
                 batch_size=None,
-                num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
+                num_workers=1,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
             )
             data = iter(dataloader)
 
             single_results = {}
             sum_natoms = 0
+            sys_natoms = None
             for _ in range(self.numb_test):
                 try:
                     input_dict, label_dict = self.get_data(data)
                 except StopIteration:
                     break
                 model_pred, _, _ = self.wrapper(**input_dict)
+                system_pred.append({item: model_pred[item].detach().cpu().numpy() for item in model_pred})
+                system_label.append({item: label_dict[item].detach().cpu().numpy() for item in label_dict})
                 _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0, mae=True)  # TODO: lr here is useless
-                natoms = input_dict["natoms"][0, 0]
+                natoms = int(input_dict["natoms"][0, 0])
+                if sys_natoms is None:
+                    sys_natoms = natoms
+                else:
+                    assert sys_natoms == natoms, "Frames in one system must be the same!"
                 sum_natoms += natoms
                 for k, v in more_loss.items():
                     if "mae" in k:
                         single_results[k] = single_results.get(k, 0.0) + v * natoms
                     else:
                         single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
+            if self.detail_file is not None:
+                save_detail_file(Path(self.detail_file), system_pred, system_label, sys_natoms, system_name=system, append=(cc != 0))
             results = {
                 k: v / sum_natoms if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
             }
@@ -153,3 +168,66 @@ class Tester(object):
             logging.info(f"{item}: {global_results[item]:.4f}")
         logging.info("# ----------------------------------------------- ")
         return global_results
+
+
+def save_txt_file(
+    fname: Path, data: np.ndarray, header: str = "", append: bool = False
+):
+    """Save numpy array to test file.
+
+    Parameters
+    ----------
+    fname : str
+        filename
+    data : np.ndarray
+        data to save to disk
+    header : str, optional
+        header string to use in file, by default ""
+    append : bool, optional
+        if true file will be appended insted of overwriting, by default False
+    """
+    flags = "ab" if append else "w"
+    with fname.open(flags) as fp:
+        np.savetxt(fp, data, header=header)
+
+
+def save_detail_file(detail_path, system_pred, system_label, natoms, system_name, append=False):
+    ntest = len(system_pred)
+    data_e = np.concatenate([item['energy'] for item in system_label]).reshape([-1, 1])
+    pred_e = np.concatenate([item['energy'] for item in system_pred]).reshape([-1, 1])
+    pe = np.concatenate(
+        (
+            data_e,
+            pred_e,
+        ),
+        axis=1,
+    )
+    save_txt_file(
+        detail_path.with_suffix(".e.out"),
+        pe,
+        header="%s: data_e pred_e" % system_name,
+        append=append,
+    )
+    pe_atom = pe / natoms
+    save_txt_file(
+        detail_path.with_suffix(".e_peratom.out"),
+        pe_atom,
+        header="%s: data_e pred_e" % system_name,
+        append=append,
+    )
+    if "force" in system_pred[0]:
+        data_f = np.concatenate([item['force'] for item in system_label]).reshape([-1, 3])
+        pred_f = np.concatenate([item['force'] for item in system_pred]).reshape([-1, 3])
+        pf = np.concatenate(
+            (
+                data_f,
+                pred_f,
+            ),
+            axis=1,
+        )
+        save_txt_file(
+            detail_path.with_suffix(".f.out"),
+            pf,
+            header="%s: data_fx data_fy data_fz pred_fx pred_fy pred_fz" % system_name,
+            append=append,
+        )

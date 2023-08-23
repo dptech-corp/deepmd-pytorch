@@ -15,7 +15,7 @@ from deepmd_pt.utils.cache import lru_cache
 
 class DeepmdDataSystem(object):
 
-    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True, noise_settings=None):
+    def __init__(self, sys_path: str, rcut, sec, type_map: List[str] = None, type_split=True, noise_settings=None, shuffle=True):
         """Construct DeePMD-style frame collection of one system.
 
         Args:
@@ -40,6 +40,7 @@ class DeepmdDataSystem(object):
         self.type_split = type_split
         self.noise_settings = noise_settings
         self._check_pbc(sys_path)
+        self.shuffle = shuffle
         if noise_settings is not None:
             self.noise_type = noise_settings.get("noise_type", "uniform")
             self.noise = float(noise_settings.get("noise", 1.0))
@@ -206,6 +207,7 @@ class DeepmdDataSystem(object):
         self._iterator += batch_size
         return self._get_subdata(idx)
 
+    # deprecated TODO
     def get_batch(self, batch_size: int):
         """Get a batch of data with at most `batch_size` frames. The frames are randomly picked from the data system.
         Args:
@@ -483,7 +485,8 @@ class DeepmdDataSystem(object):
     def _shuffle_data(self):
         nframes = self._frames['coord'].shape[0]
         idx = np.arange(nframes)
-        dp_random.shuffle(idx)
+        if self.shuffle:
+            dp_random.shuffle(idx)
         self.idx_mapping = idx
 
     def _get_subdata(self, idx=None):
@@ -650,7 +653,7 @@ def _make_idx_map(atom_type):
 class DeepmdDataSetForLoader(Dataset):
 
     def __init__(self, system: str, type_map: str, rcut, sel, weight=None, type_split=True,
-                 noise_settings=None):
+                 noise_settings=None, shuffle=True):
         """Construct DeePMD-style dataset containing frames cross different systems.
 
         Args:
@@ -670,7 +673,7 @@ class DeepmdDataSetForLoader(Dataset):
                     sel_item = [sel_item]
                 sec.append(torch.cumsum(torch.tensor(sel_item), dim=0))
         self._data_system = DeepmdDataSystem(system, rcut, sec, type_map=self._type_map,
-                                             type_split=type_split, noise_settings=noise_settings)
+                                             type_split=type_split, noise_settings=noise_settings, shuffle=shuffle)
         self.mixed_type = self._data_system.mixed_type
         self._ntypes = self._data_system.get_ntypes()
         self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)

@@ -109,6 +109,7 @@ class EnergyModelDPA2(BaseModel):
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
         model_predict = {'energy': energy,
+                         'atom_energy': atom_energy,
                          'force': force,
                          'virial': virial,
                          }
