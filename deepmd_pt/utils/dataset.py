@@ -610,7 +610,7 @@ class DeepmdDataSystem(object):
                 if self.pbc:
                     if not region.check_coord_in_region(noised_coord):
                         if i == self.max_fail_num - 1:
-                            RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
+                            raise RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
                         continue
                     else:
                         _coord = noised_coord.clone()
