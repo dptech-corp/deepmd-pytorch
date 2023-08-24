@@ -16,6 +16,10 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
         state_dict = torch.load(finetune_model)
         last_model_params = state_dict['_extra_state']['model_params']
         finetune_multi_task = "model_dict" in last_model_params
+        trainable_param = {"type_embedding": True, "descriptor": True, "fitting_net": True}
+        for net_type in trainable_param:
+            if net_type in model_config:
+                trainable_param[net_type] = model_config[net_type].get("trainable", True)
         if not finetune_multi_task:
             old_type_map, new_type_map = last_model_params['type_map'], model_config['type_map']
             assert set(new_type_map).issubset(
@@ -50,4 +54,9 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
             model_config["new_type_map"] = new_type_map
             model_config["model_branch_chosen"] = model_branch_chosen
             model_config["new_fitting"] = new_fitting
+        for net_type in trainable_param:
+            if net_type in model_config:
+                model_config[net_type]["trainable"] = trainable_param[net_type]
+            else:
+                model_config[net_type] = {"trainable": trainable_param[net_type]}
     return model_config

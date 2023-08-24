@@ -271,6 +271,9 @@ class Trainer(object):
                         bias_shift=model_params.get("bias_shift", "delta"),
                     )
 
+        # Set trainable params
+        self.wrapper.set_trainable_params()
+
         # Multi-task share params
         if shared_links is not None:
             self.wrapper.share_params(shared_links, resume=model_params["resuming"])
