@@ -633,7 +633,6 @@ class DeepmdDataSystem(object):
                 batch['nlist_type'] = nlist_type
                 batch['shift'] = shift
                 batch['mapping'] = mapping
-                logging.info(f"try_times:{i}\nclean_coord:{batch['clean_coord']}\ncoord:{batch['coord']}")
                 return batch
 
     def _get_item(self, index):
