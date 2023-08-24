@@ -16,21 +16,20 @@ from typing import (
 )
 
 def _build_neighbor_list(
-    coord0 : torch.Tensor,
     coord1 : torch.Tensor,
+    nloc : int,
     rcut : float,
     nsel : int,
     rmin : float = 1e-10,
     cut_overlap : bool = True,
 ) -> torch.Tensor:
   """build neightbor list for a single frame. keeps nsel neighbors.
-  coord0 : [nloc x 3]
   coord1 : [nall x 3]
 
   ret: [nloc x nsel] stores indexes of coord1
   """
-  nloc = coord0.shape[-1] // 3
   nall = coord1.shape[-1] // 3
+  coord0 = torch.split(coord1, [nloc*3, (nall-nloc)*3])[0]
   # nloc x nall x 3
   diff = coord1.view([-1,3])[None,:,:] - coord0.view([-1,3])[:,None,:]
   assert(list(diff.shape) == [nloc, nall, 3])
@@ -49,9 +48,9 @@ def _build_neighbor_list(
   return nlist
 
 def build_neighbor_list_lower(
-    coord0 : torch.Tensor,
     coord1 : torch.Tensor,
-    atype : torch.Tensor,
+    atype : torch.Tensor,    
+    nloc : int,
     rcut : float,
     nsel : Union[int, List[int]],
     distinguish_types: bool = True,
@@ -59,12 +58,12 @@ def build_neighbor_list_lower(
   """build neightbor list for a single frame. keeps nsel neighbors.
   Parameters
   ----------
-  coord0 : torch.Tensor
-        local coordinates of shape [nloc x 3]
   coord1 : torch.Tensor
         exptended coordinates of shape [nall x 3]
   atype : torch.Tensor
         extended atomic types of shape [nall]
+  nloc: int
+        number of local atoms.
   rcut: float
         cut-off radius
   nsel: int or List[int]
@@ -89,16 +88,14 @@ def build_neighbor_list_lower(
         xx xx xx xx -1 -1 -1 xx xx xx -1 -1 -1 -1
 
   """
-  nloc = coord0.shape[0]//3
   nall = coord1.shape[0]//3
   if nloc == 0 or nall == 0:
     return None
-  fake_type = torch.max(atype) + 1
   if isinstance(nsel, int): 
     nsel = [nsel]
   # nloc x nsel
   nlist = _build_neighbor_list(
-    coord0, coord1, rcut, sum(nsel), cut_overlap=True)
+    coord1, nloc, rcut, sum(nsel), cut_overlap=True)
   if not distinguish_types:
     return nlist
   else:
@@ -129,7 +126,7 @@ def build_neighbor_list_lower(
 
 build_neighbor_list = torch.vmap(
   build_neighbor_list_lower, 
-  in_dims=(0,0,0,None,None), 
+  in_dims=(0,0,None,None,None), 
   out_dims=(0),
 )
 
@@ -181,7 +178,7 @@ def extend_coord_with_ghosts(
   rr = [range(-npnbuff[ii], npnbuff[ii]+1) for ii in range(3)]
   shift_idx = sorted(list(itertools.product(*rr)), key=np.linalg.norm)
   # ns x 3
-  shift_idx = torch.tensor(shift_idx, dtype=GLOBAL_PT_FLOAT_PRECISION)
+  shift_idx = torch.tensor(shift_idx, dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
   ns, _ = shift_idx.shape
   nall = ns * nloc
   # nf x ns x 3

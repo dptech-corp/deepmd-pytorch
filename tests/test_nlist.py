@@ -51,7 +51,7 @@ class TestNeighList(unittest.TestCase):
     ecoord, eatype, mapping = extend_coord_with_ghosts(
       self.coord, self.atype, self.cell, self.rcut)
     nlist = build_neighbor_list(
-      self.coord, ecoord, eatype,
+      ecoord, eatype, self.nloc,
       self.rcut, sum(self.nsel), distinguish_types=False)
     np.testing.assert_array_equal(
       nlist[0].numpy(), nlist[1].numpy())
@@ -64,7 +64,7 @@ class TestNeighList(unittest.TestCase):
     ecoord, eatype, mapping = extend_coord_with_ghosts(
       self.coord, self.atype, self.cell, self.rcut)
     nlist = build_neighbor_list(
-      self.coord, ecoord, eatype,
+      ecoord, eatype, self.nloc,
       self.rcut, self.nsel, distinguish_types=True,
     )
     np.testing.assert_array_equal(nlist[0], nlist[1])
