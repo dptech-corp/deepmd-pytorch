@@ -42,6 +42,8 @@ class DenoiseLoss(TaskLoss):
         updated_coord = model_pred["updated_coord"]
         logits = model_pred["logits"]
         clean_coord = label["clean_coord"]
+        import logging
+        #logging.info(f"final label:{clean_coord}")
         clean_type = label["clean_type"]
         coord_mask = label['coord_mask']
         type_mask = label['type_mask']
