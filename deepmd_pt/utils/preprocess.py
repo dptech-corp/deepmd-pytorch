@@ -53,7 +53,6 @@ def normalize_coord(coord, region: Region3D, nloc: int):
     """
     tmp_coord = coord.clone()
     inter_cood = torch.remainder(region.phys2inter(tmp_coord), 1.0)
-    #logging.info(f"{region.phys2inter(tmp_coord)}")
     tmp_coord = region.inter2phys(inter_cood)
     return tmp_coord
 
@@ -120,13 +119,13 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     - atype: shape is [nloc]
     """
     to_face = region.get_face_distance()
-    
+
     # 计算 3 个方向的 Cell 大小和 Cell 数量
     ncell = torch.floor(to_face / rcut).to(torch.long)
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
     cell_size = to_face / ncell
     ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
-    logging.info(f"{ngcell}")
+
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
     xi = torch.arange(-ngcell[0], ncell[0] + ngcell[0], 1, device=env.PREPROCESS_DEVICE)
