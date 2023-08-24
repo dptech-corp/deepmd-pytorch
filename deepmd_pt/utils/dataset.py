@@ -548,7 +548,10 @@ class DeepmdDataSystem(object):
             return batch
         else:
             batch['clean_type'] = clean_type
-            _clean_coord = normalize_coord(clean_coord, region, nloc)
+            if self.pbc:
+                _clean_coord = normalize_coord(clean_coord, region, nloc)
+            else:
+                _clean_coord = clean_coord.clone()
             batch['clean_coord'] = _clean_coord
             # add noise
             for i in range(self.max_fail_num):
