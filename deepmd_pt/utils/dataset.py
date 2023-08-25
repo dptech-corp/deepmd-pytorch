@@ -611,12 +611,7 @@ class DeepmdDataSystem(object):
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:
-                    if not region.check_coord_in_region(noised_coord):
-                        if i == self.max_fail_num - 1:
-                            raise RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
-                        continue
-                    else:
-                        _coord = noised_coord.clone()
+                    _coord = region.move_noised_coord_all_in_box(noised_coord, clean_coord)
                 else:
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord

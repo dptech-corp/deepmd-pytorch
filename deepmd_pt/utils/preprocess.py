@@ -35,14 +35,16 @@ class Region3D(object):
     def get_face_distance(self):
         """Return face distinces to each surface of YZ, ZX, XY."""
         return torch.stack([self._h2yz, self._h2zx, self._h2xy])
-    
-    def check_coord_in_region(self, coord):
-        """Check if all atoms are inside region"""
-        tmp_coord = coord.clone()
-        inter_coord = self.phys2inter(tmp_coord)
-        if torch.min(inter_coord)<0 or torch.max(inter_coord)>1:
-            return 0
-        return 1
+
+    def move_noised_coord_all_in_box(self, noised_coord, clean_coord):
+        """Ensure all noised atoms are inside region"""
+        tmp_coord_noised = noised_coord.clone()
+        tmp_coord_clean = clean_coord.clone()
+        inter_coord_noised = self.phys2inter(tmp_coord_noised)
+        inter_coord_clean = self.phys2inter(tmp_coord_clean)
+        inter_coord_noised_update = torch.where(abs(inter_coord_noised-0.50)<0.50, inter_coord_noised, 2*inter_coord_clean-inter_coord_noised)
+        coord_noised_update = self.inter2phys(inter_coord_noised_update)
+        return coord_noised_update
 
 
 def normalize_coord(coord, region: Region3D, nloc: int):
@@ -131,6 +133,8 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     xi = torch.arange(-ngcell[0], ncell[0] + ngcell[0], 1, device=env.PREPROCESS_DEVICE)
     yi = torch.arange(-ngcell[1], ncell[1] + ngcell[1], 1, device=env.PREPROCESS_DEVICE)
     zi = torch.arange(-ngcell[2], ncell[2] + ngcell[2], 1, device=env.PREPROCESS_DEVICE)
+    #logging.info(f"xi:{xi}")
+    #logging.info(f"yi:{yi}")
     xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
     xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
     xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=env.PREPROCESS_DEVICE)
