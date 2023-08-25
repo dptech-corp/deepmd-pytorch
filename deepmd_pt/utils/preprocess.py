@@ -133,8 +133,6 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     xi = torch.arange(-ngcell[0], ncell[0] + ngcell[0], 1, device=env.PREPROCESS_DEVICE)
     yi = torch.arange(-ngcell[1], ncell[1] + ngcell[1], 1, device=env.PREPROCESS_DEVICE)
     zi = torch.arange(-ngcell[2], ncell[2] + ngcell[2], 1, device=env.PREPROCESS_DEVICE)
-    #logging.info(f"xi:{xi}")
-    #logging.info(f"yi:{yi}")
     xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
     xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
     xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=env.PREPROCESS_DEVICE)
