@@ -151,7 +151,7 @@ class TestSmooth():
                           4., 0., 0.,
                           0., 4., 0.,], dtype=dtype).view([natoms, 3])
     # displacement of atoms
-    epsilon = 1e-4
+    epsilon = .5e-4
     # required prec. relative prec is not checked.
     rprec = 0
     aprec = 1e-6

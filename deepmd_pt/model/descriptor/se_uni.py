@@ -649,7 +649,7 @@ class DescrptSeUni(Descriptor):
     # nf x nloc
     std = torch.std(normh, dim=-1)
     # nf x nloc x nnei x 3
-    hh = hh[:,:,:,:] / std[:,:,None,None]
+    hh = hh[:,:,:,:] / (1. + std[:,:,None,None])
     return hh
 
   def _one_layer(
