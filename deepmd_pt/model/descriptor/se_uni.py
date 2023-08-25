@@ -70,6 +70,7 @@ class Atten2Map(torch.nn.Module):
     attnw = attnw.masked_fill(attnw_mask, float("-inf"),)
     attnw = torch.softmax(attnw, dim=-1)
     attnw = attnw.masked_fill(attnw_mask, float(0.0),)
+    # nb x nloc x nh x nnei x nnei
     attnw = attnw.masked_fill(attnw_mask_c, float(0.0),)
     if self.smooth :
       attnw_sw = sw.unsqueeze(2).unsqueeze(2)
@@ -128,7 +129,7 @@ class Atten2EquiVarApply(torch.nn.Module):
     super(Atten2EquiVarApply, self).__init__()
     self.ni = ni
     self.nh = nh
-    self.head_map = mylinear(nh, 1)
+    self.head_map = mylinear(nh, 1, bias=False)
 
   def forward(
       self,
@@ -635,6 +636,22 @@ class DescrptSeUni(Descriptor):
     else:
       return gg
 
+  def _apply_h_norm(
+      self,
+      hh, # nf x nloc x nnei x 3
+  ):
+    """Normalize h by the std of vector length.
+    do not have an idea if this is a good way.
+    """
+    nf, nl, nnei, _ = hh.shape
+    # nf x nloc x nnei
+    normh = torch.linalg.norm(hh, dim=-1)
+    # nf x nloc
+    std = torch.std(normh, dim=-1)
+    # nf x nloc x nnei x 3
+    hh = hh[:,:,:,:] / std[:,:,None,None]
+    return hh
+
   def _one_layer(
       self,
       ll,       #
@@ -668,6 +685,8 @@ class DescrptSeUni(Descriptor):
       g1 = self._apply_bn(self.bn1[ll], g1)
     if self.bn2 is not None:
       g2 = self._apply_bn(self.bn2[ll], g2)
+    if self.update_h2:
+      h2 = self._apply_h_norm(h2)
 
     g2_update = [g2]
     h2_update = [h2]
