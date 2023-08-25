@@ -21,7 +21,7 @@ def _build_neighbor_list(
     rcut : float,
     nsel : int,
     rmin : float = 1e-10,
-    cut_overlap : bool = True,
+    cut_nearest : bool = True,
 ) -> torch.Tensor:
   """build neightbor list for a single frame. keeps nsel neighbors.
   coord1 : [nall x 3]
@@ -36,7 +36,7 @@ def _build_neighbor_list(
   # nloc x nall
   rr = torch.linalg.norm(diff, dim=-1)
   rr, nlist = torch.sort(rr, dim=-1)
-  if cut_overlap:
+  if cut_nearest:
     # nloc x (nall-1)
     rr = torch.split(rr, [1,nall-1], dim=-1)[-1]
     nlist = torch.split(nlist, [1,nall-1], dim=-1)[-1]
@@ -95,7 +95,7 @@ def build_neighbor_list_lower(
     nsel = [nsel]
   # nloc x nsel
   nlist = _build_neighbor_list(
-    coord1, nloc, rcut, sum(nsel), cut_overlap=True)
+    coord1, nloc, rcut, sum(nsel), cut_nearest=True)
   if not distinguish_types:
     return nlist
   else:
@@ -110,14 +110,15 @@ def build_neighbor_list_lower(
     tnlist = tnlist.masked_fill(mask, -1)
     snsel = tnlist.shape[1]
     for ii,ss in enumerate(nsel):
-      # nloc x s(nsel)
-      pick_mask = (tnlist == ii)
+      # nloc x s(nsel) 
+      # to int because bool cannot be sort on GPU
+      pick_mask = (tnlist == ii).to(torch.int32)
       # nloc x s(nsel), stable sort, nearer neighbors first
       pick_mask, imap = torch.sort(
         pick_mask, dim=-1, descending=True, stable=True)
       # nloc x s(nsel)
       inlist = torch.gather(nlist, 1, imap)
-      inlist = inlist.masked_fill(~pick_mask, -1)
+      inlist = inlist.masked_fill(~(pick_mask.to(torch.bool)), -1)
       # nloc x nsel[ii]
       ret_nlist.append(
         torch.split(inlist, [ss,snsel-ss], dim=-1)[0]
