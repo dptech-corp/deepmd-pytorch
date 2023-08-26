@@ -113,4 +113,24 @@ template void DeepPot::compute<double, double>(double& ener,
             const std::vector<double>& coord,
             const std::vector<int>& atype,
             const std::vector<double>& box);
+
+template void DeepPotModelDevi::init<double>(const std::vector<std::string>& models);
+
+template <typename VALUETYPE, typename ENERGYVTYPE>
+void DeepPotModelDevi::compute(std::vector<ENERGYVTYPE>& all_ener,
+            std::vector<std::vector<VALUETYPE>>& all_force,
+            std::vector<std::vector<VALUETYPE>>& all_virial,
+            const std::vector<VALUETYPE>& coord,
+            const std::vector<int>& atype,
+            const std::vector<VALUETYPE>& box)
+{
+
+}
+template void DeepPotModelDevi::compute<double, double>(std::vector<double>& all_ener,
+            std::vector<std::vector<double>>& all_force,
+            std::vector<std::vector<double>>& all_virial,
+            const std::vector<double>& coord,
+            const std::vector<int>& atype,
+            const std::vector<double>& box);
+
 }
