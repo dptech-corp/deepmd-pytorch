@@ -35,8 +35,8 @@ model_dpau = {
   "type_map": ["O","H"],
   "descriptor": {
     "type": "se_uni",
-    "sel": [11],
-    "rcut_smth": 0.5,
+    "sel": [20],
+    "rcut_smth": 3.5,
     "rcut": 4.0,
     "update_g1_has_conv": True,
     "update_g1_has_drrd": True,
