@@ -47,6 +47,7 @@ model_dpau = {
     "update_h2": True,
     "gather_g1": True,
     "combine_grrg": False,
+    "do_bn_mode": "uniform",
     "_comment": " that's all"
   },
   "fitting_net": {
