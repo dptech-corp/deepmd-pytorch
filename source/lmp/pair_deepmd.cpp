@@ -93,6 +93,33 @@ void PairDeepMD::settings(int narg, char **arg) {
       // error->one(FLERR, e.what());
     // }
   }
+  else {
+    try {
+      deep_pot.init(std::string(arg[0]));
+      deep_pot_model_devi.init(models, get_node_rank(),
+                              get_file_content(models));
+    } catch (deepmd_compat::deepmd_exception &e) {
+      error->one(FLERR, e.what());
+    }
+    cutoff = deep_pot_model_devi.cutoff();
+    numb_types = deep_pot_model_devi.numb_types();
+    numb_types_spin = deep_pot_model_devi.numb_types_spin();
+    dim_fparam = deep_pot_model_devi.dim_fparam();
+    dim_aparam = deep_pot_model_devi.dim_aparam();
+    assert(cutoff == deep_pot.cutoff());
+    assert(numb_types == deep_pot.numb_types());
+    assert(numb_types_spin == deep_pot.numb_types_spin());
+    assert(dim_fparam == deep_pot.dim_fparam());
+    assert(dim_aparam == deep_pot.dim_aparam());
+  }
+
+  out_freq = 100;
+  out_file = "model_devi.out";
+  out_each = 0;
+  out_rel = 0;
+  eps = 0.;
+  fparam.clear();
+  aparam.clear();
 }
 
 /* ---------------------------------------------------------------------- */
