@@ -14,7 +14,7 @@ class DeepEval:
             model_file: "Path"
     ):
         self.model_path = model_file
-        state_dict = torch.load(model_file)
+        state_dict = torch.load(model_file, map_location=DEVICE)
         self.input_param = state_dict['_extra_state']['model_params']
         self.input_param['resuming'] = True
         self.multi_task = "model_dict" in self.input_param

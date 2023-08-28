@@ -215,7 +215,7 @@ class Trainer(object):
             ntest = model_params.get("data_bias_nsample", 1)
             origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
-            state_dict = torch.load(origin_model)
+            state_dict = torch.load(origin_model, map_location=DEVICE)
             self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
             if self.rank == 0:
                 if force_load:
