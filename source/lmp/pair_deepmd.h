@@ -23,13 +23,23 @@ class PairDeepMD : public Pair {
 //   void init_style() override;
 
  protected:
-  deepmd::DeepPot deep_pot;
   virtual void allocate();
   double **scale;
 
  private:
+  deepmd::DeepPot deep_pot;
+  deepmd::DeepPotModelDevi deep_pot_model_devi;
   unsigned numb_models;
+  double cutoff;
   int numb_types;
+  int out_freq;
+  std::string out_file;
+  int dim_fparam;
+  int dim_aparam;
+  int out_each;
+  int out_rel;
+  int out_rel_v;
+  double eps;
 };
 
 }    // namespace LAMMPS_NS
