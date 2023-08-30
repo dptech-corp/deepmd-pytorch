@@ -130,7 +130,7 @@ void DeepPotModelDevi::compute(std::vector<ENERGYVTYPE>& all_energy,
 
     auto device = torch::kCUDA;
     for (int ii=0; ii<numb_models; ii++) {
-        modules[i].to(device);
+        modules[ii].to(device);
     }
 
     std::vector<std::vector<int>> nlist, nlist_loc, nlist_type;
@@ -203,7 +203,7 @@ void DeepPotModelDevi::compute(std::vector<ENERGYVTYPE>& all_energy,
     at::Tensor box_Tensor = torch::from_blob(const_cast<VALUETYPE*>(box.data()), {1, 9}, options).to(device);
     inputs.push_back(box_Tensor);
     for (int ii=0; ii<numb_models; ii++) {
-        c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
+        c10::Dict<c10::IValue, c10::IValue> outputs = modules[ii].forward(inputs).toGenericDict();
 
         c10::IValue energy_ = outputs.at("energy");
         c10::IValue force_ = outputs.at("force");
