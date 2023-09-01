@@ -1,9 +1,9 @@
 #include "DeepPot.h"
 
 namespace deepmd{
-DeepPot::DeepPot() {}
+DeepPot::DeepPot() { }
 
-DeepPot::~DeepPot() {  }//cublasDestroy(handle);}
+DeepPot::~DeepPot() { }//cublasDestroy(handle);}
 
 
 
@@ -113,6 +113,10 @@ template void DeepPot::compute<double, double>(double& ener,
             const std::vector<double>& coord,
             const std::vector<int>& atype,
             const std::vector<double>& box);
+
+DeepPotModelDevi::DeepPotModelDevi() { }
+
+DeepPotModelDevi::~DeepPotModelDevi() { }
 
 template void DeepPotModelDevi::init<double>(const std::vector<std::string>& models);
 
@@ -230,25 +234,6 @@ template void DeepPotModelDevi::compute<double, double>(std::vector<double>& all
             const std::vector<int>& atype,
             const std::vector<double>& box);
 
-
-template <typename VALUETYPE>
-void DeepPotModelDevi::compute_avg(VALUETYPE& dener,
-                                   const std::vector<VALUETYPE>& all_energy) {
-  assert(all_energy.size() == numb_models);
-  if (numb_models == 0) return;
-
-  dener = 0;
-  for (unsigned ii = 0; ii < numb_models; ++ii) {
-    dener += all_energy[ii];
-  }
-  dener /= (VALUETYPE)(numb_models);
-}
-
-template void DeepPotModelDevi::compute_avg<double>(
-    double& dener, const std::vector<double>& all_energy);
-
-template void DeepPotModelDevi::compute_avg<float>(
-    float& dener, const std::vector<float>& all_energy);
 
 template <typename VALUETYPE>
 void DeepPotModelDevi::compute_avg(VALUETYPE& dener,
@@ -402,3 +387,5 @@ template void DeepPotModelDevi::compute_relative_std_f<double>(
 
 template void DeepPotModelDevi::compute_relative_std_f<float>(
     std::vector<float>& std, const std::vector<float>& avg, const float eps);
+
+}
