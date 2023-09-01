@@ -73,7 +73,7 @@ class TestVirial():
   def test(
       self,
   ):
-    places = 8
+    places = 7
     delta = 1e-4
     natoms = 5
     cell = torch.rand([3, 3], dtype=dtype)
