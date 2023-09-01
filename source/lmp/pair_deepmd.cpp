@@ -238,6 +238,22 @@ void PairDeepMD::settings(int narg, char **arg) {
         FLERR,
         "fparam and fparam_from_compute should NOT be set simultaneously");
   }
+
+  if (comm->me == 0) {
+    if (numb_models > 1 && out_freq > 0) {
+      if (!is_restart) {
+        fp.open(out_file);
+        fp << scientific;
+        fp << "#" << setw(12 - 1) << "step" << setw(18 + 1) << "max_devi_v"
+           << setw(18 + 1) << "min_devi_v" << setw(18 + 1) << "avg_devi_v"
+           << setw(18 + 1) << "max_devi_f" << setw(18 + 1) << "min_devi_f"
+           << setw(18 + 1) << "avg_devi_f" << endl;
+      } else {
+        fp.open(out_file, std::ofstream::out | std::ofstream::app);
+        fp << scientific;
+      }
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------- */
