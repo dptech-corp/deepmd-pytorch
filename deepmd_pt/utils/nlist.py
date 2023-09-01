@@ -13,6 +13,7 @@ from deepmd_pt.utils.region import (
 from typing import (
   List,
   Union,
+  Optional
 )
 
 def _build_neighbor_list(
@@ -135,7 +136,7 @@ build_neighbor_list = torch.vmap(
 def extend_coord_with_ghosts(
     coord : torch.Tensor,
     atype : torch.Tensor,
-    cell : torch.Tensor,
+    cell : Optional[torch.Tensor],
     rcut : float,
 ) -> [torch.Tensor, torch.Tensor, torch.Tensor]:
   """Extend the coordinates of the atoms by appending peridoc images.
@@ -175,7 +176,7 @@ def extend_coord_with_ghosts(
   nbuff = torch.max(nbuff, dim=0, keepdim=False).values
   ncopy = nbuff * 2 + 1
   # 3
-  npnbuff = nbuff.detach().numpy()
+  npnbuff = nbuff.detach().cpu().numpy()
   rr = [range(-npnbuff[ii], npnbuff[ii]+1) for ii in range(3)]
   shift_idx = sorted(list(itertools.product(*rr)), key=np.linalg.norm)
   # ns x 3
@@ -192,8 +193,8 @@ def extend_coord_with_ghosts(
   extend_aidx = torch.tile(aidx.unsqueeze(-2), [1, ns, 1])
 
   return (
-    extend_coord.reshape([nf, nall*3]),
-    extend_atype.view([nf, nall]),
-    extend_aidx.view([nf, nall]),
+    extend_coord.reshape([nf, nall*3]).to(DEVICE),
+    extend_atype.view([nf, nall]).to(DEVICE),
+    extend_aidx.view([nf, nall]).to(DEVICE),
   )
 

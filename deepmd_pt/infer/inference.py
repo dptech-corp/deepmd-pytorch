@@ -50,6 +50,8 @@ class Tester(object):
             self.wrapper = torch.jit.script(self.wrapper)
 
         state_dict = torch.load(ckpt)
+        if "model" in state_dict:
+            state_dict = state_dict["model"]
         self.wrapper.load_state_dict(state_dict)
 
         # Loss

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeUni
-from deepmd_pt.model.task import EnergyFittingNetType
+from deepmd_pt.model.task import Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -43,7 +43,8 @@ class EnergyModelDPAUni(BaseModel):
         # Statistics
         self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
-        self.fitting_net = EnergyFittingNetType(**fitting_param)
+        fitting_param['type'] = 'ener'
+        self.fitting_net = Fitting(**fitting_param)
 
     def forward(
         self, 

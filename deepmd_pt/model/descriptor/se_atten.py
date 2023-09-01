@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+from torch import Tensor
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
@@ -14,6 +14,7 @@ from typing import Any, Union, Tuple, List
 from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
 
+@Descriptor.register("se_atten")
 class DescrptSeAtten(Descriptor):
 
     def __init__(self,
@@ -76,7 +77,8 @@ class DescrptSeAtten(Descriptor):
             sel = [sel]
 
         self.ntypes = ntypes
-        self.sec = torch.tensor(sel)  # 每种元素在邻居中的位移
+        self.sel = torch.tensor(sel)  # 每种元素在邻居中的位移
+        self.sec = self.sel
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
         self.dpa1_attention = NeighborWiseAttention(self.attn_layer, self.nnei, self.filter_neuron[-1], self.attn_dim,
@@ -184,7 +186,7 @@ class DescrptSeAtten(Descriptor):
 
     def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc: Optional[torch.Tensor] = None,
                 atype_tebd: Optional[torch.Tensor] = None, nlist_tebd: Optional[torch.Tensor] = None,
-                seq_input: Optional[torch.Tensor] = None):
+                seq_input: Optional[torch.Tensor] = None) -> List[Tensor]:
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -208,9 +210,11 @@ class DescrptSeAtten(Descriptor):
         if seq_input is not None:
             if seq_input.shape[0] == nframes * nloc:
                 seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-            atype_tebd += seq_input
-
-        ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1),
+            if atype_tebd is not None:
+                atype_tebd += seq_input
+        if atype_tebd is not None:
+            atype_tebd = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
+        ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd,
                                     nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
         nei_mask = nlist_type != self.ntypes

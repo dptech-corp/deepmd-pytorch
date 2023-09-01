@@ -13,6 +13,7 @@ except:
 from deepmd_pt.model.network import TypeFilter
 
 
+@Descriptor.register("se_e2_a")
 class DescrptSeA(Descriptor):
     ndescrpt: Final[int]
     __constants__ = ['ndescrpt']
@@ -42,7 +43,8 @@ class DescrptSeA(Descriptor):
         self.set_davg_zero = set_davg_zero
 
         self.ntypes = len(sel)  # 元素数量
-        self.sec = torch.cumsum(torch.tensor(sel), dim=0)  # 每种元素在邻居中的位移
+        self.sel = torch.tensor(sel)
+        self.sec = torch.cumsum(self.sel, dim=0)  # 每种元素在邻居中的位移
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
@@ -145,8 +147,8 @@ class DescrptSeA(Descriptor):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
-        nall = nlist.shape[1]
-        dmatrix, _, _ = prod_env_mat_se_a(
+        nloc = nlist.shape[1]
+        dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,
@@ -164,10 +166,11 @@ class DescrptSeA(Descriptor):
 
         xyz_scatter /= self.nnei
         xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)
+        rot_mat = xyz_scatter_1[:, :, 1:4]
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nall, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nall, self.filter_neuron[-1] * self.axis_neuron)
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms):

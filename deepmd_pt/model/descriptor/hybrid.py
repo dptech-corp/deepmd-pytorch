@@ -11,12 +11,15 @@ except:
     from torch.jit import Final
 
 
-
+@Descriptor.register("hybrid")
 class DescrptHybrid(Descriptor):
 
     def __init__(self,
-                 descriptor_list,
-                 descriptor_param,
+                 list,
+                 ntypes: int,
+                 tebd_dim: int = 8,
+                 tebd_input_mode: str = 'concat',
+                 hybrid_mode: str = "concat",
                  **kwargs):
         """Construct a hybrid descriptor.
 
@@ -25,13 +28,24 @@ class DescrptHybrid(Descriptor):
         - descriptor_param: descriptor configs.
         """
         super(DescrptHybrid, self).__init__()
+        supported_descrpt = ['se_atten', 'se_uni']
+        descriptor_list = []
+        for descriptor_param_item in list:
+            descriptor_type_tmp = descriptor_param_item['type']
+            assert descriptor_type_tmp in supported_descrpt, \
+                f'Only descriptors in {supported_descrpt} are supported for `hybrid` descriptor!'
+            descriptor_param_item['ntypes'] = ntypes
+            descriptor_param_item['tebd_dim'] = tebd_dim
+            descriptor_param_item['tebd_input_mode'] = tebd_input_mode
+            descriptor_list.append(Descriptor(**descriptor_param_item))
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
-        self.descriptor_param = descriptor_param["list"]
+        self.descriptor_param = list
         self.rcut = [descrpt.rcut for descrpt in self.descriptor_list]
         self.sec = [descrpt.sec for descrpt in self.descriptor_list]
+        self.sel = [descrpt.sel for descrpt in self.descriptor_list]
         self.local_cluster_list = [descrpt.local_cluster for descrpt in self.descriptor_list]
         self.local_cluster = True in self.local_cluster_list
-        self.hybrid_mode = descriptor_param.get("hybrid_mode", "concat")
+        self.hybrid_mode = hybrid_mode
         assert self.hybrid_mode in ["concat", "sequential"]
         if self.hybrid_mode == "sequential":
             sequential_transform = []

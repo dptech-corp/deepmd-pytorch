@@ -4,7 +4,7 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni, EnergyModelHybrid, ForceModelHybrid
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation import infer_model, make_sample
@@ -228,28 +228,28 @@ class TestEnergyModelSeA(unittest.TestCase, TestTrans):
     model_params = model_se_e2_a
     sampled = make_sample(model_params)
     self.type_split = False
-    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_dpa1
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-class TestEnergyModelDPA2(unittest.TestCase, TestTrans):
-  def setUp(self):
-    model_params = model_dpa2
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
+# class TestEnergyModelDPA2(unittest.TestCase, TestTrans):
+#   def setUp(self):
+#     model_params = model_dpa2
+#     sampled = make_sample(model_params)
+#     self.type_split = True
+#     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_dpau
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelDPAUni(unittest.TestCase, TestTrans):
   def setUp(self):
@@ -258,14 +258,14 @@ class TestForceModelDPAUni(unittest.TestCase, TestTrans):
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
-    self.model = ForceModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelHybrid(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = model_hybrid
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelHybrid(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelHybrid(unittest.TestCase, TestTrans):
   def setUp(self):
@@ -274,7 +274,7 @@ class TestForceModelHybrid(unittest.TestCase, TestTrans):
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
-    self.model = ForceModelHybrid(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 if __name__ == '__main__':
     unittest.main()

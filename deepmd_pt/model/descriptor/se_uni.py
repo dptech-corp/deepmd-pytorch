@@ -216,6 +216,8 @@ class LocalAtten(torch.nn.Module):
 def print_stat(aa, info=""):
   print(info, torch.mean(aa), torch.std(aa))
 
+
+@Descriptor.register("se_uni")
 class DescrptSeUni(Descriptor):
   def __init__(
       self,
@@ -654,13 +656,13 @@ class DescrptSeUni(Descriptor):
 
   def _one_layer(
       self,
-      ll,       #
-      g1,       # nf x nloc x ng1
-      g2,       # nf x nloc x nnei x ng2
-      h2,       # nf x nloc x nnei x 3
-      nlist,    # nf x nloc x nnei
-      nlist_mask,
-      sw,       # switch func, nf x nloc x nnei
+      ll: int,       #
+      g1: torch.Tensor,       # nf x nloc x ng1
+      g2: torch.Tensor,       # nf x nloc x nnei x ng2
+      h2: torch.Tensor,       # nf x nloc x nnei x 3
+      nlist: torch.Tensor,    # nf x nloc x nnei
+      nlist_mask: torch.Tensor,
+      sw: torch.Tensor,       # switch func, nf x nloc x nnei
       update_chnnl_2: bool=True,
   ):
     update_g2_has_attn = self.update_g2_has_attn
@@ -735,38 +737,40 @@ class DescrptSeUni(Descriptor):
     if update_g1_has_attn:
       g1_update.append(self.loc_attn[ll](g1, gg1, nlist_mask, sw))
 
-
-    def list_update_res_avg(update_list):
-      nitem = len(update_list)
-      uu = update_list[0]
-      for ii in range(1,nitem):
-        uu = uu + update_list[ii]
-      return uu / (float(nitem) ** 0.5)
-
-    def list_update_res_incr(update_list):
-      nitem = len(update_list)
-      uu = update_list[0]
-      scale = 1./(float(nitem-1)**0.5) if nitem > 1 else 0.
-      for ii in range(1,nitem):
-        uu = uu + scale * update_list[ii]
-      return uu
-
-    def list_update(update_list):
-      if self.update_style == "res_avg":
-        return list_update_res_avg(update_list)
-      elif self.update_style == "res_incr":
-        return list_update_res_incr(update_list)
-      else:
-        raise RuntimeError(f"unknown update style {self.update_style}")
-
     # update
     if update_chnnl_2:
-      g2_new = list_update(g2_update)
-      h2_new = list_update(h2_update)
+      g2_new = self.list_update(g2_update)
+      h2_new = self.list_update(h2_update)
     else:
       g2_new, h2_new = g2, h2
-    g1_new = list_update(g1_update)
+    g1_new = self.list_update(g1_update)
     return g1_new, g2_new, h2_new
+
+  @torch.jit.export
+  def list_update_res_avg(self, update_list):
+    nitem = len(update_list)
+    uu = update_list[0]
+    for ii in range(1, nitem):
+      uu = uu + update_list[ii]
+    return uu / (float(nitem) ** 0.5)
+
+  @torch.jit.export
+  def list_update_res_incr(self, update_list):
+    nitem = len(update_list)
+    uu = update_list[0]
+    scale = 1. / (float(nitem - 1) ** 0.5) if nitem > 1 else 0.
+    for ii in range(1, nitem):
+      uu = uu + scale * update_list[ii]
+    return uu
+
+  @torch.jit.export
+  def list_update(self, update_list):
+    if self.update_style == "res_avg":
+      return self.list_update_res_avg(update_list)
+    elif self.update_style == "res_incr":
+      return self.list_update_res_incr(update_list)
+    else:
+      raise RuntimeError(f"unknown update style {self.update_style}")
 
 
   def compute_input_stats(self, merged):

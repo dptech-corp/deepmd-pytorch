@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeUni
-from deepmd_pt.model.task import DipoleFittingNetType, EnergyFittingNetType
+from deepmd_pt.model.task import DipoleFittingNetType, Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -48,7 +48,8 @@ class ForceModelDPAUni(BaseModel):
         self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
         if self.fitting_type == 'direct_force_ener':
-            self.fitting_net = EnergyFittingNetType(**fitting_param)
+            fitting_param['type'] = 'ener'
+            self.fitting_net = Fitting(**fitting_param)
 
     def forward(
             self,

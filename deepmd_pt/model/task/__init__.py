@@ -1,5 +1,6 @@
 from .task import TaskBaseMethod
-from .ener import EnergyFittingNetType, EnergyFittingNet
+from .fitting import Fitting
+from .ener import EnergyFittingNet
 from .denoise import DenoiseNet
 from .type_predict import TypePredictNet
 from .dipole import DipoleFittingNetType

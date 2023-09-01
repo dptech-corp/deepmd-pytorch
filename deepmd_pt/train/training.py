@@ -211,11 +211,15 @@ class Trainer(object):
         self.start_step = 0
 
         # resuming and finetune
+        optimizer_state_dict = None
         if model_params["resuming"]:
             ntest = model_params.get("data_bias_nsample", 1)
             origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model)
+            if "model" in state_dict:
+                optimizer_state_dict = state_dict["optimizer"]
+                state_dict = state_dict["model"]
             self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
             if self.rank == 0:
                 if force_load:
@@ -300,6 +304,8 @@ class Trainer(object):
             self.optimizer = torch.optim.Adam(
                 self.wrapper.parameters(), lr=self.lr_exp.start_lr
             )
+            if optimizer_state_dict is not None:
+                self.optimizer.load_state_dict(optimizer_state_dict)
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
                 lambda step: warm_up_linear(step + self.start_step, self.warmup_steps),
@@ -540,7 +546,7 @@ class Trainer(object):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
         module.train_infos['lr'] = lr
         module.train_infos['step'] = step
-        torch.save(module.state_dict(), save_path)
+        torch.save({"model": module.state_dict(), "optimizer": self.optimizer.state_dict()}, save_path)
 
     def get_data(self, is_train=True, task_key="Default"):
         if not self.multi_task:
@@ -586,11 +592,6 @@ class Trainer(object):
             "coord",
             "atype",
             "natoms",
-            "mapping",
-            "shift",
-            "nlist",
-            "nlist_loc",
-            "nlist_type",
             "box",
         ]:
             if item in batch_data:
