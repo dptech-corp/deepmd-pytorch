@@ -106,7 +106,7 @@ class EnergyModel(BaseModel):
                 fitting_net['return_energy'] = True
         self.fitting_net = Fitting(**fitting_net)
 
-    def forward(self, coord, atype, box: Optional[torch.Tensor] = None, **kwargs):
+    def forward(self, coord, atype, box: Optional[torch.Tensor] = None):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
