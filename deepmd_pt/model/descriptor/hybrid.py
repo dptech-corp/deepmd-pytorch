@@ -6,7 +6,7 @@ from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_st
 from deepmd_pt.model.network import Identity, Linear
 
 try:
-    from typing import Final
+    from typing import Final, List
 except:
     from torch.jit import Final
 
@@ -40,6 +40,7 @@ class DescrptHybrid(Descriptor):
             descriptor_list.append(Descriptor(**descriptor_param_item))
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
         self.descriptor_param = list
+        self.tebd_dim = tebd_dim
         self.rcut = [descrpt.rcut for descrpt in self.descriptor_list]
         self.sec = [descrpt.sec for descrpt in self.descriptor_list]
         self.sel = [descrpt.sel for descrpt in self.descriptor_list]
@@ -71,17 +72,14 @@ class DescrptHybrid(Descriptor):
             raise RuntimeError
 
     @property
-    def dim_emb_list(self):
+    def dim_emb_list(self) -> List[int]:
         """
         Returns the output dimension list of embeddings
         """
-        emb_list = []
-        for descrpt in self.descriptor_list:
-            emb_list.append(descrpt.dim_emb)
-        return emb_list
+        return [descrpt.dim_emb for descrpt in self.descriptor_list]
 
     @property
-    def dim_emb(self):
+    def dim_emb(self) -> int:
         """
         Returns the output dimension of embedding
         """

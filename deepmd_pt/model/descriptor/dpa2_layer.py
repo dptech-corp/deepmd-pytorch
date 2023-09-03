@@ -9,6 +9,7 @@ except:
 from typing import (
     List, Optional, Tuple,
 )
+from torch import Tensor
 from deepmd_pt.utils import env
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
@@ -308,7 +309,7 @@ class DescrptDPA2Layer(torch.nn.Module):
                 g2_dim, elementwise_affine=True, device=mydev, dtype=mydtype)
         if self.update_h2:
             self.attn2h_map = Atten2Map(g2_dim, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth)
-            self.attn2_ev_apply = Atten2EquiVarApply(g2_dim, attn2_nhead)
+        self.attn2_ev_apply = Atten2EquiVarApply(g2_dim, attn2_nhead)
         if self.update_g1_has_attn:
             self.loc_attn = LocalAtten(g1_dim, attn1_hidden, attn1_nhead, self.smooth)
 
@@ -323,7 +324,8 @@ class DescrptDPA2Layer(torch.nn.Module):
         else:
             raise RuntimeError(f"unknown bn_mode {self.do_bn_mode}")
 
-    def _update_h2(self, g2, h2, nlist_mask, sw):
+    def _update_h2(self, g2, h2, nlist_mask, sw) -> Tensor:
+        assert(hasattr(self,"attn2h_map"))
         nb, nloc, nnei, _ = g2.shape
         # # nb x nloc x nnei x nh2
         # h2_1 = self.attn2_ev_apply(AA, h2)
@@ -369,11 +371,13 @@ class DescrptDPA2Layer(torch.nn.Module):
             # normalized by number of neighbors, not smooth
             # nb x nloc x 1
             invnnei = 1. / (self.epsilon + torch.sum(nlist_mask, dim=-1)).unsqueeze(-1)
+            # nb x nloc x ng2
+            g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
         else:
             gg1 = self._apply_switch(gg1, sw)
-            invnnei = 1. / float(nnei)
-        # nb x nloc x ng2
-        g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
+            invnnei = 1./nnei
+            # nb x nloc x ng2
+            g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
         return g1_11
 
     def _cal_h2g2(self, g2, h2, nlist_mask, sw):
@@ -389,12 +393,13 @@ class DescrptDPA2Layer(torch.nn.Module):
             invnnei = 1. / (self.epsilon + torch.sum(nlist_mask, dim=-1))
             # nb x nloc x 1 x 1
             invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
+            # nb x nloc x 3 x ng2
+            h2g2 = torch.matmul(torch.transpose(h2, -1, -2), g2) * invnnei
         else:
             g2 = self._apply_switch(g2, sw)
-            invnnei = 1. / float(nnei)
-        # nb x nloc x 3 x ng2
-        h2g2 = torch.matmul(
-            torch.transpose(h2, -1, -2), g2) * invnnei
+            invnnei = 1. / nnei
+            # nb x nloc x 3 x ng2
+            h2g2 = torch.matmul(torch.transpose(h2, -1, -2), g2) * invnnei
         return h2g2
 
     def _cal_grrg(self, h2g2):
@@ -532,17 +537,18 @@ class DescrptDPA2Layer(torch.nn.Module):
         if self.update_h2:
             h2 = self._apply_h_norm(h2)
 
-        g2_update = [g2]
-        h2_update = [h2]
-        g1_update = [g1]
-        g1_mlp = [g1]
+        g2_update: List[Tensor] = [g2]
+        h2_update: List[Tensor] = [h2]
+        g1_update: List[Tensor]  = [g1]
+        g1_mlp: List[Tensor]  = [g1]
 
         if cal_gg1:
             gg1 = self._make_nei_g1(g1, nlist)
         else:
             gg1 = None
 
-        if update_chnnl_2:
+        if self.update_chnnl_2:
+            assert(hasattr(self, "linear2"))
             # nb x nloc x nnei x ng2
             g2_1 = self.act(self.linear2(g2))
             g2_update.append(g2_1)
@@ -560,7 +566,7 @@ class DescrptDPA2Layer(torch.nn.Module):
                 g2_2 = self.attn2_lm(g2_2)
                 g2_update.append(g2_2)
 
-            if update_h2:
+            if self.update_h2:
                 h2_update.append(self._update_h2(g2, h2, nlist_mask, sw))
 
         if update_g1_has_conv:
@@ -582,6 +588,7 @@ class DescrptDPA2Layer(torch.nn.Module):
         g1_update.append(g1_1)
 
         if update_g1_has_attn:
+            assert gg1 is not None
             g1_update.append(self.loc_attn(g1, gg1, nlist_mask, sw))
 
         # update
@@ -594,7 +601,7 @@ class DescrptDPA2Layer(torch.nn.Module):
         return g1_new, g2_new, h2_new
 
     @torch.jit.export
-    def list_update_res_avg(self, update_list):
+    def list_update_res_avg(self, update_list: List[Tensor]):
         nitem = len(update_list)
         uu = update_list[0]
         for ii in range(1, nitem):
@@ -602,7 +609,7 @@ class DescrptDPA2Layer(torch.nn.Module):
         return uu / (float(nitem) ** 0.5)
 
     @torch.jit.export
-    def list_update_res_incr(self, update_list):
+    def list_update_res_incr(self, update_list: List[Tensor]):
         nitem = len(update_list)
         uu = update_list[0]
         scale = 1. / (float(nitem - 1) ** 0.5) if nitem > 1 else 0.
@@ -611,7 +618,7 @@ class DescrptDPA2Layer(torch.nn.Module):
         return uu
 
     @torch.jit.export
-    def list_update(self, update_list):
+    def list_update(self, update_list: List[Tensor]):
         if self.update_style == "res_avg":
             return self.list_update_res_avg(update_list)
         elif self.update_style == "res_incr":
