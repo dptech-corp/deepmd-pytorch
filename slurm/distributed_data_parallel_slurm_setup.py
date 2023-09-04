@@ -30,6 +30,7 @@ if __name__ == "__main__":
     tasks_per_node = int(os.environ["SLURM_NTASKS_PER_NODE"])
     world_size = num_nodes * tasks_per_node
     output += " && export WORLD_SIZE='{}'".format(world_size)
+    output += " && export LOCAL_WORLD_SIZE='{}'".format(tasks_per_node)
 
     # --- Set world rank ---
     world_rank = os.environ['SLURM_PROCID']
