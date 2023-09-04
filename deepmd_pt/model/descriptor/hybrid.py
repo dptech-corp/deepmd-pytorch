@@ -4,6 +4,7 @@ import torch
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 from deepmd_pt.model.network import Identity, Linear
+from typing import Optional, List
 
 try:
     from typing import Final
@@ -46,6 +47,7 @@ class DescrptHybrid(Descriptor):
         self.local_cluster_list = [descrpt.local_cluster for descrpt in self.descriptor_list]
         self.local_cluster = True in self.local_cluster_list
         self.hybrid_mode = hybrid_mode
+        self.tebd_dim = tebd_dim
         assert self.hybrid_mode in ["concat", "sequential"]
         if self.hybrid_mode == "sequential":
             sequential_transform = []
@@ -71,14 +73,11 @@ class DescrptHybrid(Descriptor):
             raise RuntimeError
 
     @property
-    def dim_emb_list(self):
+    def dim_emb_list(self) -> List[int]:
         """
         Returns the output dimension list of embeddings
         """
-        emb_list = []
-        for descrpt in self.descriptor_list:
-            emb_list.append(descrpt.dim_emb)
-        return emb_list
+        return [descrpt.dim_emb for descrpt in self.descriptor_list]
 
     @property
     def dim_emb(self):
@@ -121,7 +120,15 @@ class DescrptHybrid(Descriptor):
         for ii, descrpt in enumerate(self.descriptor_list):
             descrpt.init_desc_stat(sumr[ii], suma[ii], sumn[ii], sumr2[ii], suma2[ii])
 
-    def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc=None, atype_tebd=None, nlist_tebd=None):
+    def forward(
+            self,
+            extended_coord: torch.Tensor,
+            nlist: List[torch.Tensor],
+            atype: torch.Tensor,
+            nlist_type: List[torch.Tensor],
+            nlist_loc: List[Optional[torch.Tensor]] = None,
+            atype_tebd: Optional[torch.Tensor] = None,
+            nlist_tebd: List[Optional[torch.Tensor]] = None):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -154,19 +161,19 @@ class DescrptHybrid(Descriptor):
                 # out_diff.append(diff)
                 out_rot_mat.append(rot_mat)
             out_descriptor = torch.concat(out_descriptor, dim=-1)
-            if None not in out_rot_mat:
-                out_rot_mat = torch.concat(out_rot_mat, dim=-2)
-            else:
-                out_rot_mat = None
+            # if None not in out_rot_mat:
+            #     out_rot_mat = torch.concat(out_rot_mat, dim=-2)
+            # else:
+            out_rot_mat = None
             return out_descriptor, None, None, out_rot_mat
         elif self.hybrid_mode == 'sequential':
             seq_input = None
             env_mat, diff, rot_mat = None, None, None
-            for ii, descrpt in enumerate(self.descriptor_list):
+            for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
                 seq_output, env_mat, diff, rot_mat = descrpt(extended_coord, nlist[ii], atype, nlist_type[ii],
                                                              nlist_loc=nlist_loc[ii], atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd[ii], seq_input=seq_input)
-                seq_input = self.sequential_transform[ii](seq_output)
+                seq_input = seq_transform(seq_output)
             return seq_input, env_mat, diff, rot_mat
         else:
             raise RuntimeError

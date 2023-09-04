@@ -94,7 +94,7 @@ class EnergyModelHybrid(BaseModel):
 
         descriptor, _, _, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                               nlist_loc=nlist_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
-        atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
+        atom_energy, _ = self.fitting_net(descriptor, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])

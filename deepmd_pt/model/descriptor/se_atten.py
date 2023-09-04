@@ -77,7 +77,7 @@ class DescrptSeAtten(Descriptor):
             sel = [sel]
 
         self.ntypes = ntypes
-        self.sel = torch.tensor(sel)  # 每种元素在邻居中的位移
+        self.sel = sel  # 每种元素在邻居中的位移
         self.sec = self.sel
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
