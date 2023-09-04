@@ -380,7 +380,6 @@ class DescrptSeUni(Descriptor):
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
-    #logging.info(f"dim_emb:{self.dim_emb}")
     nframes, nloc = nlist_loc.shape[:2]
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(

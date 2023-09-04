@@ -126,7 +126,6 @@ class ForceModelHybrid(BaseModel):
         atomic_rep, pair_rep, delta_pos, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                                                    nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                                    nlist_tebd=nlist_tebd)
-        #logging.info(f"{rot_mat.shape}")
         if self.fitting_type in ['direct_force', 'direct_force_ener']:
             force_out = self.fitting_net_force(atomic_rep, atype, atype_tebd, rot_mat)
             model_predict = {'force': force_out}

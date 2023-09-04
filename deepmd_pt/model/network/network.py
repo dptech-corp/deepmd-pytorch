@@ -274,10 +274,7 @@ class SimpleLinear(nn.Module):
             nn.init.normal_(self.idt.data, mean=0.1, std=0.001)
 
     def forward(self, inputs):
-        """Return X*W+b."""
-        import logging
-        #logging.info(f"inputs:{inputs.is_cuda}")
-        #logging.info(f"matrix:{self.matrix.is_cuda}")        
+        """Return X*W+b."""    
         xw = torch.matmul(inputs, self.matrix)       
         hidden = xw + self.bias if self.bias is not None else xw
         hidden = self.activate(hidden)
@@ -1317,8 +1314,6 @@ class Evoformer2bEncoder(nn.Module):
         # Local branch
         # [nframes, nloc, nnei, attn_head]
         pair_rep = self.in_proj_pair(pair_rep)
-        #import logging
-        #logging.info(f"pair_rep:{pair_rep.is_cuda}")
         # [nframes, attn_head, nloc, nnei]
         pair_rep = pair_rep.permute(0, 3, 1, 2).contiguous()
         input_pair_rep = pair_rep

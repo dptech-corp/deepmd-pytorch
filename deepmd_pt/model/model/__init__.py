@@ -13,6 +13,7 @@ from .hybrid_ener import EnergyModelHybrid
 from .hybrid_force import ForceModelHybrid
 from .hybrid_denoise import DenoiseModelHybrid
 
+
 def get_model(model_params, sampled=None):
     if model_params.get("fitting_net", None) is not None:
         if model_params.get("backbone", None) is None:

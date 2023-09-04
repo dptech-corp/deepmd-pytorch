@@ -26,10 +26,6 @@ class DescrptHybrid(Descriptor):
         """
         super(DescrptHybrid, self).__init__()
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
-        import logging
-        #for descrpt in self.descriptor_list:
-        #    logging.info(f"\n{descrpt.dim_out}\n")
-        #logging.info(f"{self.descriptor_list[-1].dim_out}")
         self.descriptor_param = descriptor_param["list"]
         self.rcut = [descrpt.rcut for descrpt in self.descriptor_list]
         self.sec = [descrpt.sec for descrpt in self.descriptor_list]
@@ -136,8 +132,6 @@ class DescrptHybrid(Descriptor):
                 descriptor, env_mat, diff, rot_mat = descrpt(extended_coord, nlist[ii], atype, nlist_type[ii],
                                                              nlist_loc=nlist_loc[ii], atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd[ii])
-                #import logging
-                #logging.info(f"env_mat:{env_mat.shape}")
                 if descriptor.shape[0] == nframes * nloc:
                     # [nframes * nloc, 1 + nnei, emb_dim]
                     descriptor = descriptor[:, 0, :].reshape(nframes, nloc, -1)
@@ -150,9 +144,6 @@ class DescrptHybrid(Descriptor):
                 out_rot_mat = torch.concat(out_rot_mat, dim=-2)
             else:
                 out_rot_mat = None
-            #out_env_mat = torch.tensor(out_env_mat)
-            #out_diff = torch.tensor(out_diff)
-            #logging.info(f"out_env_mat:{out_env_mat}")
             return out_descriptor, out_env_mat, out_diff, out_rot_mat
         elif self.hybrid_mode == 'sequential':
             seq_input = None
