@@ -29,7 +29,15 @@ class DenoiseNet(TaskBaseMethod):
         """
         super(DenoiseNet, self).__init__()
         self.attn_head = attn_head
-        self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
+        self.pair2coord_proj = []
+
+        if isinstance(self.attn_head, list):
+            self.nitem = len(attn_head)
+            for idx in range(self.nitem):
+                _pair2coord_proj = NonLinearHead(self.attn_head[idx], 1, activation_fn=activation_function)
+                self.pair2coord_proj.append(_pair2coord_proj)
+        else:
+            self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
 
     def forward(self, coord, pair_weights, diff, nlist_mask):
         """Calculate the updated coord.
@@ -42,7 +50,24 @@ class DenoiseNet(TaskBaseMethod):
         Returns:
         - denoised_coord: Denoised updated coord with shape [nframes, nloc, 3].
         """
-        # [nframes, nloc, nnei, 1]
-        attn_probs = self.pair2coord_proj(pair_weights)
-        coord_update = (attn_probs * diff).sum(dim=-2) / nlist_mask.sum(dim=-1).unsqueeze(-1)
-        return coord + coord_update
+        
+        # [nframes, nloc, nnei, head]➡️[nframes, nloc, nnei, 1]
+        if isinstance(pair_weights, list):
+            all_coord_update = []
+            assert len(pair_weights) == len(diff) == len(nlist_mask) == self.nitem
+            for idx in range(self.nitem):
+                _attn_probs = self.pair2coord_proj[idx](pair_weights[idx])
+                _coord_update = (_attn_probs * diff[idx]).sum(dim=-2) / nlist_mask[idx].sum(dim=-1).unsqueeze(-1)
+                all_coord_update.append(coord+_coord_update)
+            return all_coord_update
+        else:
+            attn_probs = self.pair2coord_proj(pair_weights)
+            coord_update = (attn_probs * diff).sum(dim=-2) / nlist_mask.sum(dim=-1).unsqueeze(-1)
+            return coord + coord_update
+        #logging.info(f"attn_probs*diff:{(attn_probs*diff).shape}")
+        #logging.info(f"nlist_mask:{((attn_probs * diff).sum(dim=-2)).shape}")
+
+        # diff [nframes, nloc, nnei, 3]
+        # attn_prob*diff [nframes, nloc, nnei, 3]
+        # nlist_mask [nframes, nloc, nnei]
+        # [nframes, nloc, 3]/ [nframes, nloc, 1]      

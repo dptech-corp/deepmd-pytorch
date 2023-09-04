@@ -611,7 +611,10 @@ class DeepmdDataSystem(object):
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:
+                    #logging.info(f"origin_coord:{noised_coord}")
                     _coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
+                    #logging.info(f"clean_coord:{batch['clean_coord']}")
+                    #logging.info(f"updated_coord:{_coord}")
                 else:
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord

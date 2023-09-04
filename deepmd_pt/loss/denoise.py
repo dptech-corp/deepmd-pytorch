@@ -49,6 +49,8 @@ class DenoiseLoss(TaskLoss):
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
         if self.has_coord:
+            import logging
+            logging.info(f"has_coord")
             if self.mask_loss_coord:
                 masked_updated_coord = updated_coord[coord_mask]
                 masked_clean_coord = clean_coord[coord_mask]
@@ -71,6 +73,7 @@ class DenoiseLoss(TaskLoss):
             loss += self.masked_coord_loss * coord_loss
             more_loss['coord_l1_error'] = coord_loss.detach()
         if self.has_token:
+            logging.info(f"has_token")
             if self.mask_loss_token:
                 masked_logits = logits[type_mask]
                 masked_target = clean_type[type_mask]
@@ -91,6 +94,7 @@ class DenoiseLoss(TaskLoss):
             loss += self.masked_token_loss * token_loss
             more_loss['token_error'] = token_loss.detach()
         if self.has_norm:
+            logging.info(f"has_norm")
             norm_x = model_pred["norm_x"]
             norm_delta_pair_rep = model_pred["norm_delta_pair_rep"]
             loss += self.norm_loss * (norm_x + norm_delta_pair_rep)

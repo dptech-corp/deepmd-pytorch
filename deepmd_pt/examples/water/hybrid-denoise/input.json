@@ -3,7 +3,8 @@
  "model": {
   "type_map": [
    "O",
-   "H"
+   "H",
+   "MASKED_TOKEN"
   ],
   "descriptor": {
    "type": "hybrid",
@@ -59,16 +60,6 @@
     }
    ]
   },
-  "fitting_net": {
-   "neuron": [
-    240,
-    240,
-    240
-   ],
-   "resnet_dt": true,
-   "seed": 1,
-   "_comment": " that's all"
-  },
   "_comment": " that's all"
  },
  "learning_rate": {
@@ -79,15 +70,25 @@
   "_comment": "that's all"
  },
  "loss": {
-  "type": "ener",
-  "start_pref_e": 0.02,
-  "limit_pref_e": 1,
-  "start_pref_f": 1000,
-  "limit_pref_f": 1,
-  "start_pref_v": 0,
-  "limit_pref_v": 0,
-  "_comment": " that's all"
- },
+    "type": "denoise",
+    "noise_type": "uniform",
+    "noise": 1.0,
+    "noise_mode": "fix_num",
+    "mask_num": 8,
+    "mask_prob": 0.15,
+    "mask_coord": true,
+    "mask_type": false,
+    "same_mask": false,
+    "max_fail_num": 10,
+    "masked_token_loss": 0.0,
+    "masked_coord_loss": 1.0,
+    "norm_loss": 0.0,
+    "use_l1": true,
+    "beta": 1.0,
+    "mask_loss_coord": true,
+    "mask_loss_token": false,
+    "_comment": " that's all"
+    },
  "training": {
   "training_data": {
    "systems": [

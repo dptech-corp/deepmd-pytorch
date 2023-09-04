@@ -26,6 +26,10 @@ class DescrptHybrid(Descriptor):
         """
         super(DescrptHybrid, self).__init__()
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
+        import logging
+        #for descrpt in self.descriptor_list:
+        #    logging.info(f"\n{descrpt.dim_out}\n")
+        #logging.info(f"{self.descriptor_list[-1].dim_out}")
         self.descriptor_param = descriptor_param["list"]
         self.rcut = [descrpt.rcut for descrpt in self.descriptor_list]
         self.sec = [descrpt.sec for descrpt in self.descriptor_list]
@@ -125,26 +129,31 @@ class DescrptHybrid(Descriptor):
         nframes, nloc = atype.shape[:2]
         if self.hybrid_mode == 'concat':
             out_descriptor = []
-            # out_env_mat = []
+            out_env_mat = []
             out_rot_mat = []
-            # out_diff = []
+            out_diff = []
             for ii, descrpt in enumerate(self.descriptor_list):
                 descriptor, env_mat, diff, rot_mat = descrpt(extended_coord, nlist[ii], atype, nlist_type[ii],
                                                              nlist_loc=nlist_loc[ii], atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd[ii])
+                #import logging
+                #logging.info(f"env_mat:{env_mat.shape}")
                 if descriptor.shape[0] == nframes * nloc:
                     # [nframes * nloc, 1 + nnei, emb_dim]
                     descriptor = descriptor[:, 0, :].reshape(nframes, nloc, -1)
                 out_descriptor.append(descriptor)
-                # out_env_mat.append(env_mat)
-                # out_diff.append(diff)
+                out_env_mat.append(env_mat)
+                out_diff.append(diff)
                 out_rot_mat.append(rot_mat)
             out_descriptor = torch.concat(out_descriptor, dim=-1)
             if None not in out_rot_mat:
                 out_rot_mat = torch.concat(out_rot_mat, dim=-2)
             else:
                 out_rot_mat = None
-            return out_descriptor, None, None, out_rot_mat
+            #out_env_mat = torch.tensor(out_env_mat)
+            #out_diff = torch.tensor(out_diff)
+            #logging.info(f"out_env_mat:{out_env_mat}")
+            return out_descriptor, out_env_mat, out_diff, out_rot_mat
         elif self.hybrid_mode == 'sequential':
             seq_input = None
             env_mat, diff, rot_mat = None, None, None

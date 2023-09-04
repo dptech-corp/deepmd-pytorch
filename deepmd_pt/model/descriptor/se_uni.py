@@ -380,6 +380,7 @@ class DescrptSeUni(Descriptor):
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
+    #logging.info(f"dim_emb:{self.dim_emb}")
     nframes, nloc = nlist_loc.shape[:2]
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(
@@ -450,7 +451,7 @@ class DescrptSeUni(Descriptor):
       grrg = self._cal_grrg(h2g2)
       g1 = torch.cat([g1, grrg], dim=-1)
 
-    return g1, None, diff, rot_mat.view(-1, self.dim_emb, 3)
+    return g1, g2, diff, rot_mat.view(-1, self.dim_emb, 3)
 
 
   def _linear_layers(

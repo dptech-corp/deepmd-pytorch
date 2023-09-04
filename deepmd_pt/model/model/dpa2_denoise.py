@@ -57,7 +57,7 @@ class DenoiseModelDPA2(BaseModel):
             self.backbone = Evoformer2bBackBone(**backbone_param)
         else:
             NotImplementedError(f"Unknown backbone type {backbone_type}!")
-
+ 
         assert model_params.pop('fitting_net', None) is None, f'Denoise task must not have fitting_net!'
         # Denoise and predict
         self.coord_denoise_net = DenoiseNet(self.backbone.attn_head, self.backbone.activation_function)
@@ -90,10 +90,16 @@ class DenoiseModelDPA2(BaseModel):
 
         descriptor, env_mat, diff, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                                     atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
+        import logging
+        logging.info(f"descriptor_before:{descriptor.shape}")
+        logging.info(f"env_mat:{env_mat.shape}")
         atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep = \
             self.backbone(descriptor, env_mat, padding_nlist_loc, nlist_type, nnei_mask)
-
+        logging.info(f"descriptor:{descriptor.shape}")
+        logging.info(f"atomic_rep:{atomic_rep.shape}")
+        logging.info(f"delta_pair_rep:{delta_pair_rep.shape}")
         updated_coord = self.coord_denoise_net(coord, delta_pair_rep, diff, nnei_mask)
+        logging.info(f"diff:{diff.shape}")
         logits = self.type_predict_net(atomic_rep)
         model_predict = {'updated_coord': updated_coord,
                          'logits': logits,

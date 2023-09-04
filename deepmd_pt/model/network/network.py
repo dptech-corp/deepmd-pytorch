@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from deepmd_pt.utils.env import DEVICE
 
 from deepmd_pt.utils import env
 
@@ -261,10 +262,10 @@ class SimpleLinear(nn.Module):
         self.use_timestep = use_timestep
         self.activate = ActivationFn(activate)
 
-        self.matrix = nn.Parameter(data=Tensor(num_in, num_out))
+        self.matrix = nn.Parameter(data=Tensor(num_in, num_out)).to(DEVICE)
         nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
         if bias:
-          self.bias = nn.Parameter(data=Tensor(1, num_out))
+          self.bias = nn.Parameter(data=Tensor(1, num_out)).to(DEVICE)
           nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
         else:
           self.bias = None
@@ -273,8 +274,11 @@ class SimpleLinear(nn.Module):
             nn.init.normal_(self.idt.data, mean=0.1, std=0.001)
 
     def forward(self, inputs):
-        """Return X*W+b."""        
-        xw = torch.matmul(inputs, self.matrix)
+        """Return X*W+b."""
+        import logging
+        #logging.info(f"inputs:{inputs.is_cuda}")
+        #logging.info(f"matrix:{self.matrix.is_cuda}")        
+        xw = torch.matmul(inputs, self.matrix)       
         hidden = xw + self.bias if self.bias is not None else xw
         hidden = self.activate(hidden)
         if self.use_timestep:
@@ -1313,6 +1317,8 @@ class Evoformer2bEncoder(nn.Module):
         # Local branch
         # [nframes, nloc, nnei, attn_head]
         pair_rep = self.in_proj_pair(pair_rep)
+        #import logging
+        #logging.info(f"pair_rep:{pair_rep.is_cuda}")
         # [nframes, attn_head, nloc, nnei]
         pair_rep = pair_rep.permute(0, 3, 1, 2).contiguous()
         input_pair_rep = pair_rep

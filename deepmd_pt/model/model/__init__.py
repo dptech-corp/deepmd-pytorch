@@ -11,7 +11,7 @@ from .dpau_force import ForceModelDPAUni
 from .dpa2_lcc_force import ForceModelDPA2Lcc
 from .hybrid_ener import EnergyModelHybrid
 from .hybrid_force import ForceModelHybrid
-
+from .hybrid_denoise import DenoiseModelHybrid
 
 def get_model(model_params, sampled=None):
     if model_params.get("fitting_net", None) is not None:
@@ -44,7 +44,9 @@ def get_model(model_params, sampled=None):
             elif "direct" in model_params["fitting_net"].get("type", "ener"):
                 return ForceModelDPA2(model_params, sampled)
     else:
-        if model_params.get("backbone", None) is None:
+        if model_params["descriptor"]["type"] == "hybrid":
+            return DenoiseModelHybrid(model_params, sampled)
+        elif model_params.get("backbone", None) is None:
             return DenoiseModelDPA1(model_params, sampled)
         else:
             return DenoiseModelDPA2(model_params, sampled)
