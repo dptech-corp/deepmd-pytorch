@@ -15,7 +15,7 @@
      "rcut": 4.0,
      "nlayers": 3,
      "g1_dim": 128,
-     "g2_dim": 40,
+     "g2_dim": 32,
      "attn2_hidden": 32,
      "attn2_nhead": 4,
      "attn1_hidden": 128,
