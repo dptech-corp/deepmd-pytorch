@@ -204,6 +204,7 @@ def extend_coord_with_ghosts(
     xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
     xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
     xyz = xyz.view(-1, 3)
+    print(xyz)
     # ns x 3
     shift_idx = xyz[torch.argsort(torch.norm(xyz, dim=1))]
     ns, _ = shift_idx.shape
