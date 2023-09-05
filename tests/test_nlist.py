@@ -14,6 +14,7 @@ from deepmd_pt.utils.nlist import (
 from deepmd_pt.utils.preprocess import(
   build_neighbor_list as legacy_build_neighbor_list,
 )
+from IPython import embed
 
 dtype = torch.float64
 
@@ -55,6 +56,8 @@ class TestNeighList(unittest.TestCase):
       self.rcut, sum(self.nsel), distinguish_types=False)
     torch.testing.assert_close(
       nlist[0], nlist[1])
+    print(torch.sort(nlist[0], dim=-1)[0])
+    print(torch.sort(self.ref_nlist, dim=-1)[0])
     torch.testing.assert_close(
       torch.sort(nlist[0], dim=-1)[0],
       torch.sort(self.ref_nlist, dim=-1)[0],
