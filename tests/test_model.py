@@ -291,8 +291,7 @@ class TestEnergy(unittest.TestCase):
         batch = my_ds.systems[0]._data_system.preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
-        model_predict = my_model(batch['coord'], batch['atype'], batch['natoms'],
-                                 batch['mapping'], batch['shift'], batch['nlist'], batch['box'])
+        model_predict = my_model(batch['coord'], batch['atype'], batch['box'])
         p_energy, p_force, p_virial = model_predict['energy'], model_predict['force'], model_predict['virial']
         cur_lr = my_lr.value(self.wanted_step)
         model_pred = {'energy': p_energy,
