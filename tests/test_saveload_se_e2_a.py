@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
 from deepmd.common import expand_sys_str
 from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.model import EnergyModelSeA
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils import env
 from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.train.wrapper import ModelWrapper
@@ -75,7 +75,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
     def create_wrapper(self):
         model_config = copy.deepcopy(self.config['model'])
         sampled = copy.deepcopy(self.sampled)
-        model = EnergyModelSeA(model_config, sampled).to(env.DEVICE)
+        model = get_model(model_config, sampled).to(env.DEVICE)
         return ModelWrapper(model, self.loss)
 
     def get_data(self):
@@ -86,8 +86,7 @@ class TestSaveLoadDPA1(unittest.TestCase):
             self.training_data = BufferedIterator(iter(self.training_dataloader))
             batch_data = next(iter(self.training_data))
         input_dict = {}
-        for item in ['coord', 'atype', 'natoms', 'mapping', 'shift', 'nlist', 'nlist_loc', 'nlist_type',
-                     'box']:
+        for item in ['coord', 'atype', 'box']:
             if item in batch_data:
                 input_dict[item] = batch_data[item]
             else:

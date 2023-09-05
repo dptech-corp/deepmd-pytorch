@@ -79,6 +79,7 @@ class DescrptSeAtten(Descriptor):
         self.ntypes = ntypes
         self.sel = sel  # 每种元素在邻居中的位移
         self.sec = self.sel
+        self.split_sel = self.sel
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
         self.dpa1_attention = NeighborWiseAttention(self.attn_layer, self.nnei, self.filter_neuron[-1], self.attn_dim,

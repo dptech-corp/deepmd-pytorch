@@ -88,12 +88,6 @@ class Tester(object):
         for item in [
             "coord",
             "atype",
-            "natoms",
-            # "mapping",
-            # "shift",
-            # "nlist",
-            # "nlist_loc",
-            # "nlist_type",
             "box",
         ]:
             if item in batch_data:
@@ -137,8 +131,8 @@ class Tester(object):
                 model_pred, _, _ = self.wrapper(**input_dict)
                 system_pred.append({item: model_pred[item].detach().cpu().numpy() for item in model_pred})
                 system_label.append({item: label_dict[item].detach().cpu().numpy() for item in label_dict})
-                _, more_loss = self.loss(model_pred, label_dict, input_dict["natoms"], 1.0, mae=True)  # TODO: lr here is useless
-                natoms = int(input_dict["natoms"][0, 0])
+                natoms = int(input_dict["atype"].shape[-1])
+                _, more_loss = self.loss(model_pred, label_dict, natoms, 1.0, mae=True)  # TODO: lr here is useless
                 if sys_natoms is None:
                     sys_natoms = natoms
                 else:

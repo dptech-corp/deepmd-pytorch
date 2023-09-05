@@ -127,7 +127,6 @@ class TestLearningRate(unittest.TestCase):
         my_loss, my_more_loss = mine(
             self.label,
             self.model_pred,
-            self.natoms,
             self.cur_lr,
         )
         my_loss = my_loss.detach().cpu()

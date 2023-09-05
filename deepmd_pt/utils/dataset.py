@@ -528,6 +528,7 @@ class DeepmdDataSystem(object):
             region = Region3D(box)
         else:
             box = None
+            batch['box'] = None
             region = None
         if self.noise_settings is None:
             batch['atype'] = clean_type

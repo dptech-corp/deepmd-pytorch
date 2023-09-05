@@ -18,7 +18,7 @@ from deepmd.utils.learning_rate import LearningRateExp
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModelSeA
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.env import *
 
 from deepmd_pt.utils.stat import make_stat_input
@@ -240,7 +240,7 @@ class TestEnergy(unittest.TestCase):
                                 'type_map': self.type_map
                             })
         sampled = make_stat_input(my_ds.systems, my_ds.dataloaders, self.data_stat_nbatch)
-        my_model = EnergyModelSeA(
+        my_model = get_model(
             model_params={
                 'descriptor': {
                     'type': 'se_e2_a',
@@ -301,7 +301,7 @@ class TestEnergy(unittest.TestCase):
         label = {'energy': batch['energy'],
                  'force': batch['force'],
                  }
-        loss, _ = my_loss(model_pred, label, batch['natoms'], cur_lr)
+        loss, _ = my_loss(model_pred, label, cur_lr)
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
         rtol = 1e-5

@@ -273,6 +273,7 @@ class DescrptSeUni(Descriptor):
     assert len(sel) == 1
     self.sel = sel  # 每种元素在邻居中的位移
     self.sec = self.sel
+    self.split_sel = self.sel
     self.axis_dim = axis_dim
     self.set_davg_zero = set_davg_zero
     self.g1_dim = g1_dim
