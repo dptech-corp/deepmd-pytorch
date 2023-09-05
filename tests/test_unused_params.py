@@ -42,15 +42,6 @@ class TestUnusedParamsDPAUni(unittest.TestCase):
       model_dpau["descriptor"]["update_g2_has_g1g1"] = g1g1
       model_dpau["descriptor"]["update_g2_has_attn"] = attn2
       model_dpau["descriptor"]["update_h2"] = h2
-      print("cmbg2: ", cmbg2)
-      print("conv: ", conv)
-      print("drrd: ", drrd)
-      print("grrg: ", grrg)
-      print("attn1: ", attn1)
-      print("g1g1: ", g1g1)
-      print("attn2: ", attn2)
-      print("h2: ", h2)
-      print("_______________")
       self._test_unused(model_dpau)
 
   def _test_unused(self, model_params):
