@@ -146,7 +146,9 @@ class EnergyModel(BaseModel):
         if self.grad_force:
             mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
             force = torch.zeros_like(coord)
-            model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping, src=model_predict_lower['force'], reduce='sum')
+            model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping, src=model_predict_lower['extended_force'], reduce='sum')
+        else:
+            model_predict_lower['force'] = model_predict_lower['dforce']
         return model_predict_lower
 
     def forward_lower(self, extended_coord, extended_atype, nlist, mapping: Optional[torch.Tensor] = None):
@@ -154,8 +156,6 @@ class EnergyModel(BaseModel):
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
-        atype_tebd = None
-        nlist_tebd = None
         if self.has_type_embedding:
             atype_tebd = self.type_embedding(atype)
             if not isinstance(nlist, list):
@@ -167,11 +167,14 @@ class EnergyModel(BaseModel):
                 for nlist_type_item in nlist_type:
                     nlist_type_item[nlist_type_item == -1] = self.ntypes
                     nlist_tebd.append(self.type_embedding(nlist_type_item))
+        else:
+            atype_tebd = None
+            nlist_tebd = None
 
         descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
-        atom_energy, force = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+        atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
         energy = atom_energy.sum(dim=1)
         model_predict = {'energy': energy,
                          'atom_energy': atom_energy,
@@ -179,11 +182,16 @@ class EnergyModel(BaseModel):
         if self.grad_force:
             faked_grad = torch.ones_like(energy)
             lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-            force = -torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-            assert force is not None
-            virial = torch.transpose(force, 1, 2) @ extended_coord
+            extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+            assert extended_force is not None
+            extended_force = -extended_force
+            virial = torch.transpose(extended_force, 1, 2) @ extended_coord
             model_predict['virial'] = virial
-        model_predict['force'] = force
+            model_predict['extended_force'] = extended_force
+        else:
+            assert dforce is not None
+            model_predict['dforce'] = dforce
+
         return model_predict
 
     @staticmethod
@@ -193,18 +201,20 @@ class EnergyModel(BaseModel):
             nframes, nloc = nlist.shape[:2]
             nmask = nlist == -1
             nlist[nmask] = 0
-            nlist_loc = None
             if mapping is not None:
                 nlist_loc = torch.gather(mapping, dim=1, index=nlist.reshape(nframes, -1)).reshape(nframes, nloc, -1)
                 nlist_loc[nmask] = -1
+            else:
+                nlist_loc = None
             nlist_type = torch.gather(extended_atype, dim=1, index=nlist.reshape(nframes, -1)).reshape(nframes, nloc,
                                                                                                        -1)
             nlist_type[nmask] = -1
             nlist[nmask] = -1
+            return nlist_loc, nlist_type, nframes, nloc
         else:
             nframes, nloc = nlist[0].shape[:2]
             nlist_type = []
-            nlist_loc = []
+            nlist_loc_list = []
             for nlist_item in nlist:
                 nmask = nlist_item == -1
                 nlist_item[nmask] = 0
@@ -213,9 +223,7 @@ class EnergyModel(BaseModel):
                         nframes, nloc,
                         -1)
                     nlist_loc_item[nmask] = -1
-                    nlist_loc.append(nlist_loc_item)
-                else:
-                    nlist_loc = None
+                    nlist_loc_list.append(nlist_loc_item)
                 nlist_type_item = torch.gather(extended_atype, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
                     nframes,
                     nloc,
@@ -223,4 +231,10 @@ class EnergyModel(BaseModel):
                 nlist_type_item[nmask] = -1
                 nlist_type.append(nlist_type_item)
                 nlist_item[nmask] = -1
-        return nlist_loc, nlist_type, nframes, nloc
+
+            if mapping is not None:
+                nlist_loc = nlist_loc_list
+            else:
+                nlist_loc = None
+            return nlist_loc, nlist_type, nframes, nloc
+

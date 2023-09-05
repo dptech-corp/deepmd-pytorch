@@ -89,11 +89,11 @@ class Tester(object):
             "coord",
             "atype",
             "natoms",
-            "mapping",
-            "shift",
-            "nlist",
-            "nlist_loc",
-            "nlist_type",
+            # "mapping",
+            # "shift",
+            # "nlist",
+            # "nlist_loc",
+            # "nlist_type",
             "box",
         ]:
             if item in batch_data:

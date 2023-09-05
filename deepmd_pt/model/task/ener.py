@@ -45,7 +45,7 @@ class EnergyFittingNet(Fitting):
             logging.info('Set seed to %d in fitting net.', kwargs['seed'])
             torch.manual_seed(kwargs['seed'])
 
-    def forward(self, inputs, atype, atype_tebd: Optional[torch.Tensor] = None, rot_mat: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, None]:
+    def forward(self, inputs, atype, atype_tebd: Optional[torch.Tensor] = None, rot_mat: Optional[torch.Tensor] = None):
         """Based on embedding net output, alculate total energy.
 
         Args:

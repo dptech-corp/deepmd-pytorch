@@ -1,10 +1,7 @@
 import torch
 import itertools
 import numpy as np
-from deepmd_pt.utils.env import (
-  DEVICE,
-  GLOBAL_PT_FLOAT_PRECISION,
-)
+from deepmd_pt.utils import env
 from deepmd_pt.utils.region import (
   phys2inter,
   inter2phys,
@@ -16,13 +13,14 @@ from typing import (
   Optional
 )
 
+
 def _build_neighbor_list(
-    coord1 : torch.Tensor,
-    nloc : int,
-    rcut : float,
-    nsel : int,
-    rmin : float = 1e-10,
-    cut_nearest : bool = True,
+    coord1: torch.Tensor,
+    nloc: int,
+    rcut: float,
+    nsel: int,
+    rmin: float = 1e-10,
+    cut_nearest: bool = True,
 ) -> torch.Tensor:
   """build neightbor list for a single frame. keeps nsel neighbors.
   coord1 : [nall x 3]
@@ -48,12 +46,13 @@ def _build_neighbor_list(
   nlist = nlist.masked_fill((rr > rcut), -1)
   return nlist
 
+
 def build_neighbor_list_lower(
-    coord1 : torch.Tensor,
-    atype : torch.Tensor,    
-    nloc : int,
-    rcut : float,
-    nsel : Union[int, List[int]],
+    coord1: torch.Tensor,
+    atype: torch.Tensor,
+    nloc: int,
+    rcut: float,
+    sel: Union[int, List[int]],
     distinguish_types: bool = True,
 ) -> torch.Tensor:
   """build neightbor list for a single frame. keeps nsel neighbors.
@@ -90,13 +89,26 @@ def build_neighbor_list_lower(
 
   """
   nall = coord1.shape[0]//3
-  if nloc == 0 or nall == 0:
-    return None
-  if isinstance(nsel, int): 
-    nsel = [nsel]
+  if isinstance(sel, int):
+    sel = [sel]
+  nsel = sum(sel)
   # nloc x nsel
-  nlist = _build_neighbor_list(
-    coord1, nloc, rcut, sum(nsel), cut_nearest=True)
+  coord0 = torch.split(coord1, [nloc*3, (nall-nloc)*3])[0]
+  # nloc x nall x 3
+  diff = coord1.view([-1,3])[None,:,:] - coord0.view([-1,3])[:,None,:]
+  assert(list(diff.shape) == [nloc, nall, 3])
+  # nloc x nall
+  rr = torch.linalg.norm(diff, dim=-1)
+  rr, nlist = torch.sort(rr, dim=-1)
+  # nloc x (nall-1)
+  rr = torch.split(rr, [1,nall-1], dim=-1)[-1]
+  nlist = torch.split(nlist, [1,nall-1], dim=-1)[-1]
+  # nloc x nsel
+  nnei = rr.shape[1]
+  rr = torch.split(rr, [nsel,nnei-nsel], dim=-1)[0]
+  nlist = torch.split(nlist, [nsel,nnei-nsel], dim=-1)[0]
+  nlist = nlist.masked_fill((rr > rcut), -1)
+
   if not distinguish_types:
     return nlist
   else:
@@ -110,7 +122,7 @@ def build_neighbor_list_lower(
     )
     tnlist = tnlist.masked_fill(mask, -1)
     snsel = tnlist.shape[1]
-    for ii,ss in enumerate(nsel):
+    for ii,ss in enumerate(sel):
       # nloc x s(nsel) 
       # to int because bool cannot be sort on GPU
       pick_mask = (tnlist == ii).to(torch.int32)
@@ -138,7 +150,7 @@ def extend_coord_with_ghosts(
     atype : torch.Tensor,
     cell : Optional[torch.Tensor],
     rcut : float,
-) -> [torch.Tensor, torch.Tensor, torch.Tensor]:
+):
   """Extend the coordinates of the atoms by appending peridoc images.
   The number of images is large enough to ensure all the neighbors
   within rcut are appended.
@@ -162,6 +174,7 @@ def extend_coord_with_ghosts(
         maping extended index to the local index
   
   """
+  assert cell is not None
   nf, nloc = atype.shape  
   aidx = torch.tile(torch.arange(nloc).unsqueeze(0), [nf,1])
   coord = coord.view([nf, nloc, 3])
@@ -174,13 +187,15 @@ def extend_coord_with_ghosts(
   nbuff = torch.ceil(rcut / to_face).to(torch.long)
   # 3
   nbuff = torch.max(nbuff, dim=0, keepdim=False).values
-  ncopy = nbuff * 2 + 1
-  # 3
-  npnbuff = nbuff.detach().cpu().numpy()
-  rr = [range(-npnbuff[ii], npnbuff[ii]+1) for ii in range(3)]
-  shift_idx = sorted(list(itertools.product(*rr)), key=np.linalg.norm)
+  xi = torch.arange(-nbuff[0], nbuff[0] + 1, 1, device=env.DEVICE)
+  yi = torch.arange(-nbuff[1], nbuff[1] + 1, 1, device=env.DEVICE)
+  zi = torch.arange(-nbuff[2], nbuff[2] + 1, 1, device=env.DEVICE)
+  xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+  xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+  xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+  xyz = xyz.view(-1, 3)
   # ns x 3
-  shift_idx = torch.tensor(shift_idx, dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+  shift_idx = xyz[torch.argsort(torch.norm(xyz, dim=1))]
   ns, _ = shift_idx.shape
   nall = ns * nloc
   # nf x ns x 3
@@ -193,8 +208,8 @@ def extend_coord_with_ghosts(
   extend_aidx = torch.tile(aidx.unsqueeze(-2), [1, ns, 1])
 
   return (
-    extend_coord.reshape([nf, nall*3]).to(DEVICE),
-    extend_atype.view([nf, nall]).to(DEVICE),
-    extend_aidx.view([nf, nall]).to(DEVICE),
+    extend_coord.reshape([nf, nall*3]).to(env.DEVICE),
+    extend_atype.view([nf, nall]).to(env.DEVICE),
+    extend_aidx.view([nf, nall]).to(env.DEVICE),
   )
 

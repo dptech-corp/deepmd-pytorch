@@ -274,7 +274,7 @@ class DescrptSeUni(Descriptor):
     sel = [sel] if isinstance(sel, int) else sel
     self.nnei = sum(sel)  # 总的邻居数量
     assert len(sel) == 1
-    self.sel = torch.tensor(sel)  # 每种元素在邻居中的位移
+    self.sel = sel  # 每种元素在邻居中的位移
     self.sec = self.sel
     self.axis_dim = axis_dim
     self.set_davg_zero = set_davg_zero
@@ -342,12 +342,24 @@ class DescrptSeUni(Descriptor):
     """
     return self.g2_dim
 
-  def forward(self, extended_coord, nlist, atype, nlist_type, nlist_loc=None, atype_tebd=None, nlist_tebd=None, seq_input=None):
+  def forward(
+          self,
+          extended_coord,
+          nlist,
+          atype,
+          nlist_type: Optional[torch.Tensor] = None,
+          nlist_loc: Optional[torch.Tensor] = None,
+          atype_tebd: Optional[torch.Tensor] = None,
+          nlist_tebd: Optional[torch.Tensor] = None,
+          seq_input: Optional[torch.Tensor] = None
+  ):
 
     """
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
+    assert nlist_type is not None
+    assert nlist_loc is not None
     nframes, nloc = nlist_loc.shape[:2]
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(
