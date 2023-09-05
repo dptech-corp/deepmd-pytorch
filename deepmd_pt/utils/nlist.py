@@ -206,7 +206,6 @@ def extend_coord_with_ghosts(
     xyz = xyz.view(-1, 3)
     # ns x 3
     shift_idx = xyz[torch.argsort(torch.norm(xyz, dim=1))]
-    print(shift_idx)
     ns, _ = shift_idx.shape
     nall = ns * nloc
     # nf x ns x 3

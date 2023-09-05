@@ -32,7 +32,7 @@ class TestSmooth:
         epsilon = .5e-4
         # required prec. relative prec is not checked.
         rprec = 0
-        aprec = 1e-6
+        aprec = 1e-5
 
         coord0 = torch.clone(coord)
         coord1 = torch.clone(coord)

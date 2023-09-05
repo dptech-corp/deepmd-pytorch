@@ -142,7 +142,7 @@ class EnergyModel(BaseModel):
                         rcut, sel, distinguish_types=self.type_split))
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, )
+        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping)
         if self.grad_force:
             mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
             force = torch.zeros_like(coord)
