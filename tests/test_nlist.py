@@ -14,7 +14,6 @@ from deepmd_pt.utils.nlist import (
 from deepmd_pt.utils.preprocess import(
   build_neighbor_list as legacy_build_neighbor_list,
 )
-from IPython import embed
 
 dtype = torch.float64
 
