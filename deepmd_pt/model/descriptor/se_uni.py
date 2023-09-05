@@ -17,6 +17,9 @@ from deepmd_pt.model.network import (
 from .se_atten import analyze_descrpt
 from .dpa2_layer import DescrptDPA2Layer
 
+from deepmd_pt.utils.stat import sample_system
+from deepmd_pt.utils.dataloader import DpLoaderSet
+
 mydtype = env.GLOBAL_PT_FLOAT_PRECISION
 mydev = env.DEVICE
 
@@ -403,13 +406,26 @@ class DescrptSeUni(Descriptor):
       """Update mean and stddev for descriptor elements.
       """
       ndescrpt = self.nnei * 4  # 描述符的元素数量
-      sumr = []
-      suma = []
-      sumn = []
-      sumr2 = []
-      suma2 = []
-      mixed_type = 'real_natoms_vec' in merged[0]
-      for system in merged:  # 逐个 system 的分析
+      keys = [
+        "coord",
+        "force",
+        "energy",
+        "atype",
+        "natoms",
+        "mapping",
+        "nlist",
+        "nlist_loc",
+        "nlist_type",
+        "shift",
+      ]
+      natoms = []
+      energy = []
+      sumr = None
+      mixed_type = merged.systems[0].mixed_type
+      if mixed_type:
+        keys.append("real_natoms_vec")
+      for item in merged.dataloaders:  #sample from each system, the intermediate results would not be saved
+          system = sample_system(keys, nbatch, item, desc_index)
           index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
           extended_coord = torch.gather(system['coord'], dim=1, index=index)
           extended_coord = extended_coord - system['shift']
@@ -427,17 +443,27 @@ class DescrptSeUni(Descriptor):
                 env_mat.detach().cpu().numpy(), ndescrpt,
                 system['real_natoms_vec'], mixed_type=mixed_type,
                 real_atype=system['atype'].detach().cpu().numpy())
-          sumr.append(sysr)
-          suma.append(sysa)
-          sumn.append(sysn)
-          sumr2.append(sysr2)
-          suma2.append(sysa2)
-      sumr = np.sum(sumr, axis=0)
-      suma = np.sum(suma, axis=0)
-      sumn = np.sum(sumn, axis=0)
-      sumr2 = np.sum(sumr2, axis=0)
-      suma2 = np.sum(suma2, axis=0)
-      return sumr, suma, sumn, sumr2, suma2
+          energy.append(system['energy'].mean(dim=0, keepdim=True))
+          if merged.systems[0].mixed_type:
+                natoms.append(system['real_natoms_vec'].double().mean(dim=0, keepdim=True))
+          else:
+                natoms.append(system['natoms'].double().mean(dim=0, keepdim=True))
+          if(sumr is None):
+                sumr = np.add(np.zeros_like(sysr),sysr)
+                suma = np.add(np.zeros_like(sysa),sysa)
+                sumn = np.add(np.zeros_like(sysn),sysn)
+                sumr2 = np.add(np.zeros_like(sysr2),sysr2)
+                suma2 = np.add(np.zeros_like(sysa2),sysa2)
+          else:
+                sumr = np.add(sumr,sysr)
+                suma = np.add(suma,sysa)
+                sumn = np.add(sumn,sysn)
+                sumr2 = np.add(sumr2,sysr2)
+                suma2 = np.add(suma2,sysa2)
+      sys_ener = torch.cat(energy).cpu()
+      sys_tynatom = torch.cat(natoms)[:, 2:].cpu()
+      energy_coef, _, _, _ = np.linalg.lstsq(sys_tynatom, sys_ener, rcond)
+      return sumr, suma, sumn, sumr2, suma2,  energy_coef
 
   def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
       all_davg = []

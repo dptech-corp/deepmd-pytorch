@@ -100,20 +100,19 @@ class DescrptHybrid(Descriptor):
         else:
             raise NotImplementedError
 
-    def compute_input_stats(self, merged):
+    def compute_input_stats(self, nbatch, merged):
         """Update mean and stddev for descriptor elements.
         """
-        sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
+        sumr, suma, sumn, sumr2, suma2, energy_coef = [], [], [], [], []
         for ii, descrpt in enumerate(self.descriptor_list):
-            merged_tmp = [{key: item[key] if not isinstance(item[key], list) else item[key][ii] for key in item} for
-                          item in merged]
-            sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp = descrpt.compute_input_stats(merged_tmp)
+            sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp,energy_coef_tmp = descrpt.compute_input_stats(nbatch. merged, desc_index=ii)
             sumr.append(sumr_tmp)
             suma.append(suma_tmp)
             sumn.append(sumn_tmp)
             sumr2.append(sumr2_tmp)
             suma2.append(suma2_tmp)
-        return sumr, suma, sumn, sumr2, suma2
+            energy_coef.append(energy_coef_tmp)
+        return sumr, suma, sumn, sumr2, suma2, energy_coef
 
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
         for ii, descrpt in enumerate(self.descriptor_list):
