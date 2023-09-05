@@ -100,7 +100,7 @@ class TestFittingNet(unittest.TestCase):
         for i in range(natoms.shape[0] - 2):
             atype[:, cnt:cnt + natoms[i + 2]] = i
             cnt += natoms[i + 2]
-        my_energy = my_fn(embedding, atype).detach()
+        my_energy, _ = my_fn(embedding, atype).detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
 
