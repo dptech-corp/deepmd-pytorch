@@ -43,8 +43,8 @@ class TestNeighList(unittest.TestCase):
     #   torch.tensor([10,20], dtype=torch.long),
     #   mapping[0], type_split=True, )
     self.ref_nlist = torch.tensor(
-      [[10,  4, 20, 12, 30,  2, -1, -1, -1, -1,  5,  3, 15,  1, -1, -1, -1, -1, -1, -1],
-       [10, 12, 36,  0, -1, -1, -1, -1, -1, -1,  5, 11, 21, 13, 31,  3, -1, -1, -1, -1]]
+      [[0,  0,  0,  0,  0,  0, -1, -1, -1, -1,  1,  1,  1,  1, -1, -1, -1, -1, -1, -1],
+       [0,  0,  0,  0, -1, -1, -1, -1, -1, -1,  1,  1,  1,  1,  1,  1, -1, -1, -1, -1]]
     ).to(env.DEVICE)
     
   def test_build_notype(self):
@@ -55,10 +55,11 @@ class TestNeighList(unittest.TestCase):
       self.rcut, sum(self.nsel), distinguish_types=False)
     torch.testing.assert_close(
       nlist[0], nlist[1])
-    print(torch.sort(nlist[0], dim=-1)[0])
-    print(torch.sort(self.ref_nlist, dim=-1)[0])
+    nlist_mask = nlist[0] == -1
+    nlist_loc = mapping[0][nlist[0]]
+    nlist_loc[nlist_mask] = -1
     torch.testing.assert_close(
-      torch.sort(nlist[0], dim=-1)[0],
+      torch.sort(nlist_loc, dim=-1)[0],
       torch.sort(self.ref_nlist, dim=-1)[0],
     )
 
@@ -70,9 +71,12 @@ class TestNeighList(unittest.TestCase):
       self.rcut, self.nsel, distinguish_types=True,
     )
     torch.testing.assert_close(nlist[0], nlist[1])
+    nlist_mask = nlist[0] == -1
+    nlist_loc = mapping[0][nlist[0]]
+    nlist_loc[nlist_mask] = -1
     for ii in range(2):
       torch.testing.assert_close(
-        torch.sort(torch.split(nlist[0], self.nsel, dim=-1)[ii], dim=-1)[0],
+        torch.sort(torch.split(nlist_loc, self.nsel, dim=-1)[ii], dim=-1)[0],
         torch.sort(torch.split(self.ref_nlist, self.nsel, dim=-1)[ii], dim=-1)[0],
       )
 
