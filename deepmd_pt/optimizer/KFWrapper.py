@@ -26,7 +26,7 @@ class KFOptimizerWrapper:
     ) -> None:
         model_pred, _, _ = self.model(**inputs, inference_only=True)
         Etot_predict = model_pred['energy']
-        natoms_sum = inputs['natoms'][0, 0]
+        natoms_sum = int(inputs["atype"].shape[-1])
         self.optimizer.set_grad_prefactor(natoms_sum)
 
         self.optimizer.zero_grad()
@@ -54,7 +54,7 @@ class KFOptimizerWrapper:
     def update_force(
         self, inputs: dict, Force_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
-        natoms_sum = inputs['natoms'][0, 0]
+        natoms_sum = int(inputs["atype"].shape[-1])
         bs = Force_label.shape[0]
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
 
@@ -64,7 +64,7 @@ class KFOptimizerWrapper:
             self.optimizer.zero_grad()
             model_pred, _, _ = self.model(**inputs, inference_only=True)
             Etot_predict = model_pred['energy']
-            natoms_sum = inputs['natoms'][0, 0]
+            natoms_sum = int(inputs["atype"].shape[-1])
             force_predict = model_pred['force']
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
             error_tmp = update_prefactor * error_tmp
@@ -88,7 +88,7 @@ class KFOptimizerWrapper:
     def update_denoise_coord(
         self, inputs: dict, clean_coord: torch.Tensor, update_prefactor: float = 1, mask_loss_coord: bool = True, coord_mask: torch.Tensor = None
     ) -> None:
-        natoms_sum = inputs['natoms'][0, 0]
+        natoms_sum = int(inputs["atype"].shape[-1])
         bs = clean_coord.shape[0]
         self.optimizer.set_grad_prefactor(natoms_sum * self.atoms_per_group * 3)
 
@@ -98,7 +98,7 @@ class KFOptimizerWrapper:
             self.optimizer.zero_grad()
             model_pred, _, _ = self.model(**inputs, inference_only=True)
             updated_coord = model_pred['updated_coord']
-            natoms_sum = inputs['natoms'][0, 0]
+            natoms_sum = int(inputs["atype"].shape[-1])
             error_tmp = clean_coord[:, index[i]] - updated_coord[:, index[i]]
             error_tmp = update_prefactor * error_tmp
             if mask_loss_coord:
