@@ -7,6 +7,7 @@ from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.preprocess import Region3D, normalize_coord, make_env_mat
 from deepmd_pt.utils.dataloader import collate_batch
 from typing import Optional, Union, List
+from deepmd_pt.utils import env
 
 
 class DeepEval:
@@ -15,7 +16,7 @@ class DeepEval:
             model_file: "Path"
     ):
         self.model_path = model_file
-        state_dict = torch.load(model_file)
+        state_dict = torch.load(model_file, map_location=env.DEVICE)
         if "model" in state_dict:
             state_dict = state_dict["model"]
         self.input_param = state_dict['_extra_state']['model_params']
@@ -30,9 +31,9 @@ class DeepEval:
 
     def eval(
             self,
-            coords: np.ndarray,
-            cells: Optional[np.ndarray],
-            atom_types: Union[np.ndarray, List[int]],
+            coords: Union[np.ndarray, torch.Tensor],
+            cells: Optional[Union[np.ndarray, torch.Tensor]],
+            atom_types: Union[np.ndarray, torch.Tensor, List[int]],
             atomic: bool = False,
             infer_batch_size: int = 2,
     ):
@@ -48,9 +49,9 @@ class DeepPot(DeepEval):
 
     def eval(
             self,
-            coords: np.ndarray,
-            cells: Optional[np.ndarray],
-            atom_types: Union[np.ndarray, List[int]],
+            coords: Union[np.ndarray, torch.Tensor],
+            cells: Optional[Union[np.ndarray, torch.Tensor]],
+            atom_types: Union[np.ndarray, torch.Tensor, List[int]],
             atomic: bool = False,
             infer_batch_size: int = 2,
     ):

@@ -49,7 +49,7 @@ class Tester(object):
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
 
-        state_dict = torch.load(ckpt)
+        state_dict = torch.load(ckpt, map_location=DEVICE)
         if "model" in state_dict:
             state_dict = state_dict["model"]
         self.wrapper.load_state_dict(state_dict)

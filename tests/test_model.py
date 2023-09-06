@@ -284,9 +284,9 @@ class TestEnergy(unittest.TestCase):
             with torch.no_grad():
                 src = torch.from_numpy(var)
                 dst = param.data
-                print(name)
-                print(src.mean(), src.std())
-                print(dst.mean(), dst.std())
+                # print(name)
+                # print(src.mean(), src.std())
+                # print(dst.mean(), dst.std())
                 dst.copy_(src)
         # Start forward computing
         batch = my_ds.systems[0]._data_system.preprocess(batch)
@@ -307,12 +307,8 @@ class TestEnergy(unittest.TestCase):
         rtol = 1e-5
         atol = 1e-8
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
-        print('global virial in tf: \n', head_dict['virial'])
-        print('global virial in torch: \n', p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy())
         self.assertTrue(
             np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
-        print('atomic virial in tf: \n', head_dict['atomic_virial'])
-        print('atomic virial in torch: \n', p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy())
         self.assertTrue(
             np.allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)

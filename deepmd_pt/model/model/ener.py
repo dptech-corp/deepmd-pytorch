@@ -76,6 +76,8 @@ class EnergyModel(BaseModel):
                 descriptor['tebd_dim'] = tebd_dim
                 descriptor['tebd_input_mode'] = tebd_input_mode
                 self.tebd_dim = tebd_dim
+        else:
+            self.type_embedding = None
 
         self.descriptor = Descriptor(**descriptor)
         self.rcut = self.descriptor.rcut
@@ -178,7 +180,7 @@ class EnergyModel(BaseModel):
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
-        if self.has_type_embedding:
+        if self.type_embedding is not None:
             atype_tebd = self.type_embedding(atype)
             if not self.split_nlist:
                 assert nlist_type is not None
@@ -199,6 +201,7 @@ class EnergyModel(BaseModel):
         descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
+        assert descriptor is not None
         atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
         energy = atom_energy.sum(dim=1)
         model_predict = {'energy': energy,
@@ -235,10 +238,15 @@ class EnergyModel(BaseModel):
       sumce0, sumce1, sumce2 = torch.split(torch.sum(ce, dim=1), [1,1,1], dim=-1)
       faked_grad = torch.ones_like(sumce0)
       lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-      extended_virial_corr0 = torch.autograd.grad([sumce0], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
-      extended_virial_corr1 = torch.autograd.grad([sumce1], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
-      extended_virial_corr2 = torch.autograd.grad([sumce2], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
-      extended_virial_corr = torch.concat([extended_virial_corr0, extended_virial_corr1, extended_virial_corr2], dim=-1)
+      extended_virial_corr0 = torch.autograd.grad([sumce0], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr0 is not None
+      extended_virial_corr1 = torch.autograd.grad([sumce1], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr1 is not None
+      extended_virial_corr2 = torch.autograd.grad([sumce2], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr2 is not None
+      extended_virial_corr = torch.concat([extended_virial_corr0.unsqueeze(-1),
+                                           extended_virial_corr1.unsqueeze(-1),
+                                           extended_virial_corr2.unsqueeze(-1)], dim=-1)
       return extended_virial_corr
       
 

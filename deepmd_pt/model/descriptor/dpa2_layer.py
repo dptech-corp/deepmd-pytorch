@@ -7,7 +7,7 @@ try:
 except:
     from torch.jit import Final
 from typing import (
-    List, Optional, Tuple,
+    List, Optional, Tuple, Callable
 )
 from deepmd_pt.utils import env
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
@@ -55,54 +55,6 @@ def _apply_switch(
     # gg:  nf x nloc x nnei x ng
     # sw:  nf x nloc x nnei
     return gg * sw.unsqueeze(-1)
-
-
-def _apply_nb_1(
-        bn: Optional[torch.nn.Module],
-        gg: torch.Tensor
-) -> torch.Tensor:
-    assert bn is not None
-    nb, nl, nf = gg.shape
-    gg = gg.view([nb, 1, nl * nf])
-    gg = bn(gg)
-    return gg.view([nb, nl, nf])
-
-
-def _apply_nb_2(
-        bn: Optional[torch.nn.Module],
-        gg: torch.Tensor,
-) -> torch.Tensor:
-    assert bn is not None
-    nb, nl, nnei, nf = gg.shape
-    gg = gg.view([nb, 1, nl * nnei * nf])
-    gg = bn(gg)
-    return gg.view([nb, nl, nnei, nf])
-
-
-def _apply_bn_uni(
-        bn: Optional[torch.nn.Module],
-        gg: torch.Tensor,
-        mode: str = '1',
-) -> torch.Tensor:
-    assert bn is not None
-    if len(gg.shape) == 3:
-        return _apply_nb_1(bn, gg)
-    elif len(gg.shape) == 4:
-        return _apply_nb_2(bn, gg)
-    else:
-        raise RuntimeError(f'unsupported input shape {gg.shape}')
-
-
-def _apply_bn_comp(
-        bn: Optional[torch.nn.Module],
-        gg: torch.Tensor,
-) -> torch.Tensor:
-    assert bn is not None
-    ss = gg.shape
-    nf = ss[-1]
-    gg = gg.view([-1, nf])
-    gg = bn(gg).view(ss)
-    return gg
 
 
 def _apply_h_norm(
@@ -552,16 +504,74 @@ class DescrptDPA2Layer(torch.nn.Module):
 
     def _apply_bn(
             self,
-            bn: Optional[torch.nn.Module],
+            bn_number: int,
             gg: torch.Tensor,
     ):
-        assert bn is not None
         if self.do_bn_mode == 'uniform':
-            return _apply_bn_uni(bn, gg)
+            return self._apply_bn_uni(bn_number, gg)
         elif self.do_bn_mode == 'component':
-            return _apply_bn_comp(bn, gg)
+            return self._apply_bn_comp(bn_number, gg)
         else:
             return gg
+
+    def _apply_nb_1(
+            self,
+            bn_number: int,
+            gg: torch.Tensor
+    ) -> torch.Tensor:
+        nb, nl, nf = gg.shape
+        gg = gg.view([nb, 1, nl * nf])
+        if bn_number == 1:
+            assert self.bn1 is not None
+            gg = self.bn1(gg)
+        else:
+            assert self.bn2 is not None
+            gg = self.bn2(gg)
+        return gg.view([nb, nl, nf])
+
+    def _apply_nb_2(
+            self,
+            bn_number: int,
+            gg: torch.Tensor,
+    ) -> torch.Tensor:
+        nb, nl, nnei, nf = gg.shape
+        gg = gg.view([nb, 1, nl * nnei * nf])
+        if bn_number == 1:
+            assert self.bn1 is not None
+            gg = self.bn1(gg)
+        else:
+            assert self.bn2 is not None
+            gg = self.bn2(gg)
+        return gg.view([nb, nl, nnei, nf])
+
+    def _apply_bn_uni(
+            self,
+            bn_number: int,
+            gg: torch.Tensor,
+            mode: str = '1',
+    ) -> torch.Tensor:
+        if len(gg.shape) == 3:
+            return self._apply_nb_1(bn_number, gg)
+        elif len(gg.shape) == 4:
+            return self._apply_nb_2(bn_number, gg)
+        else:
+            raise RuntimeError(f'unsupported input shape {gg.shape}')
+
+    def _apply_bn_comp(
+            self,
+            bn_number: int,
+            gg: torch.Tensor,
+    ) -> torch.Tensor:
+        ss = gg.shape
+        nf = ss[-1]
+        gg = gg.view([-1, nf])
+        if bn_number == 1:
+            assert self.bn1 is not None
+            gg = self.bn1(gg).view(ss)
+        else:
+            assert self.bn2 is not None
+            gg = self.bn2(gg).view(ss)
+        return gg
 
     def forward(
             self,
@@ -582,9 +592,9 @@ class DescrptDPA2Layer(torch.nn.Module):
         nh2 = h2.shape[-1]
 
         if self.bn1 is not None:
-            g1 = self._apply_bn(self.bn1, g1)
+            g1 = self._apply_bn(1, g1)
         if self.bn2 is not None:
-            g2 = self._apply_bn(self.bn2, g2)
+            g2 = self._apply_bn(2, g2)
         if self.update_h2:
             h2 = _apply_h_norm(h2)
 
@@ -694,7 +704,7 @@ class DescrptDPA2Layer(torch.nn.Module):
     def _bn_layer(
             self,
             nf: int = 1,
-    ) -> torch.nn.Module:
+    ) -> Callable:
         return torch.nn.BatchNorm1d(
             nf, eps=1e-5, momentum=self.bn_momentum, affine=False,
             track_running_stats=True, device=env.DEVICE, dtype=env.GLOBAL_PT_FLOAT_PRECISION)

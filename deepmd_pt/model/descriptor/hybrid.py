@@ -50,8 +50,8 @@ class DescrptHybrid(Descriptor):
         self.hybrid_mode = hybrid_mode
         self.tebd_dim = tebd_dim
         assert self.hybrid_mode in ["concat", "sequential"]
+        sequential_transform = []
         if self.hybrid_mode == "sequential":
-            sequential_transform = []
             for ii in range(len(descriptor_list) - 1):
                 if descriptor_list[ii].dim_out == descriptor_list[ii + 1].dim_in:
                     sequential_transform.append(Identity())
@@ -59,7 +59,7 @@ class DescrptHybrid(Descriptor):
                     sequential_transform.append(Linear(descriptor_list[ii].dim_out, descriptor_list[ii + 1].dim_in,
                                                        bias=False, init="glorot"))
             sequential_transform.append(Identity())
-            self.sequential_transform = torch.nn.ModuleList(sequential_transform)
+        self.sequential_transform = torch.nn.ModuleList(sequential_transform)
 
     @property
     def dim_out(self):

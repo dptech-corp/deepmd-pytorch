@@ -45,6 +45,7 @@ class DescrptSeA(Descriptor):
         self.ntypes = len(sel)  # 元素数量
         self.sel = sel  # 每种元素在邻居中的位移
         self.sec = np.cumsum(self.sel)
+        self.split_sel = self.sel
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
