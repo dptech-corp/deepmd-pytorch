@@ -309,6 +309,8 @@ class TestEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
         self.assertTrue(
             np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
+        print(head_dict['atomic_virial'])
+        print(p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy())
         self.assertTrue(
             np.allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
