@@ -9,11 +9,6 @@ from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation import (
     make_sample,
-    model_se_e2_a,
-    model_dpa1,
-    model_dpa2,
-    model_dpau,
-    model_hybrid,
 )
 from deepmd_pt.infer.deep_eval import eval_model
 
@@ -34,6 +29,20 @@ class TestUnusedParamsDPAUni(unittest.TestCase):
       if (not grrg) and (not conv):
         # skip the case g2 is not envolved
         continue
+      # we cannot import the model_dpau from e.g. `test_permutation`
+      # if we do that the test fails with unused parameters.
+      # still do NOT know the reason
+      model_dpau = {
+        "type_map": ["O", "H", "B"],
+        "descriptor":{
+          "type": "se_uni",
+          "sel": 40,
+          "rcut_smth": 0.5,
+          "rcut": 4.0,
+          "nlayers": 2,
+        },
+        "fitting_net":{},
+      }
       model_dpau["descriptor"]["combine_grrg"] = cmbg2
       model_dpau["descriptor"]["update_g1_has_conv"] = conv
       model_dpau["descriptor"]["update_g1_has_drrd"] = drrd
@@ -42,6 +51,7 @@ class TestUnusedParamsDPAUni(unittest.TestCase):
       model_dpau["descriptor"]["update_g2_has_g1g1"] = g1g1
       model_dpau["descriptor"]["update_g2_has_attn"] = attn2
       model_dpau["descriptor"]["update_h2"] = h2
+      model_dpau["fitting_net"]["neuron"] = [12, 12, 12]
       self._test_unused(model_dpau)
 
   def _test_unused(self, model_params):
