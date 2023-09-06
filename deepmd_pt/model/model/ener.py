@@ -44,7 +44,6 @@ class EnergyModel(BaseModel):
             stat_file_dir=None,
             stat_file_path=None,
             sampled=None,
-            atomic_virial: bool = False,
             **kwargs,
     ):
         """Based on components, construct a DPA-1 model for energy.
@@ -102,20 +101,26 @@ class EnergyModel(BaseModel):
             fitting_net['embedding_width'] = self.descriptor.dim_out
 
         self.grad_force = 'direct' not in fitting_net['type']
-        self.atomic_virial = atomic_virial
         if not self.grad_force:
             fitting_net['out_dim'] = self.descriptor.dim_emb
             if 'ener' in fitting_net['type']:
                 fitting_net['return_energy'] = True
         self.fitting_net = Fitting(**fitting_net)
 
-    def forward(self, coord, atype, box: Optional[torch.Tensor] = None):
+    def forward(
+        self,
+        coord,
+        atype,
+        box: Optional[torch.Tensor] = None, 
+        do_atomic_virial: bool = False,
+    ):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
         - atype: Atom types with shape [nframes, natoms[1]].
         - natoms: Atom statisics with shape [self.ntypes+2].
         - box: Simulation box with shape [nframes, 9].
+        - atomic_virial: Whether or not compoute the atomic virial.
         Returns:
         - energy: Energy per atom.
         - force: XYZ force per atom.
@@ -144,7 +149,7 @@ class EnergyModel(BaseModel):
                         rcut, sel, distinguish_types=self.type_split))
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping)
+        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
         if self.grad_force:
             mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
             force = torch.zeros_like(coord)
@@ -156,13 +161,19 @@ class EnergyModel(BaseModel):
                                                   src=model_predict_lower['extended_virial'],
                                                   reduce='sum')
             model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
-            if self.atomic_virial:
+            if do_atomic_virial:
               model_predict_lower['atomic_virial'] = reduced_virial
         else:
             model_predict_lower['force'] = model_predict_lower['dforce']
         return model_predict_lower
 
-    def forward_lower(self, extended_coord, extended_atype, nlist, mapping: Optional[torch.Tensor] = None):
+    def forward_lower(
+        self, 
+        extended_coord, 
+        extended_atype, 
+        nlist, mapping: Optional[torch.Tensor] = None,
+        do_atomic_virial: bool = False,
+    ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
         if self.grad_force:
@@ -201,7 +212,7 @@ class EnergyModel(BaseModel):
             extended_force = -extended_force
             extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
             model_predict['extended_force'] = extended_force
-            if self.atomic_virial:
+            if do_atomic_virial:
               # the correction sums to zero, which does not contribute to global virial
               extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
               model_predict['extended_virial'] = extended_virial + extended_virial_corr
