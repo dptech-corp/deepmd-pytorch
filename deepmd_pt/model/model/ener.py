@@ -44,6 +44,7 @@ class EnergyModel(BaseModel):
             stat_file_dir=None,
             stat_file_path=None,
             sampled=None,
+            atomic_virial: bool = False,
             **kwargs,
     ):
         """Based on components, construct a DPA-1 model for energy.
@@ -101,6 +102,7 @@ class EnergyModel(BaseModel):
             fitting_net['embedding_width'] = self.descriptor.dim_out
 
         self.grad_force = 'direct' not in fitting_net['type']
+        self.atomic_virial = atomic_virial
         if not self.grad_force:
             fitting_net['out_dim'] = self.descriptor.dim_emb
             if 'ener' in fitting_net['type']:
@@ -150,11 +152,12 @@ class EnergyModel(BaseModel):
                                                                 src=model_predict_lower['extended_force'], reduce='sum')
             atomic_virial = torch.zeros_like(coord).unsqueeze(-1).expand(-1, -1, -1, 3)
             mapping = mapping.unsqueeze(-1).expand(-1, -1, -1, 3)
-            model_predict_lower['atomic_virial'] = torch.scatter_reduce(atomic_virial, 1, index=mapping,
-                                                                        src=model_predict_lower['extended_virial'],
-                                                                        reduce='sum')
-            virial = torch.sum(model_predict_lower['atomic_virial'], dim=1)
-            model_predict_lower['virial'] = virial
+            reduced_virial = torch.scatter_reduce(atomic_virial, 1, index=mapping,
+                                                  src=model_predict_lower['extended_virial'],
+                                                  reduce='sum')
+            model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
+            if self.atomic_virial:
+              model_predict_lower['atomic_virial'] = reduced_virial
         else:
             model_predict_lower['force'] = model_predict_lower['dforce']
         return model_predict_lower
@@ -198,12 +201,35 @@ class EnergyModel(BaseModel):
             extended_force = -extended_force
             extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
             model_predict['extended_force'] = extended_force
-            model_predict['extended_virial'] = extended_virial
+            if self.atomic_virial:
+              # the correction sums to zero, which does not contribute to global virial
+              extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
+              model_predict['extended_virial'] = extended_virial + extended_virial_corr
+            else:
+              model_predict['extended_virial'] = extended_virial
         else:
             assert dforce is not None
             model_predict['dforce'] = dforce
 
         return model_predict
+
+
+    def atomic_virial_corr(self, extended_coord, atom_energy):
+      nall = extended_coord.shape[1]
+      nloc = atom_energy.shape[1]
+      coord, _ = torch.split(extended_coord, [nloc, nall-nloc], dim=1)
+      # no derivative with respect to the loc coord.
+      coord = coord.detach()
+      ce = coord * atom_energy
+      sumce0, sumce1, sumce2 = torch.split(torch.sum(ce, dim=1), [1,1,1], dim=-1)
+      faked_grad = torch.ones_like(sumce0)
+      lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
+      extended_virial_corr0 = torch.autograd.grad([sumce0], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
+      extended_virial_corr1 = torch.autograd.grad([sumce1], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
+      extended_virial_corr2 = torch.autograd.grad([sumce2], [extended_coord], grad_outputs=lst, create_graph=True)[0].unsqueeze(-1)
+      extended_virial_corr = torch.concat([extended_virial_corr0, extended_virial_corr1, extended_virial_corr2], dim=-1)
+      return extended_virial_corr
+      
 
     def process_nlist(self, nlist, extended_atype, mapping: Optional[torch.Tensor] = None):
         # process the nlist_type and nlist_loc
