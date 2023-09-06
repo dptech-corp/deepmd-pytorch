@@ -153,6 +153,8 @@ class EnergyModel(BaseModel):
             model_predict_lower['atomic_virial'] = torch.scatter_reduce(atomic_virial, 1, index=mapping,
                                                                         src=model_predict_lower['extended_virial'],
                                                                         reduce='sum')
+            virial = torch.sum(model_predict_lower['atomic_virial'], dim=1)
+            model_predict_lower['virial'] = virial
         else:
             model_predict_lower['force'] = model_predict_lower['dforce']
         return model_predict_lower
@@ -195,9 +197,7 @@ class EnergyModel(BaseModel):
             assert extended_force is not None
             extended_force = -extended_force
             extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
-            virial = torch.sum(extended_virial, dim=1)
             model_predict['extended_force'] = extended_force
-            model_predict['virial'] = virial
             model_predict['extended_virial'] = extended_virial
         else:
             assert dforce is not None
