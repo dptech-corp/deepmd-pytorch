@@ -32,11 +32,13 @@ class DenoiseNet(TaskBaseMethod):
         self.pair2coord_proj = []
 
         if isinstance(self.attn_head, list):
+            logging.info("it's a list")
             self.nitem = len(attn_head)
             for idx in range(self.nitem):
                 _pair2coord_proj = NonLinearHead(self.attn_head[idx], 1, activation_fn=activation_function)
                 self.pair2coord_proj.append(_pair2coord_proj)
         else:
+            logging.info("it's not a list")
             self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
 
     def forward(self, coord, pair_weights, diff, nlist_mask):
@@ -53,14 +55,17 @@ class DenoiseNet(TaskBaseMethod):
         
         # [nframes, nloc, nnei, head]➡️[nframes, nloc, nnei, 1]
         if isinstance(pair_weights, list):
+            logging.info("it's a list")
             all_coord_update = []
             assert len(pair_weights) == len(diff) == len(nlist_mask) == self.nitem
             for idx in range(self.nitem):
                 _attn_probs = self.pair2coord_proj[idx](pair_weights[idx])
                 _coord_update = (_attn_probs * diff[idx]).sum(dim=-2) / nlist_mask[idx].sum(dim=-1).unsqueeze(-1)
                 all_coord_update.append(coord+_coord_update)
+            logging.info(f"all_coord_update:{all_coord_update}")
             return all_coord_update
         else:
+            logging.info("it's not a list")
             attn_probs = self.pair2coord_proj(pair_weights)
             coord_update = (attn_probs * diff).sum(dim=-2) / nlist_mask.sum(dim=-1).unsqueeze(-1)
             return coord + coord_update

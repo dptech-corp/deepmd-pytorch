@@ -102,7 +102,7 @@ class DenoiseModelHybrid(BaseModel):
         updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
         logits = self.type_predict_net(descriptor)
         #测试，非正式代码
-        weight_updated_coord = 0 * updated_coord[0] + 1 * updated_coord[1]
+        weight_updated_coord = 1 * updated_coord[0] + 0 * updated_coord[1]
         model_predict = {'updated_coord': weight_updated_coord,
                          'logits': logits
         }
