@@ -274,8 +274,8 @@ class SimpleLinear(nn.Module):
             nn.init.normal_(self.idt.data, mean=0.1, std=0.001)
 
     def forward(self, inputs):
-        """Return X*W+b."""    
-        xw = torch.matmul(inputs, self.matrix)       
+        """Return X*W+b."""
+        xw = torch.matmul(inputs, self.matrix)
         hidden = xw + self.bias if self.bias is not None else xw
         hidden = self.activate(hidden)
         if self.use_timestep:

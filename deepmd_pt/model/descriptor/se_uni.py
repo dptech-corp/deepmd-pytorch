@@ -440,7 +440,7 @@ class DescrptSeUni(Descriptor):
     if self.gather_g1:
       g1 = torch.cat(all_g1, dim=-1)
       g1 = self.all_g1_proj(g1)
-  
+
     # nb x nloc x 3 x ng2
     h2g2 = self._cal_h2g2(g2, h2, nlist_mask, sw)
     # (nb x nloc) x ng2 x 3
@@ -449,10 +449,7 @@ class DescrptSeUni(Descriptor):
     if self.combine_grrg:
       grrg = self._cal_grrg(h2g2)
       g1 = torch.cat([g1, grrg], dim=-1)
-    
-    #logging.info(f"g2:{g2}")
-    #logging.info(f"g1:{g1}")
-    #logging.info(f"diff:{diff}")
+
     return g1, g2, diff, rot_mat.view(-1, self.dim_emb, 3)
 
 
@@ -668,10 +665,8 @@ class DescrptSeUni(Descriptor):
     # g1 = self.lmg1[ll](g1)
     # g2 = self.lmg2[ll](g2)
     if self.bn1 is not None:
-      logging.info(f"self.bn1:{self.bn1}")
       g1 = self._apply_bn(self.bn1[ll], g1)
     if self.bn2 is not None:
-      logging.info(f"self.bn2:{self.bn2}")
       g2 = self._apply_bn(self.bn2[ll], g2)
 
     g2_update = [g2]
@@ -680,7 +675,6 @@ class DescrptSeUni(Descriptor):
     g1_mlp = [g1]
 
     if cal_gg1:
-      logging.info(f"cal_gg1:{cal_gg1}")
       gg1 = self._make_nei_g1(g1, nlist)
 
     if update_chnnl_2:
@@ -697,17 +691,12 @@ class DescrptSeUni(Descriptor):
         AAg = self.attn2g_map[ll](g2, h2, nlist_mask, sw)
         # nb x nloc x nnei x ng2
         g2_2 = self.attn2_mh_apply[ll](AAg, g2)
-        if(ll == 0):
-          logging.info(f"g2_2 1:{g2_2}")
         g2_2 = self.attn2_lm[ll](g2_2)
-        if ll == 0:
-          logging.info(f"g2_2 2:{g2_2}")
-          logging.info(f"attn2_lm:{self.attn2_lm[ll].state_dict()}")
         g2_update.append(g2_2)
 
       if update_h2:
         h2_update.append(self._update_h2(ll, g2, h2, nlist_mask, sw))
-    
+
     if update_g1_has_conv:
       g1_mlp.append(self._update_g1_conv(ll, gg1, g2, nlist, nlist_mask, sw))
 

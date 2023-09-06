@@ -251,7 +251,6 @@ def make_env_mat(coord,
         _rcut = max(rcut)
     if pbc:
         merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, _rcut)
-        #logging.info()
         merged_coord = coord[merged_mapping] - merged_coord_shift
         if merged_coord.shape[0] <= coord.shape[0]:
             logging.warning('No ghost atom is added for system ')
