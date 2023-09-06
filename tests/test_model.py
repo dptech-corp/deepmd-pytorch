@@ -165,8 +165,8 @@ class DpTrainer(object):
             neuron=self.n_neuron
         )
         return EnerModel(
-            descrpt=dp_descrpt,
-            fitting=dp_fitting,
+            dp_descrpt,
+            dp_fitting,
             type_map=self.type_map,
             data_stat_nbatch=self.data_stat_nbatch
         )
