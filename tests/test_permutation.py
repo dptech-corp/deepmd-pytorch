@@ -56,7 +56,7 @@ model_dpau = {
         "_comment": " that's all"
     },
     "fitting_net": {
-        "neuron": [24, 24, 24],
+        "neuron": [24, 24],
         "resnet_dt": True,
         "seed": 1,
     },
