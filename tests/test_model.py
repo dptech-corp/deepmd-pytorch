@@ -111,6 +111,7 @@ class DpTrainer(object):
                 'energy': model_pred['energy'],
                 'force': model_pred['force'],
                 'virial': model_pred['virial'],
+                'atomic_virial': model_pred['atom_virial'],
             }
 
         # Get statistics of each component
@@ -292,7 +293,7 @@ class TestEnergy(unittest.TestCase):
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         model_predict = my_model(batch['coord'], batch['atype'], batch['box'])
-        p_energy, p_force, p_virial = model_predict['energy'], model_predict['force'], model_predict['virial']
+        p_energy, p_force, p_virial, p_atomic_virial = model_predict['energy'], model_predict['force'], model_predict['virial'], model_predict['atomic_virial']
         cur_lr = my_lr.value(self.wanted_step)
         model_pred = {'energy': p_energy,
                       'force': p_force,
@@ -308,6 +309,8 @@ class TestEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
         self.assertTrue(
             np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
+        self.assertTrue(
+            np.allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
 
