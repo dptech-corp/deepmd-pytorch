@@ -47,7 +47,7 @@ class TestTrans:
 
 class TestEnergyModelSeA(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_se_e2_a
+        model_params = copy.deepcopy(model_se_e2_a)
         sampled = make_sample(model_params)
         self.type_split = False
         self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -55,7 +55,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestTrans):
 
 class TestEnergyModelDPA1(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_dpa1
+        model_params = copy.deepcopy(model_dpa1)
         sampled = make_sample(model_params)
         self.type_split = True
         self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -70,7 +70,7 @@ class TestEnergyModelDPA1(unittest.TestCase, TestTrans):
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_dpau
+        model_params = copy.deepcopy(model_dpau)
         sampled = make_sample(model_params)
         self.type_split = True
         self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -78,7 +78,7 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestTrans):
 
 class TestForceModelDPAUni(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_dpau
+        model_params = copy.deepcopy(model_dpau)
         model_params["fitting_net"]["type"] = "direct_force_ener"
         sampled = make_sample(model_params)
         self.type_split = True
@@ -88,7 +88,7 @@ class TestForceModelDPAUni(unittest.TestCase, TestTrans):
 
 class TestEnergyModelHybrid(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_hybrid
+        model_params = copy.deepcopy(model_hybrid)
         sampled = make_sample(model_params)
         self.type_split = True
         self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -96,7 +96,7 @@ class TestEnergyModelHybrid(unittest.TestCase, TestTrans):
 
 class TestForceModelHybrid(unittest.TestCase, TestTrans):
     def setUp(self):
-        model_params = model_hybrid
+        model_params = copy.deepcopy(model_hybrid)
         model_params["fitting_net"]["type"] = "direct_force_ener"
         sampled = make_sample(model_params)
         self.type_split = True

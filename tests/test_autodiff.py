@@ -1,3 +1,4 @@
+from copy import deepcopy
 import torch
 import unittest
 import numpy as np
@@ -96,28 +97,28 @@ class TestVirial():
 
 class TestEnergyModelSeAForce(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelSeAVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Force(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Virial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -125,14 +126,14 @@ class TestEnergyModelDPA1Virial(unittest.TestCase, TestVirial):
 
 class TestEnergyModelDPAUniForce(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_dpau
+    model_params = deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPAUniVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_dpau
+    model_params = deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)

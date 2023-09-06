@@ -68,14 +68,14 @@ class TestRot():
 
 class TestEnergyModelSeA(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = copy.deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -89,14 +89,14 @@ class TestEnergyModelDPA1(unittest.TestCase, TestRot):
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpau
+    model_params = copy.deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpau
+    model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "direct_force_ener"
     sampled = make_sample(model_params)
     self.type_split = True
@@ -105,14 +105,14 @@ class TestForceModelDPAUni(unittest.TestCase, TestRot):
 
 class TestEnergyModelHybrid(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_hybrid
+    model_params = copy.deepcopy(model_hybrid)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelHybrid(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_hybrid
+    model_params = copy.deepcopy(model_hybrid)
     model_params["fitting_net"]["type"] = "direct_force_ener"
     sampled = make_sample(model_params)
     self.type_split = True

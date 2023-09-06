@@ -34,7 +34,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestDPTrain):
         input_json = "tests/water/se_atten.json"
         with open(input_json, "r") as f:
             self.config = json.load(f)
-        self.config["model"] = model_se_e2_a
+        self.config["model"] = deepcopy(model_se_e2_a)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
@@ -44,7 +44,7 @@ class TestEnergyModelDPA1(unittest.TestCase, TestDPTrain):
         input_json = "tests/water/se_atten.json"
         with open(input_json, "r") as f:
             self.config = json.load(f)
-        self.config["model"] = model_dpa1
+        self.config["model"] = deepcopy(model_dpa1)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
@@ -54,7 +54,7 @@ class TestEnergyModelDPAU(unittest.TestCase, TestDPTrain):
         input_json = "tests/water/se_atten.json"
         with open(input_json, "r") as f:
             self.config = json.load(f)
-        self.config["model"] = model_dpau
+        self.config["model"] = deepcopy(model_dpau)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
@@ -64,7 +64,7 @@ class TestEnergyModelHybrid(unittest.TestCase, TestDPTrain):
         input_json = "tests/water/se_atten.json"
         with open(input_json, "r") as f:
             self.config = json.load(f)
-        self.config["model"] = model_hybrid
+        self.config["model"] = deepcopy(model_hybrid)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
