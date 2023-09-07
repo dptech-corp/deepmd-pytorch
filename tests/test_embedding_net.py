@@ -114,7 +114,7 @@ class TestSeA(unittest.TestCase):
         index = self.torch_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(pt_coord, dim=1, index=index)
         extended_coord = extended_coord - self.torch_batch['shift']
-        descriptor_out = descriptor(
+        descriptor_out, _, _, _ = descriptor(
             extended_coord,
             self.torch_batch['nlist'],
             self.torch_batch['atype']

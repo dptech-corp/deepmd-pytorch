@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any, Dict
 import numpy as np
 from deepmd_pt.utils import dp_random
-from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK
+from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK, DISABLE_TQDM
 from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
@@ -216,7 +216,7 @@ class Trainer(object):
             ntest = model_params.get("data_bias_nsample", 1)
             origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
-            state_dict = torch.load(origin_model)
+            state_dict = torch.load(origin_model, map_location=DEVICE)
             if "model" in state_dict:
                 optimizer_state_dict = state_dict["optimizer"]
                 state_dict = state_dict["model"]
@@ -386,7 +386,7 @@ class Trainer(object):
                     model_pred = {"energy": p_energy, "force": p_force}
                     module = self.wrapper.module if dist.is_initialized() else self.wrapper
                     loss, more_loss = module.loss[task_key](
-                        model_pred, label_dict, input_dict["natoms"], learning_rate=pref_lr
+                        model_pred, label_dict, int(input_dict["atype"].shape[-1]), learning_rate=pref_lr
                     )
                 elif isinstance(self.loss, DenoiseLoss):
                     KFOptWrapper = KFOptimizerWrapper(
@@ -442,7 +442,7 @@ class Trainer(object):
                             task_key=_task_key,
                         )
                         # more_loss.update({"rmse": math.sqrt(loss)})
-                        natoms = input_dict["natoms"][0, 0]
+                        natoms = int(input_dict["atype"].shape[-1])
                         sum_natoms += natoms
                         for k, v in more_loss.items():
                             if 'l2_' not in k:
@@ -511,7 +511,7 @@ class Trainer(object):
         self.t0 = time.time()
         with logging_redirect_tqdm():
             for step_id in tqdm(
-                    range(self.num_steps), disable=bool(dist.get_rank()) if dist.is_initialized() else None
+                    range(self.num_steps), disable=(bool(dist.get_rank()) if dist.is_initialized() else False) or DISABLE_TQDM
             ):  # set to None to disable on non-TTY; disable on not rank 0
                 if step_id < self.start_step:
                     continue
@@ -591,7 +591,6 @@ class Trainer(object):
         for item in [
             "coord",
             "atype",
-            "natoms",
             "box",
         ]:
             if item in batch_data:

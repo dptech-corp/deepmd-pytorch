@@ -5,7 +5,7 @@ from deepmd_pt.model.task import Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
-from deepmd_pt.utils.region import phys2inter, inter2phys
+from deepmd_pt.utils.region import normalize_coord
 
 
 class EnergyModel(BaseModel):
@@ -76,10 +76,13 @@ class EnergyModel(BaseModel):
                 descriptor['tebd_dim'] = tebd_dim
                 descriptor['tebd_input_mode'] = tebd_input_mode
                 self.tebd_dim = tebd_dim
+        else:
+            self.type_embedding = None
 
         self.descriptor = Descriptor(**descriptor)
         self.rcut = self.descriptor.rcut
         self.sel = self.descriptor.sel
+        self.split_nlist = descriptor['type'] in ['hybrid']
 
         # Statistics
         self.compute_or_load_stat(fitting_net, ntypes,
@@ -106,22 +109,27 @@ class EnergyModel(BaseModel):
                 fitting_net['return_energy'] = True
         self.fitting_net = Fitting(**fitting_net)
 
-    def forward(self, coord, atype, box: Optional[torch.Tensor] = None):
+    def forward(
+        self,
+        coord,
+        atype,
+        box: Optional[torch.Tensor] = None, 
+        do_atomic_virial: bool = False,
+    ):
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
         - atype: Atom types with shape [nframes, natoms[1]].
         - natoms: Atom statisics with shape [self.ntypes+2].
         - box: Simulation box with shape [nframes, 9].
+        - atomic_virial: Whether or not compoute the atomic virial.
         Returns:
         - energy: Energy per atom.
         - force: XYZ force per atom.
         """
         nframes, nloc = atype.shape[:2]
         if box is not None:
-            box = box.reshape(-1, 3, 3)
-            inter_cood = torch.remainder(phys2inter(coord, box), 1.0)
-            coord_normalized = inter2phys(inter_cood, box)
+            coord_normalized = normalize_coord(coord, box.reshape(-1, 3, 3))
         else:
             coord_normalized = coord.clone()
         if not isinstance(self.rcut, list):
@@ -135,38 +143,57 @@ class EnergyModel(BaseModel):
                 extended_coord, extended_atype, nloc,
                 self.rcut, self.sel, distinguish_types=self.type_split)
         else:
-            nlist = []
+            nlist_list = []
             for rcut, sel in zip(self.rcut, self.sel):
-                nlist.append(
+                nlist_list.append(
                     build_neighbor_list(
                         extended_coord, extended_atype, nloc,
                         rcut, sel, distinguish_types=self.type_split))
+            nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping)
+        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
         if self.grad_force:
             mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
             force = torch.zeros_like(coord)
-            model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping, src=model_predict_lower['extended_force'], reduce='sum')
+            model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping,
+                                                                src=model_predict_lower['extended_force'], reduce='sum')
+            atomic_virial = torch.zeros_like(coord).unsqueeze(-1).expand(-1, -1, -1, 3)
+            mapping = mapping.unsqueeze(-1).expand(-1, -1, -1, 3)
+            reduced_virial = torch.scatter_reduce(atomic_virial, 1, index=mapping,
+                                                  src=model_predict_lower['extended_virial'],
+                                                  reduce='sum')
+            model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
+            if do_atomic_virial:
+              model_predict_lower['atomic_virial'] = reduced_virial
         else:
             model_predict_lower['force'] = model_predict_lower['dforce']
         return model_predict_lower
 
-    def forward_lower(self, extended_coord, extended_atype, nlist, mapping: Optional[torch.Tensor] = None):
+    def forward_lower(
+        self, 
+        extended_coord, 
+        extended_atype, 
+        nlist, mapping: Optional[torch.Tensor] = None,
+        do_atomic_virial: bool = False,
+    ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
-        if self.has_type_embedding:
+        if self.type_embedding is not None:
             atype_tebd = self.type_embedding(atype)
-            if not isinstance(nlist, list):
+            if not self.split_nlist:
                 assert nlist_type is not None
                 nlist_type[nlist_type == -1] = self.ntypes
                 nlist_tebd = self.type_embedding(nlist_type)
             else:
-                nlist_tebd = []
-                for nlist_type_item in nlist_type:
-                    nlist_type_item[nlist_type_item == -1] = self.ntypes
-                    nlist_tebd.append(self.type_embedding(nlist_type_item))
+                nlist_tebd_list = []
+                nlist_type_list = list(torch.split(nlist_type, self.descriptor.split_sel, -1))
+                for nlist_type_item in nlist_type_list:
+                    nlist_mask = nlist_type_item != -1
+                    input_nlist_type = nlist_type_item * nlist_mask + ~nlist_mask * self.ntypes
+                    nlist_tebd_list.append(self.type_embedding(input_nlist_type))
+                nlist_tebd = torch.cat(nlist_tebd_list, -2)
         else:
             atype_tebd = None
             nlist_tebd = None
@@ -174,6 +201,7 @@ class EnergyModel(BaseModel):
         descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
+        assert descriptor is not None
         atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
         energy = atom_energy.sum(dim=1)
         model_predict = {'energy': energy,
@@ -185,19 +213,46 @@ class EnergyModel(BaseModel):
             extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
             assert extended_force is not None
             extended_force = -extended_force
-            virial = torch.transpose(extended_force, 1, 2) @ extended_coord
-            model_predict['virial'] = virial
+            extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
             model_predict['extended_force'] = extended_force
+            if do_atomic_virial:
+              # the correction sums to zero, which does not contribute to global virial
+              extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
+              model_predict['extended_virial'] = extended_virial + extended_virial_corr
+            else:
+              model_predict['extended_virial'] = extended_virial
         else:
             assert dforce is not None
             model_predict['dforce'] = dforce
 
         return model_predict
 
-    @staticmethod
-    def process_nlist(nlist, extended_atype, mapping: Optional[torch.Tensor] = None):
+
+    def atomic_virial_corr(self, extended_coord, atom_energy):
+      nall = extended_coord.shape[1]
+      nloc = atom_energy.shape[1]
+      coord, _ = torch.split(extended_coord, [nloc, nall-nloc], dim=1)
+      # no derivative with respect to the loc coord.
+      coord = coord.detach()
+      ce = coord * atom_energy
+      sumce0, sumce1, sumce2 = torch.split(torch.sum(ce, dim=1), [1,1,1], dim=-1)
+      faked_grad = torch.ones_like(sumce0)
+      lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
+      extended_virial_corr0 = torch.autograd.grad([sumce0], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr0 is not None
+      extended_virial_corr1 = torch.autograd.grad([sumce1], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr1 is not None
+      extended_virial_corr2 = torch.autograd.grad([sumce2], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+      assert extended_virial_corr2 is not None
+      extended_virial_corr = torch.concat([extended_virial_corr0.unsqueeze(-1),
+                                           extended_virial_corr1.unsqueeze(-1),
+                                           extended_virial_corr2.unsqueeze(-1)], dim=-1)
+      return extended_virial_corr
+      
+
+    def process_nlist(self, nlist, extended_atype, mapping: Optional[torch.Tensor] = None):
         # process the nlist_type and nlist_loc
-        if not isinstance(nlist, list):
+        if not self.split_nlist:
             nframes, nloc = nlist.shape[:2]
             nmask = nlist == -1
             nlist[nmask] = 0
@@ -212,10 +267,11 @@ class EnergyModel(BaseModel):
             nlist[nmask] = -1
             return nlist_loc, nlist_type, nframes, nloc
         else:
-            nframes, nloc = nlist[0].shape[:2]
-            nlist_type = []
+            nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
+            nframes, nloc = nlist_list[0].shape[:2]
+            nlist_type_list = []
             nlist_loc_list = []
-            for nlist_item in nlist:
+            for nlist_item in nlist_list:
                 nmask = nlist_item == -1
                 nlist_item[nmask] = 0
                 if mapping is not None:
@@ -229,12 +285,12 @@ class EnergyModel(BaseModel):
                     nloc,
                     -1)
                 nlist_type_item[nmask] = -1
-                nlist_type.append(nlist_type_item)
+                nlist_type_list.append(nlist_type_item)
                 nlist_item[nmask] = -1
 
             if mapping is not None:
-                nlist_loc = nlist_loc_list
+                nlist_loc = torch.cat(nlist_loc_list, -1)
             else:
                 nlist_loc = None
+            nlist_type = torch.cat(nlist_type_list, -1)
             return nlist_loc, nlist_type, nframes, nloc
-

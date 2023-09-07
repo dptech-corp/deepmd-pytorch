@@ -1,5 +1,6 @@
 import logging
 import torch
+from deepmd_pt.utils import env
 
 
 def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=False, model_branch=''):
@@ -13,7 +14,7 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
         #TODO
         print('finetune mode need modification for multitask mode!')
     if finetune_model is not None:
-        state_dict = torch.load(finetune_model)
+        state_dict = torch.load(finetune_model, map_location=env.DEVICE)
         last_model_params = state_dict['_extra_state']['model_params']
         finetune_multi_task = "model_dict" in last_model_params
         trainable_param = {"type_embedding": True, "descriptor": True, "fitting_net": True}

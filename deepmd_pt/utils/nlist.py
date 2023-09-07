@@ -92,21 +92,26 @@ def build_neighbor_list_lower(
   if isinstance(sel, int):
     sel = [sel]
   nsel = sum(sel)
-  # nloc x nsel
-  coord0 = torch.split(coord1, [nloc*3, (nall-nloc)*3])[0]
+  # nloc x 3
+  coord0 = coord1[:nloc * 3]
   # nloc x nall x 3
-  diff = coord1.view([-1,3])[None,:,:] - coord0.view([-1,3])[:,None,:]
+  diff = coord1.view([-1, 3]).unsqueeze(0) - coord0.view([-1, 3]).unsqueeze(1)
   assert(list(diff.shape) == [nloc, nall, 3])
   # nloc x nall
   rr = torch.linalg.norm(diff, dim=-1)
   rr, nlist = torch.sort(rr, dim=-1)
   # nloc x (nall-1)
-  rr = torch.split(rr, [1,nall-1], dim=-1)[-1]
-  nlist = torch.split(nlist, [1,nall-1], dim=-1)[-1]
+  rr = rr[:, 1:]
+  nlist = nlist[:, 1:]
   # nloc x nsel
   nnei = rr.shape[1]
-  rr = torch.split(rr, [nsel,nnei-nsel], dim=-1)[0]
-  nlist = torch.split(nlist, [nsel,nnei-nsel], dim=-1)[0]
+  if nsel <= nnei:
+    rr = rr[:, :nsel]
+    nlist = nlist[:, :nsel]
+  else:
+    rr = torch.cat([rr, torch.ones([nloc, nsel-nnei]).to(rr.device) + rcut], dim=-1)
+    nlist = torch.cat([nlist, torch.ones([nloc, nsel-nnei], dtype=torch.long).to(rr.device)], dim=-1)
+  assert (list(nlist.shape) == [nloc, nsel])
   nlist = nlist.masked_fill((rr > rcut), -1)
 
   if not distinguish_types:
@@ -115,7 +120,7 @@ def build_neighbor_list_lower(
     ret_nlist = []
     # nloc x nall
     tmp_atype = torch.tile(atype.unsqueeze(0), [nloc,1])
-    mask = (nlist == -1)    
+    mask = (nlist == -1)
     # nloc x s(nsel)
     tnlist = torch.gather(
       tmp_atype, 1, nlist.masked_fill(mask, 0),
@@ -174,38 +179,43 @@ def extend_coord_with_ghosts(
         maping extended index to the local index
   
   """
-  assert cell is not None
-  nf, nloc = atype.shape  
-  aidx = torch.tile(torch.arange(nloc).unsqueeze(0), [nf,1])
-  coord = coord.view([nf, nloc, 3])
-  cell = cell.view([nf, 3, 3])
-  # nf x 3
-  to_face = to_face_distance(cell)
-  # nf x 3
-  # *2: ghost copies on + and - directions
-  # +1: central cell
-  nbuff = torch.ceil(rcut / to_face).to(torch.long)
-  # 3
-  nbuff = torch.max(nbuff, dim=0, keepdim=False).values
-  xi = torch.arange(-nbuff[0], nbuff[0] + 1, 1, device=env.DEVICE)
-  yi = torch.arange(-nbuff[1], nbuff[1] + 1, 1, device=env.DEVICE)
-  zi = torch.arange(-nbuff[2], nbuff[2] + 1, 1, device=env.DEVICE)
-  xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-  xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-  xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-  xyz = xyz.view(-1, 3)
-  # ns x 3
-  shift_idx = xyz[torch.argsort(torch.norm(xyz, dim=1))]
-  ns, _ = shift_idx.shape
-  nall = ns * nloc
-  # nf x ns x 3
-  shift_vec = torch.einsum("sd,fdk->fsk", shift_idx, cell)
-  # nf x ns x nloc x 3
-  extend_coord = coord[:,None,:,:] + shift_vec[:,:,None,:]
-  # nf x ns x nloc
-  extend_atype = torch.tile(atype.unsqueeze(-2), [1, ns, 1])
-  # nf x ns x nloc
-  extend_aidx = torch.tile(aidx.unsqueeze(-2), [1, ns, 1])
+  nf, nloc = atype.shape
+  aidx = torch.tile(torch.arange(nloc).unsqueeze(0), [nf, 1])
+  if cell is None:
+    nall = nloc
+    extend_coord = coord.clone()
+    extend_atype = atype.clone()
+    extend_aidx = aidx.clone()
+  else:
+    coord = coord.view([nf, nloc, 3])
+    cell = cell.view([nf, 3, 3])
+    # nf x 3
+    to_face = to_face_distance(cell)
+    # nf x 3
+    # *2: ghost copies on + and - directions
+    # +1: central cell
+    nbuff = torch.ceil(rcut / to_face).to(torch.long)
+    # 3
+    nbuff = torch.max(nbuff, dim=0, keepdim=False).values
+    xi = torch.arange(-nbuff[0], nbuff[0] + 1, 1, device=env.DEVICE)
+    yi = torch.arange(-nbuff[1], nbuff[1] + 1, 1, device=env.DEVICE)
+    zi = torch.arange(-nbuff[2], nbuff[2] + 1, 1, device=env.DEVICE)
+    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+    xyz = xyz.view(-1, 3)
+    # ns x 3
+    shift_idx = xyz[torch.argsort(torch.norm(xyz, dim=1))]
+    ns, _ = shift_idx.shape
+    nall = ns * nloc
+    # nf x ns x 3
+    shift_vec = torch.einsum("sd,fdk->fsk", shift_idx, cell)
+    # nf x ns x nloc x 3
+    extend_coord = coord[:,None,:,:] + shift_vec[:,:,None,:]
+    # nf x ns x nloc
+    extend_atype = torch.tile(atype.unsqueeze(-2), [1, ns, 1])
+    # nf x ns x nloc
+    extend_aidx = torch.tile(aidx.unsqueeze(-2), [1, ns, 1])
 
   return (
     extend_coord.reshape([nf, nall*3]).to(env.DEVICE),

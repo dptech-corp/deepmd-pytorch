@@ -7,7 +7,7 @@ import numpy as np
 
 from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSystem
-from deepmd_pt.model.model import EnergyModelSeA
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 
@@ -31,9 +31,8 @@ class CheckSymmetry(DeepmdDataSystem):
 
 def get_data(batch):
     inputs = {}
-    for key in ['coord', 'atype', 'mapping', 'shift', 'nlist', 'nlist_type', 'box']:
+    for key in ['coord', 'atype', 'box']:
         inputs[key] = batch[key].unsqueeze(0).to(env.DEVICE)
-    inputs['natoms'] = None
     return inputs
 
 
@@ -52,7 +51,7 @@ class TestRotation(unittest.TestCase):
         data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
         train_data = DpLoaderSet(training_systems, self.config['training']['training_data']['batch_size'], model_params)
         sampled = make_stat_input(train_data.systems, train_data.dataloaders, data_stat_nbatch)
-        self.model = EnergyModelSeA(self.config['model'], sampled).to(env.DEVICE)
+        self.model = get_model(self.config['model'], sampled).to(env.DEVICE)
 
     def get_dataset(self, system_index=0, batch_index=0):
         systems = self.config['training']['training_data']['systems']

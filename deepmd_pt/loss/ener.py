@@ -35,7 +35,7 @@ class EnergyStdLoss(TaskLoss):
         """Return loss on loss and force.
 
         Args:
-        - natoms: Tell atom count and element count. Its shape is [2+self.ntypes].
+        - natoms: Tell atom count.
         - p_energy: Predicted energy of all atoms.
         - p_force: Predicted force per atom.
         - l_energy: Actual energy of all atoms.
@@ -52,7 +52,7 @@ class EnergyStdLoss(TaskLoss):
         more_loss = {}
         # more_loss['log_keys'] = []  # showed when validation on the fly
         # more_loss['test_keys'] = []  # showed when doing dp test
-        atom_norm = 1. / natoms[0, 0]
+        atom_norm = 1. / natoms
         if self.has_e and 'energy' in model_pred and 'energy' in label:
             if not self.use_l1_all:
                 l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
