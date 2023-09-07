@@ -8,8 +8,7 @@ on:
 jobs:
   build-n-push:
     name: Build docker image and push to Docker Hub
-    runs-on:
-      group: Default
+    runs-on: ubuntu-latest
     steps:
     - name: Check out the repo
       uses: actions/checkout@v3
