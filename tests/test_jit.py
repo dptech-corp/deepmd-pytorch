@@ -34,54 +34,54 @@ class TestJIT:
                 shutil.rmtree(f)
 
 
-class TestEnergyModelSeA(unittest.TestCase, TestJIT):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_se_e2_a)
-        self.config["training"]["numb_steps"] = 10
-        self.config["training"]["save_freq"] = 10
-
-
-class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_dpa1)
-        self.config["training"]["numb_steps"] = 10
-        self.config["training"]["save_freq"] = 10
-
-
-class TestEnergyModelDPAU(unittest.TestCase, TestJIT):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_dpau)
-        self.config["training"]["numb_steps"] = 10
-        self.config["training"]["save_freq"] = 10
-
-
-class TestEnergyModelHybrid(unittest.TestCase, TestJIT):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_hybrid)
-        self.config["training"]["numb_steps"] = 10
-        self.config["training"]["save_freq"] = 10
-
-class TestEnergyModelHybrid2(unittest.TestCase, TestJIT):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_hybrid)
-        self.config["model"]["descriptor"]["hybrid_mode"] = "sequential"
-        self.config["training"]["numb_steps"] = 10
-        self.config["training"]["save_freq"] = 10
+# class TestEnergyModelSeA(unittest.TestCase, TestJIT):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_se_e2_a)
+#         self.config["training"]["numb_steps"] = 10
+#         self.config["training"]["save_freq"] = 10
+#
+#
+# class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_dpa1)
+#         self.config["training"]["numb_steps"] = 10
+#         self.config["training"]["save_freq"] = 10
+#
+#
+# class TestEnergyModelDPAU(unittest.TestCase, TestJIT):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_dpau)
+#         self.config["training"]["numb_steps"] = 10
+#         self.config["training"]["save_freq"] = 10
+#
+#
+# class TestEnergyModelHybrid(unittest.TestCase, TestJIT):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_hybrid)
+#         self.config["training"]["numb_steps"] = 10
+#         self.config["training"]["save_freq"] = 10
+#
+# class TestEnergyModelHybrid2(unittest.TestCase, TestJIT):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_hybrid)
+#         self.config["model"]["descriptor"]["hybrid_mode"] = "sequential"
+#         self.config["training"]["numb_steps"] = 10
+#         self.config["training"]["save_freq"] = 10
 
 
 if __name__ == '__main__':

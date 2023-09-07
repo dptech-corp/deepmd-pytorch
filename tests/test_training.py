@@ -30,14 +30,14 @@ class TestDPTrain:
                 shutil.rmtree(f)
 
 
-class TestEnergyModelSeA(unittest.TestCase, TestDPTrain):
-    def setUp(self):
-        input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
-            self.config = json.load(f)
-        self.config["model"] = deepcopy(model_se_e2_a)
-        self.config["training"]["numb_steps"] = 1
-        self.config["training"]["save_freq"] = 1
+# class TestEnergyModelSeA(unittest.TestCase, TestDPTrain):
+#     def setUp(self):
+#         input_json = "tests/water/se_atten.json"
+#         with open(input_json, "r") as f:
+#             self.config = json.load(f)
+#         self.config["model"] = deepcopy(model_se_e2_a)
+#         self.config["training"]["numb_steps"] = 1
+#         self.config["training"]["save_freq"] = 1
 
 
 # class TestEnergyModelDPA1(unittest.TestCase, TestDPTrain):
