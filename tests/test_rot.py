@@ -4,277 +4,120 @@ from deepmd_pt.utils.preprocess import (
   Region3D, make_env_mat,
 )
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni, EnergyModelHybrid, ForceModelHybrid
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
-from .test_permutation import infer_model, make_sample
+from .test_permutation import (
+  make_sample,
+  model_se_e2_a,
+  model_dpa1,
+  model_dpa2,
+  model_dpau,
+  model_hybrid,
+)
+from deepmd_pt.infer.deep_eval import eval_model
 
 dtype = torch.float64
-
-model_se_e2_a = {
-  "type_map": ["O","H"],
-  "descriptor": {
-    "type": "se_e2_a",
-    "sel": [46, 92],
-    "rcut_smth": 0.50,
-    "rcut": 6.00,
-    "neuron": [25, 50, 100],
-    "resnet_dt": False,
-    "axis_neuron": 16,
-    "seed": 1,
-  },
-  "fitting_net": {
-    "neuron": [24, 24, 24],
-    "resnet_dt": True,
-    "seed": 1,
-  },
-  "data_stat_nbatch": 20,
-}
-
-
-model_dpau = {
-  "type_map": ["O","H"],
-  "descriptor": {
-    "type": "se_uni",
-    "sel": [11],
-    "rcut_smth": 0.5,
-    "rcut": 4.0,    
-    "_comment": " that's all"
-  },
-  "fitting_net": {
-    "neuron": [24, 24, 24],
-    "resnet_dt": True,
-    "seed": 1,
-  },
-}
-
-model_dpa1 = {
-  "type_map": ["O","H"],
-  "descriptor": {
-    "type": "se_atten",
-    "sel": 40,
-    "rcut_smth": 0.5,
-    "rcut": 4.0,
-    "neuron": [25, 50, 100],
-    "resnet_dt": False,
-    "axis_neuron": 16,
-    "seed": 1,
-    "attn": 64,
-    "attn_layer": 2,
-    "attn_dotr": True,
-    "attn_mask": False,
-    "post_ln": True,
-    "ffn": False,
-    "ffn_embed_dim": 512,
-    "activation": "tanh",
-    "scaling_factor": 1.0,
-    "head_num": 1,
-    "normalize": False,
-    "temperature": 1.0,
-    "_comment": " that's all"
-  },
-  "fitting_net": {
-    "neuron": [24, 24, 24],
-    "resnet_dt": True,
-    "seed": 1,
-  },
-}
-
-model_dpa2 = {
-  "type_map": ["O", "H", "MASKED_TOKEN"],
-  "descriptor": {
-    "type": "se_atten",
-    "sel": 120,
-    "rcut_smth": 0.5,
-    "rcut": 6.0,
-    "neuron": [25, 50, 100 ],
-    "resnet_dt": False,
-    "axis_neuron": 6,
-    "seed": 1,
-    "attn": 128,
-    "attn_layer": 2,
-    "attn_dotr": True,
-    "attn_mask": False,
-    "post_ln": True,
-    "ffn": False,
-    "ffn_embed_dim": 1024,
-    "activation": "tanh",
-    "scaling_factor": 1.0,
-    "head_num": 1,
-    "normalize": True,
-    "temperature": 1.0,
-    "_comment": " that's all"
-  },
-  "backbone":{
-    "type": "evo-2b",
-    "layer_num": 6,
-    "attn_head": 8,
-    "feature_dim": 128,
-    "ffn_dim": 1024,
-    "post_ln": False,
-    "final_layer_norm": True,
-    "final_head_layer_norm": False,
-    "emb_layer_norm": False,
-    "atomic_residual": True,
-    "evo_residual": True,
-    "activation_function": "gelu"
-  },
-  "fitting_net": {
-    "neuron": [24, 24, 24],
-    "resnet_dt": True,
-    "seed": 1,
-    "_comment": " that's all"
-  },
-}
-
-model_hybrid = {
-  "type_map": [
-   "O",
-   "H"
-  ],
-  "descriptor": {
-   "type": "hybrid",
-   "list": [
-    {
-     "type": "se_uni",
-     "sel": 40,
-     "rcut_smth": 0.5,
-     "rcut": 4.0,
-     "nlayers": 3,
-     "g1_dim": 128,
-     "g2_dim": 32,
-     "attn2_hidden": 32,
-     "attn2_nhead": 4,
-     "attn1_hidden": 128,
-     "attn1_nhead": 4,
-     "axis_dim": 4,
-     "update_h2": False,
-     "update_g1_has_conv": True,
-     "update_g1_has_grrg": True,
-     "update_g1_has_drrd": True,
-     "update_g1_has_attn": True,
-     "update_g2_has_g1g1": True,
-     "update_g2_has_attn": True,
-     "_comment": " that's all"
-    },
-    {
-     "type": "se_atten",
-     "sel": 120,
-     "rcut_smth": 0.5,
-     "rcut": 6.0,
-     "neuron": [
-      25,
-      50,
-      100
-     ],
-     "resnet_dt": False,
-     "axis_neuron": 16,
-     "seed": 1,
-     "attn": 128,
-     "attn_layer": 0,
-     "attn_dotr": True,
-     "attn_mask": False,
-     "post_ln": True,
-     "ffn": False,
-     "ffn_embed_dim": 1024,
-     "activation": "tanh",
-     "scaling_factor": 1.0,
-     "head_num": 1,
-     "normalize": True,
-     "temperature": 1.0,
-     "_comment": " that's all"
-    }
-   ]
-  },
-  "fitting_net": {
-   "neuron": [
-    240,
-    240,
-    240
-   ],
-   "resnet_dt": True,
-   "seed": 1,
-   "_comment": " that's all"
-  },
-  "_comment": " that's all"
- }
-
-
 
 class TestRot():
   def test(
       self,
   ):
-    natoms = 5
-    cell = 10. * torch.eye(3, dtype=dtype)
-    coord = 2*torch.rand([natoms, 3], dtype=dtype) + torch.tensor([4, 4, 4], dtype=dtype)
-    atype = torch.IntTensor([0, 0, 0, 1, 1])      
-    from scipy.stats import special_ortho_group
-    rmat = torch.tensor(special_ortho_group.rvs(3), dtype=dtype)
-    coord_rot = torch.matmul(coord, rmat)
-    ret0 = infer_model(self.model, coord, cell, atype, type_split=self.type_split)
-    ret1 = infer_model(self.model, coord_rot, cell, atype, type_split=self.type_split)
     prec = 1e-10
+    natoms = 5
+    cell = 10. * torch.eye(3, dtype=dtype).to(env.DEVICE)
+    coord = 2*torch.rand([natoms, 3], dtype=dtype).to(env.DEVICE)
+    shift = torch.tensor([4, 4, 4], dtype=dtype).to(env.DEVICE)
+    atype = torch.IntTensor([0, 0, 0, 1, 1]).to(env.DEVICE)
+    from scipy.stats import special_ortho_group
+    rmat = torch.tensor(special_ortho_group.rvs(3), dtype=dtype).to(env.DEVICE)
+
+    # rotate only coord and shift to the center of cell
+    coord_rot = torch.matmul(coord, rmat)
+    e0, f0, v0 = eval_model(self.model, (coord + shift).unsqueeze(0), cell.unsqueeze(0), atype)
+    ret0 = {'energy': e0.squeeze(0), 'force': f0.squeeze(0), 'virial': v0.squeeze(0)}
+    e1, f1, v1 = eval_model(self.model, (coord_rot + shift).unsqueeze(0), cell.unsqueeze(0), atype)
+    ret1 = {'energy': e1.squeeze(0), 'force': f1.squeeze(0), 'virial': v1.squeeze(0)}
     torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
-    rmat = rmat.to(env.DEVICE)
     torch.testing.assert_close(torch.matmul(ret0['force'], rmat), ret1['force'], rtol=prec, atol=prec)
     if not hasattr(self, "test_virial") or self.test_virial:
       torch.testing.assert_close(
         torch.matmul(rmat.T, torch.matmul(ret0['virial'], rmat)), 
         ret1['virial'], rtol=prec, atol=prec)
+    
+    # rotate coord and cell
+    torch.manual_seed(0)
+    cell = torch.rand([3, 3], dtype=dtype).to(env.DEVICE)
+    cell = (cell + cell.T) + 5. * torch.eye(3).to(env.DEVICE)
+    coord = torch.rand([natoms, 3], dtype=dtype).to(env.DEVICE)
+    coord = torch.matmul(coord, cell)
+    atype = torch.IntTensor([0, 0, 0, 1, 1]).to(env.DEVICE)
+    coord_rot = torch.matmul(coord, rmat)
+    cell_rot = torch.matmul(cell, rmat)
+    e0, f0, v0 = eval_model(self.model, coord.unsqueeze(0), cell.unsqueeze(0), atype)
+    ret0 = {'energy': e0.squeeze(0), 'force': f0.squeeze(0), 'virial': v0.squeeze(0)}
+    e1, f1, v1 = eval_model(self.model, coord_rot.unsqueeze(0), cell_rot.unsqueeze(0), atype)
+    ret1 = {'energy': e1.squeeze(0), 'force': f1.squeeze(0), 'virial': v1.squeeze(0)}
+    torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
+    torch.testing.assert_close(torch.matmul(ret0['force'], rmat), ret1['force'], rtol=prec, atol=prec)
+    if not hasattr(self, "test_virial") or self.test_virial:
+      torch.testing.assert_close(
+        torch.matmul(rmat.T, torch.matmul(ret0['virial'], rmat)), 
+        ret1['virial'], rtol=prec, atol=prec)    
+
 
 class TestEnergyModelSeA(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = copy.deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
-    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-class TestEnergyModelDPA2(unittest.TestCase, TestRot):
-  def setUp(self):
-    model_params = model_dpa2
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = EnergyModelDPA2(model_params, sampled).to(env.DEVICE)
+# class TestEnergyModelDPA2(unittest.TestCase, TestRot):
+#   def setUp(self):
+#     model_params = model_dpa2
+#     sampled = make_sample(model_params)
+#     self.type_split = True
+#     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpau
+    model_params = copy.deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelDPAUni(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_dpau
+    model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "direct_force_ener"
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
-    self.model = ForceModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelHybrid(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_hybrid
+    model_params = copy.deepcopy(model_hybrid)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelHybrid(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestForceModelHybrid(unittest.TestCase, TestRot):
   def setUp(self):
-    model_params = model_hybrid
+    model_params = copy.deepcopy(model_hybrid)
     model_params["fitting_net"]["type"] = "direct_force_ener"
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
-    self.model = ForceModelHybrid(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
 if __name__ == '__main__':

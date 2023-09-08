@@ -2,6 +2,8 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
+from deepmd_pt.utils.plugin import Plugin, PluginVariant
+from typing import Callable
 
 try:
     from typing import Final
@@ -10,12 +12,43 @@ except:
 
 
 class Descriptor(torch.nn.Module):
-    def __init__(self, **kwargs):
+
+    __plugins = Plugin()
+    local_cluster = False
+
+    @staticmethod
+    def register(key: str) -> Callable:
+        """Register a descriptor plugin.
+
+        Parameters
+        ----------
+        key : str
+            the key of a descriptor
+
+        Returns
+        -------
+        Descriptor
+            the registered descriptor
+
+        Examples
+        --------
+        >>> @Descriptor.register("some_descrpt")
+            class SomeDescript(Descriptor):
+                pass
         """
-        Descriptor base method.
-        """
-        super(Descriptor, self).__init__()
-        self.local_cluster = False
+        return Descriptor.__plugins.register(key)
+
+    def __new__(cls, *args, **kwargs):
+        if cls is Descriptor:
+            try:
+                descrpt_type = kwargs["type"]
+            except KeyError:
+                raise KeyError("the type of descriptor should be set by `type`")
+            if descrpt_type in Descriptor.__plugins.plugins:
+                cls = Descriptor.__plugins.plugins[descrpt_type]
+            else:
+                raise RuntimeError("Unknown descriptor type: " + descrpt_type)
+        return super().__new__(cls)
 
     @property
     def dim_out(self):

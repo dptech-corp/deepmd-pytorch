@@ -4,8 +4,8 @@ import copy
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd_pt.model.descriptor import DescrptSeAtten, DescrptSeUni, DescrptHybrid
-from deepmd_pt.model.task import EnergyFittingNetType
+from deepmd_pt.model.descriptor import DescrptSeAtten, DescrptSeUni, DescrptHybrid, Descriptor
+from deepmd_pt.model.task import Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -35,43 +35,37 @@ class EnergyModelHybrid(BaseModel):
             self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
             self.tebd_dim = tebd_dim
 
-        supported_descrpt = ['se_atten', 'se_uni']
         descriptor_param = model_params.pop('descriptor')
         self.descriptor_type = descriptor_param['type']
+        descriptor_param['ntypes'] = ntypes
         assert self.descriptor_type == 'hybrid', 'Only descriptor `hybrid` is supported for hybrid model!'
-        descriptor_list = []
-        for descriptor_param_item in descriptor_param['list']:
-            descriptor_type_tmp = descriptor_param_item['type']
-            assert descriptor_type_tmp in supported_descrpt, \
-                f'Only descriptors in {supported_descrpt} are supported for `hybrid` descriptor!'
-            descriptor_param_item['ntypes'] = ntypes
-            if type_embedding_param is None:
-                descriptor_param_item['tebd_dim'] = 8
-                descriptor_param_item['tebd_input_mode'] = 'concat'
-            else:
-                tebd_dim = type_embedding_param.get('neuron', [8])[-1]
-                tebd_input_mode = type_embedding_param.get('tebd_input_mode', 'concat')
-                descriptor_param_item['tebd_dim'] = tebd_dim
-                descriptor_param_item['tebd_input_mode'] = tebd_input_mode
-            if descriptor_type_tmp == 'se_atten':
-                descriptor_list.append(DescrptSeAtten(**descriptor_param_item))
-            elif descriptor_type_tmp == 'se_uni':
-                descriptor_list.append(DescrptSeUni(**descriptor_param_item))
-            else:
-                RuntimeError("Unsupported descriptor type!")
-        self.descriptor = DescrptHybrid(descriptor_list, descriptor_param)
+        if type_embedding_param is None:
+            descriptor_param['tebd_dim'] = 8
+            descriptor_param['tebd_input_mode'] = 'concat'
+        else:
+            tebd_dim = type_embedding_param.get('neuron', [8])[-1]
+            tebd_input_mode = type_embedding_param.get('tebd_input_mode', 'concat')
+            descriptor_param['tebd_dim'] = tebd_dim
+            descriptor_param['tebd_input_mode'] = tebd_input_mode
+        self.descriptor = Descriptor(**descriptor_param)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
+        fitting_param['type'] = 'ener'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
         fitting_param['use_tebd'] = True
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(fitting_param, ntypes,
+                                  resuming=model_params.get("resuming", False),
+                                  type_map=model_params['type_map'],
+                                  stat_file_dir=model_params.get("stat_file_dir", None),
+                                  stat_file_path=model_params.get("stat_file_path", None),
+                                  sampled=sampled)
 
-        self.fitting_net = EnergyFittingNetType(**fitting_param)
+        self.fitting_net = Fitting(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor] = None,
                 nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None):
@@ -100,7 +94,7 @@ class EnergyModelHybrid(BaseModel):
 
         descriptor, _, _, _ = self.descriptor(extended_coord, nlist, atype, nlist_type,
                                               nlist_loc=nlist_loc, atype_tebd=atype_tebd, nlist_tebd=nlist_tebd)
-        atom_energy = self.fitting_net(descriptor, atype, atype_tebd)
+        atom_energy, _ = self.fitting_net(descriptor, atype, atype_tebd)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
@@ -112,6 +106,7 @@ class EnergyModelHybrid(BaseModel):
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
         model_predict = {'energy': energy,
+                         'atom_energy': atom_energy,
                          'force': force,
                          'virial': virial,
                          }

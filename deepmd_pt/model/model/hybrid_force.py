@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten, DescrptSeUni, DescrptHybrid, DescrptGaussianLcc
-from deepmd_pt.model.task import EnergyFittingNetType, DipoleFittingNetType, FittingNetAttenLcc
+from deepmd_pt.model.task import Fitting, DipoleFittingNetType, FittingNetAttenLcc
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -81,7 +81,8 @@ class ForceModelHybrid(BaseModel):
             self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
             if fitting_type == 'direct_force_ener':
-                self.fitting_net = EnergyFittingNetType(**fitting_param)
+                fitting_param['type'] = 'ener'
+                self.fitting_net = Fitting(**fitting_param)
 
         elif self.fitting_type == 'atten_vec_lcc':
             assert self.descriptor.hybrid_mode == 'sequential', \

@@ -49,6 +49,7 @@ class TestLearningRate(unittest.TestCase):
         # data
         np_batch, pt_batch = get_batch()
         natoms = np_batch['natoms']
+        self.nloc = natoms[0]
         l_energy, l_force, l_virial = np_batch['energy'], np_batch['force'], np_batch['virial']
         p_energy, p_force, p_virial = np.ones_like(l_energy), np.ones_like(l_force), np.ones_like(l_virial)
         nloc = natoms[0]
@@ -127,7 +128,7 @@ class TestLearningRate(unittest.TestCase):
         my_loss, my_more_loss = mine(
             self.label,
             self.model_pred,
-            self.natoms,
+            self.nloc,
             self.cur_lr,
         )
         my_loss = my_loss.detach().cpu()

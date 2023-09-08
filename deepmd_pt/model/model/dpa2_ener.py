@@ -6,7 +6,7 @@ from deepmd_pt.model.descriptor import DescrptSeAtten
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.backbone import Evoformer2bBackBone
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
-from deepmd_pt.model.task import EnergyFittingNetType
+from deepmd_pt.model.task import Fitting
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
 
@@ -59,7 +59,8 @@ class EnergyModelDPA2(BaseModel):
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
-        assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
+        assert fitting_param.pop('type', 'type'), 'Only fitting net `ener` is supported!'
+        fitting_param['type'] = 'type'
         fitting_param['ntypes'] = 1
         fitting_param['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
         fitting_param['use_tebd'] = True
@@ -67,7 +68,7 @@ class EnergyModelDPA2(BaseModel):
         # Statistics
         self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
 
-        self.fitting_net = EnergyFittingNetType(**fitting_param)
+        self.fitting_net = Fitting(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None):
         """Return total energy of the system.
@@ -109,6 +110,7 @@ class EnergyModelDPA2(BaseModel):
         force = torch.scatter_reduce(force, 1, index=mapping, src=extended_force, reduce='sum')
         force = -force
         model_predict = {'energy': energy,
+                         'atom_energy': atom_energy,
                          'force': force,
                          'virial': virial,
                          }

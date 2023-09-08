@@ -20,5 +20,5 @@ jobs:
         pip install -e .
         pip install -r tests/requirements.txt
     - name: Test
-      run: DEVICE=cpu PREPROCESS_DEVICE=cpu coverage run --source=./deepmd_pt -m unittest -v -f && coverage report
+      run: DEVICE=cpu PREPROCESS_DEVICE=cpu DISABLE_TQDM=True coverage run --source=./deepmd_pt -m unittest -v -f && coverage report
     - uses: codecov/codecov-action@v3

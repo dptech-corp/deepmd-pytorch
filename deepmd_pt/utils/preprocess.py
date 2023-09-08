@@ -16,7 +16,7 @@ class Region3D(object):
         # 计算空间属性
         self.volume = torch.linalg.det(self.boxt)  # 平行六面体空间的体积
 
-        boxt = boxt.permute(1, 0)
+        # boxt = boxt.permute(1, 0)
         c_yz = torch.cross(boxt[1], boxt[2])
         self._h2yz = self.volume / torch.linalg.norm(c_yz)
         c_zx = torch.cross(boxt[2], boxt[0])
