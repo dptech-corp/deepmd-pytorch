@@ -455,7 +455,7 @@ class DeepmdDataSystem(object):
         assert batch['atype'].max() < len(self._type_map)
         nlist, nlist_loc, nlist_type, shift, mapping = [], [], [], [], []
 
-        for sid in trange(n_frames, disable=None):
+        for sid in trange(n_frames, disable=env.DISABLE_TQDM):
             region = Region3D(box[sid])
             nloc = atype[sid].shape[0]
             _coord = normalize_coord(coord[sid], region, nloc)
@@ -528,6 +528,7 @@ class DeepmdDataSystem(object):
             region = Region3D(box)
         else:
             box = None
+            batch['box'] = None
             region = None
         if self.noise_settings is None:
             batch['atype'] = clean_type

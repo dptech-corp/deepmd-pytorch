@@ -63,7 +63,7 @@ class ModelWrapper(torch.nn.Module):
                 else:
                     if net_type in self.model_params["model_dict"][model_item]:
                         trainable = self.model_params["model_dict"][model_item][net_type].get("trainable", True)
-                if hasattr(self.model[model_item], net_type):
+                if hasattr(self.model[model_item], net_type) and getattr(self.model[model_item], net_type) is not None:
                     for param in self.model[model_item].__getattr__(net_type).parameters():
                         param.requires_grad = trainable
 
@@ -113,15 +113,16 @@ class ModelWrapper(torch.nn.Module):
                         print(
                             f'Shared params of {model_key_base}.{class_type_base} and {model_key_link}.{class_type_link}!')
 
-    def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc: Optional[torch.Tensor]=None, box: Optional[torch.Tensor]=None,
-                cur_lr: Optional[torch.Tensor]=None, label: Optional[torch.Tensor]=None, task_key: Optional[torch.Tensor]=None, inference_only=False):
+    def forward(self, coord, atype, box: Optional[torch.Tensor] = None,
+                cur_lr: Optional[torch.Tensor] = None, label: Optional[torch.Tensor] = None,
+                task_key: Optional[torch.Tensor] = None, inference_only=False):
         if not self.multi_task:
             task_key = "Default"
         else:
             assert task_key is not None, \
                 f"Multitask model must specify the inference task! Supported tasks are {list(self.model.keys())}."
-        model_pred = self.model[task_key](coord, atype, natoms, mapping, shift, nlist, nlist_type,
-                                          nlist_loc=nlist_loc, box=box)
+        model_pred = self.model[task_key](coord, atype, box=box)
+        natoms = atype.shape[-1]
         if not self.inference_only and not inference_only:
             loss, more_loss = self.loss[task_key](model_pred, label, natoms=natoms, learning_rate=cur_lr)
             return model_pred, loss, more_loss

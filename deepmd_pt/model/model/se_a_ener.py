@@ -3,7 +3,7 @@ import copy
 import torch
 from typing import Optional, List, Dict
 from deepmd_pt.model.descriptor import DescrptSeA
-from deepmd_pt.model.task import EnergyFittingNet
+from deepmd_pt.model.task import Fitting
 from deepmd_pt.utils.stat import compute_output_stats
 from deepmd_pt.utils import env
 from deepmd_pt.model.model import BaseModel
@@ -34,13 +34,20 @@ class EnergyModelSeA(BaseModel):
         # Fitting
         fitting_param = model_params.pop('fitting_net')
         assert fitting_param.pop('type', 'ener'), 'Only fitting net `ener` is supported!'
+        fitting_param['type'] = 'ener'
         fitting_param['ntypes'] = self.descriptor.ntypes
+        fitting_param['use_tebd'] = False
         fitting_param['embedding_width'] = self.descriptor.dim_out
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(fitting_param, ntypes,
+                                  resuming=model_params.get("resuming", False),
+                                  type_map=model_params['type_map'],
+                                  stat_file_dir=model_params.get("stat_file_dir", None),
+                                  stat_file_path=model_params.get("stat_file_path", None),
+                                  sampled=sampled)
 
-        self.fitting_net = EnergyFittingNet(**fitting_param)
+        self.fitting_net = Fitting(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type: Optional[torch.Tensor] = None,
                 nlist_loc: Optional[torch.Tensor] = None, box: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
@@ -60,7 +67,7 @@ class EnergyModelSeA(BaseModel):
         extended_coord = torch.gather(coord, dim=1, index=index)
         extended_coord = extended_coord - shift
         extended_coord.requires_grad_(True)
-        descriptor = self.descriptor(extended_coord, nlist, atype)
+        descriptor, _, _, _ = self.descriptor(extended_coord, nlist, atype)
         atom_energy = self.fitting_net(descriptor, atype)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)

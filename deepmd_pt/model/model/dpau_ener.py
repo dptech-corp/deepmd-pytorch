@@ -4,8 +4,8 @@ import copy
 import numpy as np
 import torch
 from typing import Optional, List
-from deepmd_pt.model.descriptor import DescrptSeUni
-from deepmd_pt.model.task import EnergyFittingNetType
+from deepmd_pt.model.descriptor import Descriptor
+from deepmd_pt.model.task import Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -31,7 +31,7 @@ class EnergyModelDPAUni(BaseModel):
 
         self.descriptor_type = descriptor_param['type']
         assert self.descriptor_type == 'se_uni', 'Only descriptor `se_uni` is supported for DPA-1!'
-        self.descriptor = DescrptSeUni(**descriptor_param)
+        self.descriptor = Descriptor(**descriptor_param)
 
         # Fitting
         fitting_param = model_params.pop('fitting_net')
@@ -41,9 +41,15 @@ class EnergyModelDPAUni(BaseModel):
         fitting_param['use_tebd'] = True
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(fitting_param, ntypes,
+                                  resuming=model_params.get("resuming", False),
+                                  type_map=model_params['type_map'],
+                                  stat_file_dir=model_params.get("stat_file_dir", None),
+                                  stat_file_path=model_params.get("stat_file_path", None),
+                                  sampled=sampled)
 
-        self.fitting_net = EnergyFittingNetType(**fitting_param)
+        fitting_param['type'] = 'ener'
+        self.fitting_net = Fitting(**fitting_param)
 
     def forward(
         self, 
@@ -76,7 +82,7 @@ class EnergyModelDPAUni(BaseModel):
           nlist_type,
           nlist_loc,
         )
-        atom_energy = self.fitting_net(descriptor, atype)
+        atom_energy, _ = self.fitting_net(descriptor, atype)
         energy = atom_energy.sum(dim=1)
         faked_grad = torch.ones_like(energy)
         lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])

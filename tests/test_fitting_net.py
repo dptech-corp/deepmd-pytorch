@@ -77,7 +77,7 @@ class TestFittingNet(unittest.TestCase):
 
     def test_consistency(self):
         dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms)
-        my_fn = EnergyFittingNet(self.ntypes, self.embedding_width, self.n_neuron, self.dp_fn.bias_atom_e)
+        my_fn = EnergyFittingNet(self.ntypes, self.embedding_width, self.n_neuron, self.dp_fn.bias_atom_e, use_tebd=False)
         for name, param in my_fn.named_parameters():
             matched = re.match('filter_layers\.(\d).deep_layers\.(\d)\.([a-z]+)', name)
             key = None
@@ -100,7 +100,8 @@ class TestFittingNet(unittest.TestCase):
         for i in range(natoms.shape[0] - 2):
             atype[:, cnt:cnt + natoms[i + 2]] = i
             cnt += natoms[i + 2]
-        my_energy = my_fn(embedding, atype).detach()
+        my_energy, _ = my_fn(embedding, atype)
+        my_energy = my_energy.detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
 

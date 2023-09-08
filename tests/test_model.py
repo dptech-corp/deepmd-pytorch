@@ -18,7 +18,7 @@ from deepmd.utils.learning_rate import LearningRateExp
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp
 from deepmd_pt.loss import EnergyStdLoss
-from deepmd_pt.model.model import EnergyModelSeA
+from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.env import *
 
 from deepmd_pt.utils.stat import make_stat_input
@@ -111,6 +111,7 @@ class DpTrainer(object):
                 'energy': model_pred['energy'],
                 'force': model_pred['force'],
                 'virial': model_pred['virial'],
+                'atomic_virial': model_pred['atom_virial'],
             }
 
         # Get statistics of each component
@@ -164,8 +165,8 @@ class DpTrainer(object):
             neuron=self.n_neuron
         )
         return EnerModel(
-            descrpt=dp_descrpt,
-            fitting=dp_fitting,
+            dp_descrpt,
+            dp_fitting,
             type_map=self.type_map,
             data_stat_nbatch=self.data_stat_nbatch
         )
@@ -240,7 +241,7 @@ class TestEnergy(unittest.TestCase):
                                 'type_map': self.type_map
                             })
         sampled = make_stat_input(my_ds.systems, my_ds.dataloaders, self.data_stat_nbatch)
-        my_model = EnergyModelSeA(
+        my_model = get_model(
             model_params={
                 'descriptor': {
                     'type': 'se_e2_a',
@@ -283,17 +284,16 @@ class TestEnergy(unittest.TestCase):
             with torch.no_grad():
                 src = torch.from_numpy(var)
                 dst = param.data
-                print(name)
-                print(src.mean(), src.std())
-                print(dst.mean(), dst.std())
+                # print(name)
+                # print(src.mean(), src.std())
+                # print(dst.mean(), dst.std())
                 dst.copy_(src)
         # Start forward computing
         batch = my_ds.systems[0]._data_system.preprocess(batch)
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
-        model_predict = my_model(batch['coord'], batch['atype'], batch['natoms'],
-                                 batch['mapping'], batch['shift'], batch['nlist'], batch['box'])
-        p_energy, p_force, p_virial = model_predict['energy'], model_predict['force'], model_predict['virial']
+        model_predict = my_model(batch['coord'], batch['atype'], batch['box'], do_atomic_virial=True)
+        p_energy, p_force, p_virial, p_atomic_virial = model_predict['energy'], model_predict['force'], model_predict['virial'], model_predict['atomic_virial']
         cur_lr = my_lr.value(self.wanted_step)
         model_pred = {'energy': p_energy,
                       'force': p_force,
@@ -301,7 +301,7 @@ class TestEnergy(unittest.TestCase):
         label = {'energy': batch['energy'],
                  'force': batch['force'],
                  }
-        loss, _ = my_loss(model_pred, label, batch['natoms'], cur_lr)
+        loss, _ = my_loss(model_pred, label, int(batch['natoms'][0, 0]), cur_lr)
         self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
         self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
         rtol = 1e-5
@@ -309,6 +309,8 @@ class TestEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
         self.assertTrue(
             np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
+        self.assertTrue(
+            np.allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy()))
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
 

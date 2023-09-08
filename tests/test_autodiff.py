@@ -1,11 +1,9 @@
+from copy import deepcopy
 import torch
 import unittest
 import numpy as np
 from deepmd_pt.utils import env
-from deepmd_pt.model.model import EnergyModelSeA, EnergyModelDPA1, EnergyModelDPA2, EnergyModelDPAUni, ForceModelDPAUni, EnergyModelHybrid, ForceModelHybrid
-
-from deepmd_pt.utils.dataloader import DpLoaderSet
-from deepmd_pt.utils.stat import make_stat_input
+from deepmd_pt.model.model import get_model
 
 dtype = torch.float64
 
@@ -13,7 +11,7 @@ from .test_permutation import (
   model_se_e2_a,
   model_dpa1,
   model_dpau,
-  infer_model,
+  eval_model,
   make_sample,
 )
 
@@ -55,13 +53,11 @@ class TestForce():
     coord = coord.numpy()
     def np_infer(
         coord,
-    ):      
-      ret = infer_model(
-        self.model, 
-        torch.tensor(coord), cell, atype,
-        type_split=self.type_split)
+    ):
+      e0, f0, v0 = eval_model(self.model, torch.tensor(coord).unsqueeze(0), cell.unsqueeze(0), atype)
+      ret = {'energy': e0.squeeze(0), 'force': f0.squeeze(0), 'virial': v0.squeeze(0)}
       # detach
-      ret = {kk: ret[kk].detach().numpy() for kk in ret}
+      ret = {kk: ret[kk].detach().cpu().numpy() for kk in ret}
       return ret
     ff = lambda coord: np_infer(coord)["energy"]
     fdf = -finite_difference(ff, coord, delta=delta).squeeze()
@@ -86,16 +82,11 @@ class TestVirial():
     cell = cell.numpy()
     def np_infer(
         new_cell,
-    ):      
-      ret = infer_model(
-        self.model,
-        torch.tensor(stretch_box(coord, cell, new_cell)),
-        torch.tensor(new_cell),
-        atype,
-        type_split=self.type_split,
-      )
+    ):
+      e0, f0, v0 = eval_model(self.model, torch.tensor(stretch_box(coord, cell, new_cell)).unsqueeze(0), torch.tensor(new_cell).unsqueeze(0), atype)
+      ret = {'energy': e0.squeeze(0), 'force': f0.squeeze(0), 'virial': v0.squeeze(0)}
       # detach
-      ret = {kk: ret[kk].detach().numpy() for kk in ret}
+      ret = {kk: ret[kk].detach().cpu().numpy() for kk in ret}
       return ret
     ff = lambda bb: np_infer(bb)["energy"]
     fdv = -(finite_difference(ff, cell, delta=delta)\
@@ -106,45 +97,45 @@ class TestVirial():
 
 class TestEnergyModelSeAForce(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
-    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelSeAVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_se_e2_a
+    model_params = deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
-    self.model = EnergyModelSeA(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Force(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Virial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_dpa1
+    model_params = deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPA1(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
 class TestEnergyModelDPAUniForce(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = model_dpau
+    model_params = deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPAUniVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = model_dpau
+    model_params = deepcopy(model_dpau)
     sampled = make_sample(model_params)
     self.type_split = True
-    self.model = EnergyModelDPAUni(model_params, sampled).to(env.DEVICE)
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 

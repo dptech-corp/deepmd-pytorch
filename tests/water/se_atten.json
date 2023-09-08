@@ -76,7 +76,7 @@
                 "tests/water/data/data_3"
             ],
             "batch_size": 1,
-            "numb_btch": 3,
+            "numb_btch": 1,
             "_comment": "that's all"
         },
         "numb_steps": 1000000,

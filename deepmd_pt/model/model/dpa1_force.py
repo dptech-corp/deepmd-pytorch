@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Optional, List
 from deepmd_pt.model.descriptor import DescrptSeAtten
-from deepmd_pt.model.task import DipoleFittingNetType, EnergyFittingNetType
+from deepmd_pt.model.task import DipoleFittingNetType, Fitting
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.utils.stat import compute_output_stats, make_stat_input
 from deepmd_pt.utils import env
@@ -57,10 +57,16 @@ class ForceModelDPA1(BaseModel):
         self.fitting_net_force = DipoleFittingNetType(**fitting_param)
 
         # Statistics
-        self.compute_or_load_stat(model_params, fitting_param, ntypes, sampled=sampled)
+        self.compute_or_load_stat(fitting_param, ntypes,
+                                  resuming=model_params.get("resuming", False),
+                                  type_map=model_params['type_map'],
+                                  stat_file_dir=model_params.get("stat_file_dir", None),
+                                  stat_file_path=model_params.get("stat_file_path", None),
+                                  sampled=sampled)
 
         if fitting_type == 'direct_force_ener':
-            self.fitting_net = EnergyFittingNetType(**fitting_param)
+            fitting_param['type'] = 'ener'
+            self.fitting_net = Fitting(**fitting_param)
 
     def forward(self, coord, atype, natoms, mapping, shift, nlist, nlist_type, nlist_loc=None, box=None):
         """Return total energy of the system.
