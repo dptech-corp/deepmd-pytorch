@@ -79,37 +79,7 @@ class DescrptSeA(Descriptor):
         """
         return 0
 
-    def compute_input_stats(self, merged):
-        """Update mean and stddev for descriptor elements.
-        """
-        sumr = []
-        suma = []
-        sumn = []
-        sumr2 = []
-        suma2 = []
-        for system in merged:  # 逐个 system 的分析
-            index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
-            extended_coord = torch.gather(system['coord'], dim=1, index=index)
-            extended_coord = extended_coord - system['shift']
-            env_mat, _, _ = prod_env_mat_se_a(
-                extended_coord, system['nlist'], system['atype'],
-                self.mean, self.stddev,
-                self.rcut, self.rcut_smth,
-            )
-            sysr, sysr2, sysa, sysa2, sysn = analyze_descrpt(env_mat.detach().cpu().numpy(), self.ndescrpt,
-                                                             system['natoms'])
-            sumr.append(sysr)
-            suma.append(sysa)
-            sumn.append(sysn)
-            sumr2.append(sysr2)
-            suma2.append(sysa2)
-        sumr = np.sum(sumr, axis=0)
-        suma = np.sum(suma, axis=0)
-        sumn = np.sum(sumn, axis=0)
-        sumr2 = np.sum(sumr2, axis=0)
-        suma2 = np.sum(suma2, axis=0)
-        return sumr, suma, sumn, sumr2, suma2
-    def dynamic_compute_input_stats(self, nbatch, merged: DpLoaderSet,rcond=1e-3,desc_index=None):
+    def compute_input_stats(self, nbatch, merged: DpLoaderSet,rcond=1e-3,desc_index=None):
         """Update mean and stddev for descriptor elements.
         """
         keys = [

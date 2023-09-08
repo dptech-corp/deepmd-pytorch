@@ -165,7 +165,10 @@ class Trainer(object):
             self.validation_dataloader, self.validation_data, self.valid_numb_batch = get_data_loader(training_data,
                                                                                                       validation_data,
                                                                                                       training_params)
-            self.model = get_single_model(model_params, sampled)
+            if sampled == True:
+                self.model = get_single_model(model_params, training_data)
+            else: 
+                self.model = get_single_model(model_params,None)
         else:
             self.training_dataloader, self.training_data, \
             self.validation_dataloader, self.validation_data, \
@@ -176,7 +179,10 @@ class Trainer(object):
                 self.valid_numb_batch[model_key] = get_data_loader(training_data[model_key],
                                                                    validation_data[model_key],
                                                                    training_params['data_dict'][model_key])
-                self.model[model_key] = get_single_model(model_params['model_dict'][model_key], sampled[model_key])
+                if sampled[model_key] == True:
+                    self.model[model_key] = get_single_model(model_params['model_dict'][model_key], training_data[model_key])
+                else:
+                    self,model[model_key] = get_single_model(model_params['model_dict'][model_key], None)
 
         # Learning rate
         self.warmup_steps = training_params.get("warmup_steps", 0)

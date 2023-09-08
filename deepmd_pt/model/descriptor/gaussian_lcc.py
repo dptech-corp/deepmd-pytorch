@@ -144,7 +144,7 @@ class DescrptGaussianLcc(Descriptor):
         """
         return self.pair_embed_dim
 
-    def compute_input_stats(self, merged):
+    def compute_input_stats(self, nbatch, merged):
         """Update mean and stddev for descriptor elements.
         """
         return [], [], [], [], []

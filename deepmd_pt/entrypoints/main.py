@@ -94,18 +94,18 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
             train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
                                             model_params_single,
                                             type_split=type_split, noise_settings=noise_settings)
-            sampled_single = None
+            sampled = False
         else:
             train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
                                             model_params_single,
                                             type_split=type_split)
-            data_stat_nbatch = model_params_single.get('data_stat_nbatch', 10)
-            sampled_single = make_stat_input(train_data_single.systems, train_data_single.dataloaders, data_stat_nbatch)
+            #data_stat_nbatch = model_params_single.get('data_stat_nbatch', 10)
+            sampled = True
             if noise_settings is not None:
                 train_data_single = DpLoaderSet(training_systems, training_dataset_params['batch_size'],
                                                 model_params_single,
                                                 type_split=type_split, noise_settings=noise_settings)
-        return train_data_single, validation_data_single, sampled_single
+        return train_data_single, validation_data_single, sampled
 
     if not multi_task:
         train_data, validation_data, sampled = \
@@ -120,7 +120,6 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
                                              config['training']['data_dict'][model_key],
                                              config['loss_dict'][model_key],
                                              suffix=f'_{model_key}')
-
     trainer = training.Trainer(config, train_data, sampled, validation_data=validation_data, init_model=init_model,
                                restart_model=restart_model, finetune_model=finetune_model, force_load=force_load,
                                shared_links=shared_links)

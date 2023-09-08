@@ -23,6 +23,7 @@ def get_model(model_params, sampled=None):
                        stat_file_dir=model_params.get("stat_file_dir", None),
                        stat_file_path=model_params.get("stat_file_path", None),
                        sampled=sampled,
+                       sample_nbatch=model_params.get('data_stat_nbatch', 10)
                        )
 
 # backup
