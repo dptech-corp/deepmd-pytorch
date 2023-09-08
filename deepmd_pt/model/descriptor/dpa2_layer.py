@@ -11,11 +11,9 @@ from typing import (
 )
 from deepmd_pt.utils import env
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
 from deepmd_pt.model.network import (
     TypeEmbedNet, SimpleLinear
 )
-from .se_atten import analyze_descrpt
 
 
 def torch_linear(*args, **kwargs):
