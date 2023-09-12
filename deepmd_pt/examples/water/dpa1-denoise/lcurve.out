@@ -1,0 +1,2 @@
+#  step   coord_l1_error_val coord_l1_error_trn   token_error_val token_error_trn         lr
+      0      1.93e-01    2.47e-01      1.86e+00    6.77e-01    1.0e-03
