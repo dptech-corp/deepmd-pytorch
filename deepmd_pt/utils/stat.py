@@ -24,6 +24,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
         "force",
         "energy",
         "atype",
+        "box",
         "natoms",
         "mapping",
         "nlist",
