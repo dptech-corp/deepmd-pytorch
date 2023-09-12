@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from deepmd_pt.utils import env
+from deepmd_pt.utils.env import DEVICE
 
 try:
     from typing import Final
@@ -261,10 +262,10 @@ class SimpleLinear(nn.Module):
         self.use_timestep = use_timestep
         self.activate = ActivationFn(activate)
 
-        self.matrix = nn.Parameter(data=Tensor(num_in, num_out))
+        self.matrix = nn.Parameter(data=Tensor(num_in, num_out)).to(DEVICE)
         nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
         if bias:
-          self.bias = nn.Parameter(data=Tensor(1, num_out))
+          self.bias = nn.Parameter(data=Tensor(1, num_out)).to(DEVICE)
           nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
         else:
           self.bias = None

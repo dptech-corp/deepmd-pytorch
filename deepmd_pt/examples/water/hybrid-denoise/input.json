@@ -3,7 +3,8 @@
  "model": {
   "type_map": [
    "O",
-   "H"
+   "H",
+   "MASKED_TOKEN"
   ],
   "descriptor": {
    "type": "hybrid",

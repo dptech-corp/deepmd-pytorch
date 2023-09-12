@@ -213,8 +213,6 @@ class EnergyModel(BaseModel):
         descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
-        #logging.info(f"descriptor:{descriptor.shape}")
-        #logging.info(f"")
         assert descriptor is not None
         # energy, force
         if self.fitting_net:

@@ -34,7 +34,8 @@ class DenoiseNet(TaskBaseMethod):
             self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
         else:
             self.pair2coord_proj = []
-            for ii in range(len(self.attn_head)):
+            self.ndescriptor = len(self.attn_head)
+            for ii in range(self.ndescriptor):
                 _pair2coord_proj = NonLinearHead(self.attn_head[ii], 1, activation_fn=activation_function)
                 self.pair2coord_proj.append(_pair2coord_proj)
 
@@ -56,9 +57,10 @@ class DenoiseNet(TaskBaseMethod):
             return coord + coord_update
         else:
             all_coord_update = []
-            assert len(pair_weights) == len(diff) == len(nlist_mask)
-            for ii in range(len(self.attn_head)):
+            assert len(pair_weights) == len(diff) == len(nlist_mask) == self.ndescriptor
+            for ii in range(self.ndescriptor):
                 _attn_probs = self.pair2coord_proj[ii](pair_weights[ii])
                 _coord_update = (_attn_probs * diff[ii]).sum(dim=-2) / nlist_mask[ii].sum(dim=-1).unsqueeze(-1)
                 all_coord_update.append(coord+_coord_update)
-            return all_coord_update
+            out_coord = 0.5 * all_coord_update[0] + 0.5 *  all_coord_update[1]
+            return out_coord
