@@ -84,7 +84,7 @@ def b_to_face_distance(cell):
   _h2zx = volume / torch.linalg.norm(c_zx,dim=-1)
   c_xy = torch.cross(cell[:,0], cell[:,1],dim=-1)
   _h2xy = volume / torch.linalg.norm(c_xy,dim=-1)
-  return torch.stack([_h2yz, _h2zx, _h2xy])
+  return torch.stack([_h2yz, _h2zx, _h2xy],dim=1)
 
 
 # b_to_face_distance = torch.vmap(
