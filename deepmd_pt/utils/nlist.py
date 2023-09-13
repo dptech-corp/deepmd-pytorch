@@ -173,7 +173,7 @@ def build_neighbor_list(
   Returns
   -------
   neighbor_list : torch.Tensor
-        Neighbor list of shape [nloc x nsel], the neighbors
+        Neighbor list of shape [batch_size, nloc x nsel], the neighbors
         are stored in an ascending order. If the number of 
         neighbors is less than nsel, the positions are masked
         with -1. The neighbor list of an atom looks like
