@@ -206,8 +206,8 @@ def build_neighbor_list(
     rr = rr[:, :, :nsel]
     nlist = nlist[:, :, :nsel]
   else:
-    rr = torch.cat([rr, torch.ones([nloc, nsel-nnei]).to(rr.device) + rcut], dim=-1)
-    nlist = torch.cat([nlist, torch.ones([nloc, nsel-nnei], dtype=torch.long).to(rr.device)], dim=-1)
+    rr = torch.cat([rr, torch.ones([batch_size, nloc, nsel-nnei]).to(rr.device) + rcut], dim=-1)
+    nlist = torch.cat([nlist, torch.ones([batch_size, nloc, nsel-nnei], dtype=torch.long).to(rr.device)], dim=-1)
   assert (list(nlist.shape) == [batch_size, nloc, nsel])
   nlist = nlist.masked_fill((rr > rcut), -1)
 

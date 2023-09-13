@@ -75,19 +75,19 @@ def _to_face_distance(cell):
   _h2xy = volume / torch.linalg.norm(c_xy)
   return torch.stack([_h2yz, _h2zx, _h2xy])
 
-# def b_to_face_distance(cell):
-#   volume = torch.linalg.det(cell)
-#   c_yz = torch.cross(cell[:,1], cell[:,2],dim=-1)
-#   _h2yz = volume / torch.linalg.norm(c_yz,dim=-1)
-#   c_zx = torch.cross(cell[:,2], cell[:,0],dim=-1)
-#   _h2zx = volume / torch.linalg.norm(c_zx,dim=-1)
-#   c_xy = torch.cross(cell[:,0], cell[:,1],dim=-1)
-#   _h2xy = volume / torch.linalg.norm(c_xy,dim=-1)
-#   return torch.stack([_h2yz, _h2zx, _h2xy])
+def b_to_face_distance(cell):
+  volume = torch.linalg.det(cell)
+  c_yz = torch.cross(cell[:,1], cell[:,2],dim=-1)
+  _h2yz = volume / torch.linalg.norm(c_yz,dim=-1)
+  c_zx = torch.cross(cell[:,2], cell[:,0],dim=-1)
+  _h2zx = volume / torch.linalg.norm(c_zx,dim=-1)
+  c_xy = torch.cross(cell[:,0], cell[:,1],dim=-1)
+  _h2xy = volume / torch.linalg.norm(c_xy,dim=-1)
+  return torch.stack([_h2yz, _h2zx, _h2xy])
 
 
-b_to_face_distance = torch.vmap(
-  _to_face_distance, in_dims=(0), out_dims=(0))
+# b_to_face_distance = torch.vmap(
+#   _to_face_distance, in_dims=(0), out_dims=(0))
 
 def normalize_coord(
     coord : torch.Tensor,
