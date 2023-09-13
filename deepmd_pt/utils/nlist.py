@@ -289,7 +289,6 @@ def extend_coord_with_ghosts(
     cell = cell.view([nf, 3, 3])
     # nf x 3
     to_face = to_face_distance(cell)
-    print(to_face)
     # nf x 3
     # *2: ghost copies on + and - directions
     # +1: central cell

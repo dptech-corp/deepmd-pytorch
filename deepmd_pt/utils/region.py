@@ -62,6 +62,7 @@ def to_face_distance(
   """
   cshape = cell.shape
   dist = b_to_face_distance(cell.view([-1, 3, 3]))
+  print(dist)
   return dist.view(list(cshape[:-2])+[3])
 
 
