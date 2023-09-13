@@ -44,6 +44,7 @@ class EnergyModel(BaseModel):
             stat_file_dir=None,
             stat_file_path=None,
             sampled=None,
+            sample_nbatch=10,
             **kwargs,
     ):
         """Based on components, construct a DPA-1 model for energy.
@@ -90,7 +91,8 @@ class EnergyModel(BaseModel):
                                   type_map=type_map,
                                   stat_file_dir=stat_file_dir,
                                   stat_file_path=stat_file_path,
-                                  sampled=sampled)
+                                  sampled=sampled,
+                                  sample_nbatch=sample_nbatch)
 
         # Fitting
         fitting_net['type'] = fitting_net.get('type', 'ener')

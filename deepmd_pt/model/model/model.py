@@ -19,24 +19,10 @@ class BaseModel(torch.nn.Module):
         raise NotImplementedError
 
     def compute_or_load_stat(self, fitting_param, ntypes,
-                             resuming=False, type_map=None, stat_file_dir=None, stat_file_path=None, sampled=None):
+                             resuming=False, type_map=None, stat_file_dir=None, stat_file_path=None, sampled=None, sample_nbatch=10):
         if not resuming:
             if sampled is not None:  # compute stat
-                for sys in sampled:
-                    for key in sys:
-                        if isinstance(sys[key], list):
-                            sys[key] = [item.to(env.DEVICE) for item in sys[key]]
-                        else:
-                            sys[key] = sys[key].to(env.DEVICE)
-                sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
-
-                energy = [item['energy'] for item in sampled]
-                mixed_type = 'real_natoms_vec' in sampled[0]
-                if mixed_type:
-                    input_natoms = [item['real_natoms_vec'] for item in sampled]
-                else:
-                    input_natoms = [item['natoms'] for item in sampled]
-                tmp = compute_output_stats(energy, input_natoms)
+                sumr, suma, sumn, sumr2, suma2,tmp = self.descriptor.compute_input_stats(sample_nbatch, sampled)
                 fitting_param['bias_atom_e'] = tmp[:, 0]
                 if stat_file_path is not None:
                     if not os.path.exists(stat_file_dir):
