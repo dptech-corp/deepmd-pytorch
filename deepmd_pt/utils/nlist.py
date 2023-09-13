@@ -155,9 +155,9 @@ def build_neighbor_list(
   Parameters
   ----------
   coord1 : torch.Tensor
-        exptended coordinates of shape [nall x 3]
+        exptended coordinates of shape [batch_size, nall x 3]
   atype : torch.Tensor
-        extended atomic types of shape [nall]
+        extended atomic types of shape [batch_size, nall]
   nloc: int
         number of local atoms.
   rcut: float
@@ -241,13 +241,11 @@ def build_neighbor_list(
       )
     return torch.concat(ret_nlist, dim=-1)
 
-'''
-build_neighbor_list = torch.vmap(
-  build_neighbor_list_lower, 
-  in_dims=(0,0,None,None,None), 
-  out_dims=(0),
-)
-'''
+# build_neighbor_list = torch.vmap(
+#   build_neighbor_list_lower, 
+#   in_dims=(0,0,None,None,None), 
+#   out_dims=(0),
+# )
 def extend_coord_with_ghosts(
     coord : torch.Tensor,
     atype : torch.Tensor,
