@@ -1,5 +1,5 @@
 import torch
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 from deepmd_pt.model.descriptor import Descriptor
 from deepmd_pt.model.task import Fitting
 from deepmd_pt.model.network import TypeEmbedNet
@@ -115,7 +115,7 @@ class EnergyModel(BaseModel):
         atype,
         box: Optional[torch.Tensor] = None, 
         do_atomic_virial: bool = False,
-    ):
+    ) -> Dict[str, torch.Tensor]:
         """Return total energy of the system.
         Args:
         - coord: Atom coordinates with shape [nframes, natoms[1]*3].
