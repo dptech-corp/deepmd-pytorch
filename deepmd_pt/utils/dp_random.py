@@ -4,7 +4,7 @@ import numpy as np
 _RANDOM_GENERATOR = np.random.RandomState()
 
 
-def choice(a: np.ndarray, p: np.ndarray = None):
+def choice(a: np.ndarray, p: np.ndarray = None, **kwargs):
     """Generates a random sample from a given 1-D array.
 
     Parameters
@@ -19,7 +19,7 @@ def choice(a: np.ndarray, p: np.ndarray = None):
     np.ndarray
         arrays with results and their shapes
     """
-    return _RANDOM_GENERATOR.choice(a, p=p)
+    return _RANDOM_GENERATOR.choice(a, p=p, **kwargs)
 
 
 def random(size=None):
