@@ -27,7 +27,8 @@ class BaseModel(torch.nn.Module):
                         if isinstance(sys[key], list):
                             sys[key] = [item.to(env.DEVICE) for item in sys[key]]
                         else:
-                            sys[key] = sys[key].to(env.DEVICE)
+                            if sys[key] is not None:
+                                sys[key] = sys[key].to(env.DEVICE)
                 sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
 
                 energy = [item['energy'] for item in sampled]
