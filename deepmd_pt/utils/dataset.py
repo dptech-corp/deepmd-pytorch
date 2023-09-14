@@ -677,6 +677,7 @@ class DeepmdDataSetForLoader(Dataset):
                                              type_split=type_split, noise_settings=noise_settings, shuffle=shuffle)
         self.mixed_type = self._data_system.mixed_type
         self._ntypes = self._data_system.get_ntypes()
+        self._natoms = self._data_system._natoms
         self._natoms_vec = self._data_system.get_natoms_vec(self._ntypes)
 
     def set_noise(self, noise_settings):
