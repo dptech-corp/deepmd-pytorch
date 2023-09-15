@@ -85,12 +85,15 @@ class DpLoaderSet(Dataset):
                 system_sampler = None
             if isinstance(batch_size,str):
                 if batch_size == "auto":
-                    self.batch_size = 32 // system._natoms + 1
+                    rule = 32
                 elif batch_size.startswith("auto:"):
-                    N = int(batch_size.split(":")[1])
-                    self.batch_size = N // system._natoms + 1
+                    rule = int(batch_size.split(":")[1])
                 else:
-                    logging.info(f"Unsupported batch size type")
+                    rule = None
+                    logging.error(f"Unsupported batch size type")
+                self.batch_size = rule // system._natoms 
+                if self.batch_size * system._natoms < rule:
+                    self.batch_size += 1
             else:
                 self.batch_size = batch_size
             system_dataloader = DataLoader(
