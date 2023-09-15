@@ -518,17 +518,9 @@ class Trainer(object):
                 if step_id < self.start_step:
                     continue
                 if self.multi_task:
-                    if self.world_size <= self.num_model:
-                        chosen_index_list = dp_random.choice(
-                            np.arange(self.num_model), p=np.array(self.model_prob),
-                            size=self.world_size, replace=False)
-                    else:
-                        chosen_index_list = np.arange(self.num_model)
-                        dp_random.shuffle(chosen_index_list)
-                        extra_list = dp_random.choice(
-                            np.arange(self.num_model), p=np.array(self.model_prob),
-                            size=self.world_size - self.num_model, replace=True)
-                        chosen_index_list = np.concatenate([chosen_index_list, extra_list])
+                    chosen_index_list = dp_random.choice(
+                        np.arange(self.num_model), p=np.array(self.model_prob),
+                        size=self.world_size, replace=True)
                     assert chosen_index_list.size == self.world_size
                     model_index = chosen_index_list[self.rank]
                     model_key = self.model_keys[model_index]
