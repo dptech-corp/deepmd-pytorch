@@ -144,10 +144,17 @@ def test(FLAGS):
 
 
 def freeze(FLAGS):
-    with open(FLAGS.INPUT, 'r') as fin:
-        config = json.load(fin)
+    if FLAGS.input_script is not None:
+        with open(FLAGS.input_script, 'r') as fin:
+            config = json.load(fin)
+    else:
+        pt_model = torch.load(FLAGS.CKPT)
+        if 'model' in pt_model.keys():
+            config = {'model': pt_model['model']['_extra_state']['model_params']}
+        else:
+            config = {'model': pt_model['_extra_state']['model_params']}
     model = torch.jit.script(inference.Tester(config, FLAGS.CKPT, 1).model)
-    torch.jit.save(model, 'frozen_model.pth', {
+    torch.jit.save(model, FLAGS.output, {
         # TODO: _extra_files
     })
 
@@ -210,8 +217,10 @@ def main(args=None):
     )
 
     freeze_parser = subparsers.add_parser('freeze', help='Freeze a model.')
-    freeze_parser.add_argument('INPUT', help='A Json-format configuration file.')
     freeze_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+    freeze_parser.add_argument("-o", "--output", type=str, default='frozen_model.pth',
+                               help="The frozen model path")
+    freeze_parser.add_argument("-i", "--input-script", type=str, default=None, help="Assign the input script to freeze.")
 
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
