@@ -68,8 +68,6 @@ class DeepPotModelDevi {
    **/
   template <typename VALUETYPE>
   void init(const std::vector<std::string>& models);
-  double cutoff() { return rcut; }
-  int numb_types() { return sec.size(); }
 
   /**
    * @brief Evaluate the energy, force and virial by using this DP.
@@ -152,8 +150,6 @@ class DeepPotModelDevi {
  private:
   unsigned numb_models;
   std::vector<torch::jit::script::Module> modules;
-  double rcut;
-  std::vector<int> sec;
 };
 
 template <typename VALUETYPE>
@@ -171,12 +167,5 @@ void DeepPotModelDevi::init(const std::vector<std::string>& models) {
     catch (const c10::Error& e) {
         std::cerr << "Error loading the model\n";
     }
-
-
-    auto rcut_ = modules[0].run_method("get_rcut").toDouble();
-    rcut = static_cast<VALUETYPE>(rcut_);
-
-    auto sec_ = modules[0].run_method("get_sec");
-    TensortoVec<int64_t, int>(sec_, sec);
 }
 }  // namespace deepmd

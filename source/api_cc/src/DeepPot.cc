@@ -83,15 +83,11 @@ void DeepPotModelDevi::compute(std::vector<ENERGYVTYPE>& all_energy,
         modules[ii].to(device);
     }
 
-    std::vector<std::vector<int>> nlist, nlist_loc, nlist_type;
-    std::vector<int> merged_mapping;
-    std::vector<VALUETYPE> merged_coord_shift;
-    std::vector<VALUETYPE> coord_wrapped;
+    std::vector<VALUETYPE> coord_wrapped = coord;
 
     int natoms = atype.size();
 
-    make_env_mat(nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping, coord_wrapped, coord, atype, box, rcut, sec);
-    int nall = merged_mapping.size();
+    //make_env_mat(nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping, coord_wrapped, coord, atype, box, rcut, sec);
     // auto device = torch::kCPU;
     auto options = torch::TensorOptions().dtype(torch::kFloat64);
     auto int_options = torch::TensorOptions().dtype(torch::kInt64);
