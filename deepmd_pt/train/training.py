@@ -220,7 +220,7 @@ class Trainer(object):
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model, map_location=DEVICE)
             if "model" in state_dict:
-                optimizer_state_dict = state_dict["optimizer"]
+                optimizer_state_dict = state_dict["optimizer"] if finetune_model is None else None
                 state_dict = state_dict["model"]
             self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
             if self.rank == 0:
