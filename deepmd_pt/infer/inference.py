@@ -31,11 +31,11 @@ class Tester(object):
         self.detail_file = detail_file
         self.shuffle_test = shuffle_test
         model_params = config['model']
-        training_params = config['training']
-
         # Data + Model
-        dp_random.seed(training_params['seed'])
-        self.dataset_params = training_params.pop('validation_data')
+        if 'training' in config:
+            training_params = config['training']
+            dp_random.seed(training_params['seed'])
+            self.dataset_params = training_params.pop('validation_data')
         self.type_split = False
         if model_params['descriptor']['type'] in ['se_e2_a']:
             self.type_split = True
@@ -55,26 +55,27 @@ class Tester(object):
         self.wrapper.load_state_dict(state_dict)
 
         # Loss
-        self.noise_settings = None
-        loss_params = config.pop("loss")
-        loss_type = loss_params.pop("type", "ener")
-        if loss_type == 'ener':
-            loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
-            self.loss = EnergyStdLoss(**loss_params)
-        elif loss_type == 'denoise':
-            if loss_type == 'denoise':
-                self.noise_settings = {"noise_type": loss_params.pop("noise_type", "uniform"),
-                                       "noise": loss_params.pop("noise", 1.0),
-                                       "noise_mode": loss_params.pop("noise_mode", "fix_num"),
-                                       "mask_num": loss_params.pop("mask_num", 8),
-                                       "same_mask": loss_params.pop("same_mask", False),
-                                       "mask_coord": loss_params.pop("mask_coord", False),
-                                       "mask_type": loss_params.pop("mask_type", False),
-                                       "mask_type_idx": len(model_params["type_map"]) - 1}
-            loss_params['ntypes'] = len(model_params['type_map'])
-            self.loss = DenoiseLoss(**loss_params)
-        else:
-            raise NotImplementedError
+        if 'loss' in config:
+            self.noise_settings = None
+            loss_params = config.pop("loss")
+            loss_type = loss_params.pop("type", "ener")
+            if loss_type == 'ener':
+                loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
+                self.loss = EnergyStdLoss(**loss_params)
+            elif loss_type == 'denoise':
+                if loss_type == 'denoise':
+                    self.noise_settings = {"noise_type": loss_params.pop("noise_type", "uniform"),
+                                           "noise": loss_params.pop("noise", 1.0),
+                                           "noise_mode": loss_params.pop("noise_mode", "fix_num"),
+                                           "mask_num": loss_params.pop("mask_num", 8),
+                                           "same_mask": loss_params.pop("same_mask", False),
+                                           "mask_coord": loss_params.pop("mask_coord", False),
+                                           "mask_type": loss_params.pop("mask_type", False),
+                                           "mask_type_idx": len(model_params["type_map"]) - 1}
+                loss_params['ntypes'] = len(model_params['type_map'])
+                self.loss = DenoiseLoss(**loss_params)
+            else:
+                raise NotImplementedError
 
     @staticmethod
     def get_data(data):

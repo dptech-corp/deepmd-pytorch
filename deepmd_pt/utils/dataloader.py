@@ -252,6 +252,8 @@ def collate_batch(batch):
         elif "find_" in key:
             result[key] = batch[0][key]
         else:
-            result[key] = collate_tensor_fn([d[key] for d in batch])
-
+            if batch[0][key] is None:
+                result[key] = None
+            else:
+                result[key] = collate_tensor_fn([d[key] for d in batch])
     return result

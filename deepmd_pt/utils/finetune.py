@@ -15,6 +15,8 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
         print('finetune mode need modification for multitask mode!')
     if finetune_model is not None:
         state_dict = torch.load(finetune_model, map_location=env.DEVICE)
+        if 'model' in state_dict:
+            state_dict = state_dict['model']
         last_model_params = state_dict['_extra_state']['model_params']
         finetune_multi_task = "model_dict" in last_model_params
         trainable_param = {"type_embedding": True, "descriptor": True, "fitting_net": True}

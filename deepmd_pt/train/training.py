@@ -53,6 +53,8 @@ class Trainer(object):
         self.multi_task = "model_dict" in model_params
         self.model_keys = [key for key in model_params["model_dict"]] if self.multi_task else ["Default"]
         self.rank = dist.get_rank() if dist.is_initialized() else 0
+        self.world_size = dist.get_world_size() if dist.is_initialized() else 1
+        self.num_model = len(self.model_keys)
 
         # Iteration config
         self.num_steps = training_params["numb_steps"]
@@ -218,7 +220,7 @@ class Trainer(object):
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model, map_location=DEVICE)
             if "model" in state_dict:
-                optimizer_state_dict = state_dict["optimizer"]
+                optimizer_state_dict = state_dict["optimizer"] if finetune_model is None else None
                 state_dict = state_dict["model"]
             self.start_step = state_dict['_extra_state']['train_infos']['step'] if self.restart_training else 0
             if self.rank == 0:
@@ -516,9 +518,11 @@ class Trainer(object):
                 if step_id < self.start_step:
                     continue
                 if self.multi_task:
-                    model_index = dp_random.choice(
-                        np.arange(len(self.model_keys)), p=np.array(self.model_prob)
-                    )
+                    chosen_index_list = dp_random.choice(
+                        np.arange(self.num_model), p=np.array(self.model_prob),
+                        size=self.world_size, replace=True)
+                    assert chosen_index_list.size == self.world_size
+                    model_index = chosen_index_list[self.rank]
                     model_key = self.model_keys[model_index]
                 else:
                     model_key = "Default"
@@ -584,7 +588,8 @@ class Trainer(object):
 
         for key in batch_data.keys():
             if not isinstance(batch_data[key], list):
-                batch_data[key] = batch_data[key].to(DEVICE)
+                if batch_data[key] is not None:
+                    batch_data[key] = batch_data[key].to(DEVICE)
             else:
                 batch_data[key] = [item.to(DEVICE) for item in batch_data[key]]
         input_dict = {}
