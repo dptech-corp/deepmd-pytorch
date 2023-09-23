@@ -162,7 +162,6 @@ class EnergyModel(BaseModel):
                     build_neighbor_list(
                         extended_coord, extended_atype, nloc,
                         rcut, sel, distinguish_types=self.type_split))  
-            self.nlist_list = nlist_list 
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
         model_predict_lower = self.forward_lower(coord, extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
@@ -190,8 +189,9 @@ class EnergyModel(BaseModel):
         extended_coord, 
         extended_atype, 
         nlist, mapping: Optional[torch.Tensor] = None,
-        do_atomic_virial: bool = False,
+        do_atomic_virial: bool = False
     ):
+        nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
         if self.grad_force:
@@ -248,13 +248,13 @@ class EnergyModel(BaseModel):
                 nnei_mask = nlist != -1
             elif self.combination:
                 nnei_mask = []
-                for item in self.nlist_list:
+                for item in nlist_list:
                     nnei_mask_item = item != -1
                     nnei_mask.append(nnei_mask_item)
             else:
                 env_mat = env_mat[-1]
                 diff = diff[-1]
-                nnei_mask = self.nlist_list[-1] != -1
+                nnei_mask = nlist_list[-1] != -1
             updated_coord, logits = self.coord_denoise_net(coord, env_mat, diff, nnei_mask, descriptor)
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,

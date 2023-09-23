@@ -9,6 +9,7 @@
   "descriptor": {
    "type": "hybrid",
    "hybrid_mode": "sequential",
+   "combination": true,
    "list": [
     {
      "type": "se_atten",
