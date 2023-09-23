@@ -219,7 +219,7 @@ class EnergyModel(BaseModel):
                                                              nlist_tebd=nlist_tebd)
         assert descriptor is not None
         # energy, force
-        if self.fitting_net:
+        if self.fitting_net is not None:
             atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
             energy = atom_energy.sum(dim=1)
             model_predict = {'energy': energy,
