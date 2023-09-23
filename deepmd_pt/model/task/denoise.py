@@ -38,6 +38,7 @@ class DenoiseNet(TaskBaseMethod):
             for ii in range(self.ndescriptor):
                 _pair2coord_proj = NonLinearHead(self.attn_head[ii], 1, activation_fn=activation_function)
                 self.pair2coord_proj.append(_pair2coord_proj)
+            self.pair2coord_proj = torch.nn.ModuleList(self.pair2coord_proj)
 
     def forward(self, coord, pair_weights, diff, nlist_mask):
         """Calculate the updated coord.
@@ -53,14 +54,14 @@ class DenoiseNet(TaskBaseMethod):
         # [nframes, nloc, nnei, 1]
         if not isinstance(self.attn_head, list):
             attn_probs = self.pair2coord_proj(pair_weights)
-            coord_update = (attn_probs * diff).sum(dim=-2) / nlist_mask.sum(dim=-1).unsqueeze(-1)
+            coord_update = (attn_probs * diff).sum(dim=-2) / (nlist_mask.sum(dim=-1).unsqueeze(-1)+1e-6)
             return coord + coord_update
         else:
             all_coord_update = []
             assert len(pair_weights) == len(diff) == len(nlist_mask) == self.ndescriptor
             for ii in range(self.ndescriptor):
                 _attn_probs = self.pair2coord_proj[ii](pair_weights[ii])
-                _coord_update = (_attn_probs * diff[ii]).sum(dim=-2) / nlist_mask[ii].sum(dim=-1).unsqueeze(-1)
+                _coord_update = (_attn_probs * diff[ii]).sum(dim=-2) / (nlist_mask[ii].sum(dim=-1).unsqueeze(-1)+1e-6)
                 all_coord_update.append(coord+_coord_update)
             out_coord = 0.5 * all_coord_update[0] + 0.5 *  all_coord_update[1]
             return out_coord

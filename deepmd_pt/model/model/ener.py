@@ -57,6 +57,7 @@ class EnergyModel(BaseModel):
         ntypes = len(type_map)
         self.ntypes = ntypes
         descriptor['ntypes'] = ntypes
+        self.combination = descriptor.get('combination',False)
         self.descriptor_type = descriptor['type']
 
         self.has_type_embedding = False
@@ -114,8 +115,10 @@ class EnergyModel(BaseModel):
             self.grad_force = False
             if not isinstance(self.rcut, list):
                 self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb)
-            else:
+            elif self.combination:
                 self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb_list)
+            else:
+                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb)
             self.type_predict_net = TypePredictNet(self.descriptor.dim_out, self.ntypes - 1)
 
     def forward(
@@ -242,11 +245,15 @@ class EnergyModel(BaseModel):
         else:
             if not isinstance(self.rcut, list):
                 nnei_mask = nlist != -1
-            else:
+            elif self.combination:
                 nnei_mask = []
                 for item in self.nlist_list:
                     nnei_mask_item = item != -1
                     nnei_mask.append(nnei_mask_item)
+            else:
+                env_mat = env_mat[-1]
+                diff = diff[-1]
+                nnei_mask = self.nlist_list[-1] != -1
             updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
             logits = self.type_predict_net(descriptor)
             model_predict = {'updated_coord': updated_coord,
