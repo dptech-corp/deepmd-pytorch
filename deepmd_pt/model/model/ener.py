@@ -1,7 +1,7 @@
 import torch
 from typing import Optional, List, Union
 from deepmd_pt.model.descriptor import Descriptor
-from deepmd_pt.model.task import Fitting, DenoiseNet, TypePredictNet
+from deepmd_pt.model.task import Fitting, DenoiseNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
@@ -58,6 +58,8 @@ class EnergyModel(BaseModel):
         self.ntypes = ntypes
         descriptor['ntypes'] = ntypes
         self.combination = descriptor.get('combination',False)
+        if(self.combination):
+            self.prefactor=descriptor.get('prefactor', [0.5,0.5])
         self.descriptor_type = descriptor['type']
 
         self.has_type_embedding = False
@@ -114,12 +116,11 @@ class EnergyModel(BaseModel):
             self.fitting_net = None
             self.grad_force = False
             if not isinstance(self.rcut, list):
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb)
+                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
             elif self.combination:
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb_list)
+                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb_list, self.prefactor)
             else:
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_emb)
-            self.type_predict_net = TypePredictNet(self.descriptor.dim_out, self.ntypes - 1)
+                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
 
     def forward(
         self,
@@ -254,8 +255,7 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = self.nlist_list[-1] != -1
-            updated_coord = self.coord_denoise_net(coord, env_mat, diff, nnei_mask)
-            logits = self.type_predict_net(descriptor)
+            updated_coord, logits = self.coord_denoise_net(coord, env_mat, diff, nnei_mask, descriptor)
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }

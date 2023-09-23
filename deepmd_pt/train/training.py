@@ -360,11 +360,6 @@ class Trainer(object):
                     **input_dict, cur_lr=pref_lr, label=label_dict, task_key=task_key
                 )
                 loss.backward()
-                if(_step_id in [0]):
-                    for name_item, item_param in self.wrapper.named_parameters():
-                        print(name_item, item_param.grad.sum() if item_param.grad is not None else None)
-
-                self.gradient_max_norm = 10
                 if self.gradient_max_norm > 0.:
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.wrapper.parameters(), self.gradient_max_norm)
                     if not torch.isfinite(grad_norm).all():
