@@ -33,7 +33,7 @@ class DenoiseLoss(TaskLoss):
         self.mask_loss_coord = mask_loss_coord
         self.mask_loss_token = mask_loss_token
 
-    def forward(self, model_pred, label, natoms, learning_rate):
+    def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on coord and type denoise.
 
         Returns:
