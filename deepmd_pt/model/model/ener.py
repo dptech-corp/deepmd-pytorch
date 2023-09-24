@@ -59,6 +59,8 @@ class EnergyModel(BaseModel):
         descriptor['ntypes'] = ntypes
         self.combination = descriptor.get('combination',False)
         if(self.combination):
+            import logging
+            logging.info("combination right")
             self.prefactor=descriptor.get('prefactor', [0.5,0.5])
         self.descriptor_type = descriptor['type']
 

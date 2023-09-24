@@ -552,11 +552,14 @@ class DeepmdDataSystem(object):
             return batch
         else:
             batch['clean_type'] = clean_type
+            batch['clean_coord'] = clean_coord
+            '''
             if self.pbc:
                 _clean_coord = normalize_coord(clean_coord, region, nloc)
             else:
                 _clean_coord = clean_coord.clone()
             batch['clean_coord'] = _clean_coord
+            '''
             # add noise
             for i in range(self.max_fail_num):
                 mask_num = 0
@@ -591,13 +594,13 @@ class DeepmdDataSystem(object):
                         )
                     else:
                         NotImplementedError(f"Unknown noise type {self.noise_type}!")
-                    noised_coord = _clean_coord.clone().detach()
+                    noised_coord = clean_coord.clone().detach()
                     noised_coord[coord_mask] += noise_on_coord
                     batch['coord_mask'] = torch.tensor(coord_mask,
                                                        dtype=torch.bool,
                                                        device=env.PREPROCESS_DEVICE)
                 else:
-                    noised_coord = _clean_coord
+                    noised_coord = clean_coord
                     batch['coord_mask'] = torch.tensor(np.zeros_like(coord_mask, dtype=np.bool),
                                                        dtype=torch.bool,
                                                        device=env.PREPROCESS_DEVICE)
@@ -615,7 +618,8 @@ class DeepmdDataSystem(object):
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:
-                    _coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
+                    _coord = normalize_coord(noised_coord, region, nloc)
+                    #_coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
                 else:
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord
@@ -630,6 +634,7 @@ class DeepmdDataSystem(object):
                         RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
                     continue
                 batch['atype'] = masked_type
+                batch['coord'] = noised_coord
                 batch['nlist'] = nlist
                 batch['nlist_loc'] = nlist_loc
                 batch['nlist_type'] = nlist_type
