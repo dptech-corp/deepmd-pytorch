@@ -553,13 +553,6 @@ class DeepmdDataSystem(object):
         else:
             batch['clean_type'] = clean_type
             batch['clean_coord'] = clean_coord
-            '''
-            if self.pbc:
-                _clean_coord = normalize_coord(clean_coord, region, nloc)
-            else:
-                _clean_coord = clean_coord.clone()
-            batch['clean_coord'] = _clean_coord
-            '''
             # add noise
             for i in range(self.max_fail_num):
                 mask_num = 0
@@ -619,7 +612,6 @@ class DeepmdDataSystem(object):
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:
                     _coord = normalize_coord(noised_coord, region, nloc)
-                    #_coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
                 else:
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord
