@@ -59,8 +59,6 @@ class EnergyModel(BaseModel):
         descriptor['ntypes'] = ntypes
         self.combination = descriptor.get('combination',False)
         if(self.combination):
-            import logging
-            logging.info("combination right")
             self.prefactor=descriptor.get('prefactor', [0.5,0.5])
         self.descriptor_type = descriptor['type']
 
@@ -166,7 +164,7 @@ class EnergyModel(BaseModel):
                         rcut, sel, distinguish_types=self.type_split))
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(coord, extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
+        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
         if self.fitting_net is not None:
             if self.grad_force:
                 mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
@@ -187,13 +185,11 @@ class EnergyModel(BaseModel):
 
     def forward_lower(
         self, 
-        coord,
         extended_coord, 
         extended_atype, 
         nlist, mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
-        nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
         if self.grad_force:
@@ -246,6 +242,8 @@ class EnergyModel(BaseModel):
                 model_predict['dforce'] = dforce
         # denoise
         else:
+            coord = extended_coord[:nloc]
+            nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
             if not isinstance(self.rcut, list):
                 nnei_mask = nlist != -1
             elif self.combination:
