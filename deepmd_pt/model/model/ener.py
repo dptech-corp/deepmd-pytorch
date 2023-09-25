@@ -115,7 +115,7 @@ class EnergyModel(BaseModel):
         else:
             self.fitting_net = None
             self.grad_force = False
-            if not isinstance(self.rcut, list):
+            if not self.split_nlist:
                 self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
             elif self.combination:
                 self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb_list, self.prefactor)
@@ -244,7 +244,7 @@ class EnergyModel(BaseModel):
         else:
             coord = extended_coord[:, :nloc]
             nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
-            if not isinstance(self.rcut, list):
+            if not self.split_nlist:
                 nnei_mask = nlist != -1
             elif self.combination:
                 nnei_mask = []
