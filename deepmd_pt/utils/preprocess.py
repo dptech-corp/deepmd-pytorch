@@ -36,7 +36,7 @@ class Region3D(object):
         """Return face distinces to each surface of YZ, ZX, XY."""
         return torch.stack([self._h2yz, self._h2zx, self._h2xy])
 
-    
+
 def normalize_coord(coord, region: Region3D, nloc: int):
     """Move outer atoms into region by mirror.
 

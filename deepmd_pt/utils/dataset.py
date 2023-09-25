@@ -615,7 +615,7 @@ class DeepmdDataSystem(object):
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:
-                    _coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
+                    _coord = normalize_coord(noised_coord, region, nloc)
                 else:
                     _coord = noised_coord.clone()
                 try:
