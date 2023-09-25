@@ -70,7 +70,7 @@ class DenoiseNet(TaskBaseMethod):
         if not isinstance(self.attn_head, list):
             attn_probs = self.pair2coord_proj(pair_weights)
             coord_update = (attn_probs * diff).sum(dim=-2) / (nlist_mask.sum(dim=-1).unsqueeze(-1)+1e-6)
-            return coord + coord_update, logits
+            return coord_update, logits
         else:
             assert len(self.prefactor)==self.ndescriptor
             all_coord_update = []
@@ -78,7 +78,7 @@ class DenoiseNet(TaskBaseMethod):
             for ii in range(self.ndescriptor):
                 _attn_probs = self.pair2coord_proj[ii](pair_weights[ii])
                 _coord_update = (_attn_probs * diff[ii]).sum(dim=-2) / (nlist_mask[ii].sum(dim=-1).unsqueeze(-1)+1e-6)
-                all_coord_update.append(coord+_coord_update)
+                all_coord_update.append(_coord_update)
             out_coord = self.prefactor[0] * all_coord_update[0]
             for ii in range(self.ndescriptor-1):
                 out_coord += self.prefactor[ii+1] * all_coord_update[ii+1]

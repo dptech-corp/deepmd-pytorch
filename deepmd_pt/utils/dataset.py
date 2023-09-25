@@ -614,13 +614,16 @@ class DeepmdDataSystem(object):
                     batch['type_mask'] = torch.tensor(np.zeros_like(type_mask, dtype=np.bool),
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
+                '''
                 if self.pbc:
+                    #_coord = normalize_coord(noised_coord, region, nloc)
                     _coord = region.move_noised_coord_all_in_box(noised_coord, _clean_coord)
                 else:
                     _coord = noised_coord.clone()
                 batch['coord'] = _coord
+                '''
                 try:
-                    nlist, nlist_loc, nlist_type, shift, mapping = make_env_mat(_coord, masked_type, region,
+                    nlist, nlist_loc, nlist_type, shift, mapping = make_env_mat(noised_coord, masked_type, region,
                                                                                 rcut, sec,
                                                                                 pbc=self.pbc,
                                                                                 type_split=self.type_split,
@@ -630,6 +633,7 @@ class DeepmdDataSystem(object):
                         RuntimeError(f"Add noise times beyond max tries {self.max_fail_num}!")
                     continue
                 batch['atype'] = masked_type
+                batch['coord'] = noised_coord
                 batch['nlist'] = nlist
                 batch['nlist_loc'] = nlist_loc
                 batch['nlist_type'] = nlist_type

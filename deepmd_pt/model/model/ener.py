@@ -181,6 +181,8 @@ class EnergyModel(BaseModel):
                     model_predict_lower['atomic_virial'] = reduced_virial
             else:
                 model_predict_lower['force'] = model_predict_lower['dforce']
+        else:
+            model_predict_lower['updated_coord'] += coord
         return model_predict_lower
 
     def forward_lower(
@@ -242,7 +244,6 @@ class EnergyModel(BaseModel):
                 model_predict['dforce'] = dforce
         # denoise
         else:
-            coord = extended_coord[:, :nloc]
             nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
             if not self.split_nlist:
                 nnei_mask = nlist != -1
@@ -255,7 +256,7 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = nlist_list[-1] != -1
-            updated_coord, logits = self.coord_denoise_net(coord, env_mat, diff, nnei_mask, descriptor)
+            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor)
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }
