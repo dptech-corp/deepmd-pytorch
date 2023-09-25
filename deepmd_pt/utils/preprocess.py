@@ -36,7 +36,16 @@ class Region3D(object):
         """Return face distinces to each surface of YZ, ZX, XY."""
         return torch.stack([self._h2yz, self._h2zx, self._h2xy])
 
-
+    def move_noised_coord_all_in_box(self, noised_coord, clean_coord):
+        """Ensure all noised atoms are inside region"""
+        tmp_coord_noised = noised_coord.clone()
+        tmp_coord_clean = clean_coord.clone()
+        inter_coord_noised = self.phys2inter(tmp_coord_noised)
+        inter_coord_clean = self.phys2inter(tmp_coord_clean)
+        inter_coord_noised_update = torch.where(abs(inter_coord_noised-0.50)<0.50, inter_coord_noised, 2*inter_coord_clean-inter_coord_noised)
+        coord_noised_update = self.inter2phys(inter_coord_noised_update)
+        return coord_noised_update
+    
 def normalize_coord(coord, region: Region3D, nloc: int):
     """Move outer atoms into region by mirror.
 
