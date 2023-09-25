@@ -242,7 +242,7 @@ class EnergyModel(BaseModel):
                 model_predict['dforce'] = dforce
         # denoise
         else:
-            coord = extended_coord[:nloc]
+            coord = extended_coord[:, :nloc]
             nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
             if not isinstance(self.rcut, list):
                 nnei_mask = nlist != -1
