@@ -598,7 +598,7 @@ class DeepmdDataSystem(object):
                                                        device=env.PREPROCESS_DEVICE)
                 else:
                     noised_coord = _clean_coord
-                    batch['coord_mask'] = torch.tensor(np.zeros_like(coord_mask, dtype=np.bool),
+                    batch['coord_mask'] = torch.tensor(np.zeros_like(coord_mask, dtype=bool),
                                                        dtype=torch.bool,
                                                        device=env.PREPROCESS_DEVICE)
 
@@ -611,7 +611,7 @@ class DeepmdDataSystem(object):
                                                       device=env.PREPROCESS_DEVICE)
                 else:
                     masked_type = clean_type
-                    batch['type_mask'] = torch.tensor(np.zeros_like(type_mask, dtype=np.bool),
+                    batch['type_mask'] = torch.tensor(np.zeros_like(type_mask, dtype=bool),
                                                       dtype=torch.bool,
                                                       device=env.PREPROCESS_DEVICE)
                 if self.pbc:

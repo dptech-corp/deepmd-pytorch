@@ -137,13 +137,13 @@ class Trainer(object):
             lr_exp = LearningRateExp(**lr_params)
             return lr_exp
 
-        def get_loss(loss_params, start_lr):
+        def get_loss(loss_params, start_lr, _ntypes):
             loss_type = loss_params.get("type", "ener")
             if loss_type == 'ener':
                 loss_params["starter_learning_rate"] = start_lr
                 return EnergyStdLoss(**loss_params)
             elif loss_type == 'denoise':
-                loss_params['ntypes'] = len(model_params['type_map'])
+                loss_params['ntypes'] = _ntypes
                 return DenoiseLoss(**loss_params)
             else:
                 raise NotImplementedError
@@ -193,16 +193,17 @@ class Trainer(object):
 
         # Loss
         if not self.multi_task:
-            self.loss = get_loss(config["loss"], config["learning_rate"]["start_lr"])
+            self.loss = get_loss(config["loss"], config["learning_rate"]["start_lr"], len(model_params['type_map']))
         else:
             self.loss = {}
             for model_key in self.model_keys:
+                loss_param = config["loss_dict"][model_key]
                 if config.get("learning_rate_dict", None) is not None:
-                    self.loss[model_key] = \
-                        get_loss(config["loss_dict"][model_key], config["learning_rate_dict"][model_key]["start_lr"])
+                    lr_param = config["learning_rate_dict"][model_key]["start_lr"]
                 else:
-                    self.loss[model_key] = \
-                        get_loss(config["loss_dict"][model_key], config["learning_rate"]["start_lr"])
+                    lr_param = config["learning_rate"]["start_lr"]
+                ntypes = len(model_params['model_dict'][model_key]['type_map'])
+                self.loss[model_key] = get_loss(loss_param, lr_param, ntypes)
 
         # JIT
         if JIT:

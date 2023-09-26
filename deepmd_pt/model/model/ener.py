@@ -55,6 +55,7 @@ class EnergyModel(BaseModel):
         super(EnergyModel, self).__init__()
         # Descriptor + Type Embedding Net (Optional)
         ntypes = len(type_map)
+        self.type_map = type_map
         self.ntypes = ntypes
         descriptor['ntypes'] = ntypes
         self.combination = descriptor.get('combination',False)

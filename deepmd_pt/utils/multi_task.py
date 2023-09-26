@@ -92,12 +92,9 @@ def get_class_name(item_key, item_params):
     elif item_key == "fitting_net":
         item_type = item_params.get("type", "ener")
         if item_type == "ener":
-            return EnergyFittingNetType.__name__
-        elif item_type == "direct_force":
-            return DipoleFittingNetType.__name__
-        elif item_type == "direct_force_ener":
-            # TODO ZD
-            return "direct_force_ener"
+            return EnergyFittingNet.__name__
+        elif item_type in ["direct_force", "direct_force_ener"]:
+            return EnergyFittingNetDirect.__name__
         elif item_type == "atten_vec_lcc":
             return FittingNetAttenLcc.__name__
         else:

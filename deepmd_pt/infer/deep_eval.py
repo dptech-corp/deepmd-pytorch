@@ -24,6 +24,7 @@ class DeepEval:
         self.multi_task = "model_dict" in self.input_param
         assert not self.multi_task, "multitask mode currently not supported!"
         self.type_split = self.input_param['descriptor']['type'] in ['se_e2_a']
+        self.type_map = self.input_param['type_map']
         self.dp = ModelWrapper(get_model(self.input_param, None).to(DEVICE))
         self.dp.load_state_dict(state_dict)
         self.rcut = self.dp.model['Default'].descriptor.rcut
