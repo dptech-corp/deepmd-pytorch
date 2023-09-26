@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 import numpy as np
 import torch
 
@@ -8,14 +9,17 @@ try:
 except:
     from torch.jit import Final
 
-from deepmd_pt.model.network import NonLinearHead
+from deepmd_pt.model.network import NonLinearHead, MaskLMHead
 from deepmd_pt.model.task import TaskBaseMethod
 
 
 class DenoiseNet(TaskBaseMethod):
 
     def __init__(self,
+                 feature_dim,
+                 ntypes,
                  attn_head=8,
+                 prefactor=[0.5,0.5],
                  activation_function="gelu",
                  **kwargs):
         """Construct a denoise net.
@@ -28,10 +32,29 @@ class DenoiseNet(TaskBaseMethod):
         - resnet_dt: Using time-step in the ResNet construction.
         """
         super(DenoiseNet, self).__init__()
+        self.feature_dim = feature_dim
+        self.ntypes = ntypes
         self.attn_head = attn_head
-        self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
+        self.prefactor = torch.tensor(prefactor,dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
 
-    def forward(self, coord, pair_weights, diff, nlist_mask):
+        self.lm_head = MaskLMHead(
+                embed_dim=self.feature_dim,
+                output_dim=ntypes,
+                activation_fn=activation_function,
+                weight=None,
+            )
+
+        if not isinstance(self.attn_head, list):
+            self.pair2coord_proj = NonLinearHead(self.attn_head, 1, activation_fn=activation_function)
+        else:
+            self.pair2coord_proj = []
+            self.ndescriptor = len(self.attn_head)
+            for ii in range(self.ndescriptor):
+                _pair2coord_proj = NonLinearHead(self.attn_head[ii], 1, activation_fn=activation_function)
+                self.pair2coord_proj.append(_pair2coord_proj)
+            self.pair2coord_proj = torch.nn.ModuleList(self.pair2coord_proj)
+
+    def forward(self, coord, pair_weights, diff, nlist_mask, features, masked_tokens: Optional[torch.Tensor]=None):
         """Calculate the updated coord.
         Args:
         - coord: Input noisy coord with shape [nframes, nloc, 3].
@@ -43,6 +66,20 @@ class DenoiseNet(TaskBaseMethod):
         - denoised_coord: Denoised updated coord with shape [nframes, nloc, 3].
         """
         # [nframes, nloc, nnei, 1]
-        attn_probs = self.pair2coord_proj(pair_weights)
-        coord_update = (attn_probs * diff).sum(dim=-2) / nlist_mask.sum(dim=-1).unsqueeze(-1)
-        return coord + coord_update
+        logits = self.lm_head(features, masked_tokens=masked_tokens)
+        if not isinstance(self.attn_head, list):
+            attn_probs = self.pair2coord_proj(pair_weights)
+            coord_update = (attn_probs * diff).sum(dim=-2) / (nlist_mask.sum(dim=-1).unsqueeze(-1)+1e-6)
+            return coord_update, logits
+        else:
+            assert len(self.prefactor)==self.ndescriptor
+            all_coord_update = []
+            assert len(pair_weights) == len(diff) == len(nlist_mask) == self.ndescriptor
+            for ii in range(self.ndescriptor):
+                _attn_probs = self.pair2coord_proj[ii](pair_weights[ii])
+                _coord_update = (_attn_probs * diff[ii]).sum(dim=-2) / (nlist_mask[ii].sum(dim=-1).unsqueeze(-1)+1e-6)
+                all_coord_update.append(_coord_update)
+            out_coord = self.prefactor[0] * all_coord_update[0]
+            for ii in range(self.ndescriptor-1):
+                out_coord += self.prefactor[ii+1] * all_coord_update[ii+1]
+            return out_coord, logits

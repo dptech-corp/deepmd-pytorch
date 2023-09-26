@@ -552,7 +552,11 @@ class DeepmdDataSystem(object):
             return batch
         else:
             batch['clean_type'] = clean_type
-            batch['clean_coord'] = clean_coord
+            if self.pbc:
+                _clean_coord = normalize_coord(clean_coord, region, nloc)
+            else:
+                _clean_coord = clean_coord.clone()
+            batch['clean_coord'] = _clean_coord
             # add noise
             for i in range(self.max_fail_num):
                 mask_num = 0
@@ -587,13 +591,13 @@ class DeepmdDataSystem(object):
                         )
                     else:
                         NotImplementedError(f"Unknown noise type {self.noise_type}!")
-                    noised_coord = clean_coord.clone().detach()
+                    noised_coord = _clean_coord.clone().detach()
                     noised_coord[coord_mask] += noise_on_coord
                     batch['coord_mask'] = torch.tensor(coord_mask,
                                                        dtype=torch.bool,
                                                        device=env.PREPROCESS_DEVICE)
                 else:
-                    noised_coord = clean_coord
+                    noised_coord = _clean_coord
                     batch['coord_mask'] = torch.tensor(np.zeros_like(coord_mask, dtype=np.bool),
                                                        dtype=torch.bool,
                                                        device=env.PREPROCESS_DEVICE)
@@ -614,7 +618,6 @@ class DeepmdDataSystem(object):
                     _coord = normalize_coord(noised_coord, region, nloc)
                 else:
                     _coord = noised_coord.clone()
-                batch['coord'] = _coord
                 try:
                     nlist, nlist_loc, nlist_type, shift, mapping = make_env_mat(_coord, masked_type, region,
                                                                                 rcut, sec,

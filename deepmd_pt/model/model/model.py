@@ -20,6 +20,7 @@ class BaseModel(torch.nn.Module):
 
     def compute_or_load_stat(self, fitting_param, ntypes,
                              resuming=False, type_map=None, stat_file_dir=None, stat_file_path=None, sampled=None):
+        if fitting_param is None: fitting_param = {}
         if not resuming:
             if sampled is not None:  # compute stat
                 for sys in sampled:

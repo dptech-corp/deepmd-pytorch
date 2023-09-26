@@ -16,7 +16,7 @@ from .ener import EnergyModel
 
 def get_model(model_params, sampled=None):
     return EnergyModel(descriptor=model_params['descriptor'],
-                       fitting_net=model_params['fitting_net'],
+                       fitting_net=model_params.get('fitting_net', None),
                        type_map=model_params['type_map'],
                        type_embedding=model_params.get('type_embedding', None),
                        resuming=model_params.get("resuming", False),

@@ -183,6 +183,7 @@ class DescrptHybrid(Descriptor):
         elif self.hybrid_mode == 'sequential':
             seq_input = None
             env_mat, diff, rot_mat = None, None, None
+            env_mat_list, diff_list = [], []
             for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
                 if nlist_loc is not None:
                     input_nlist_loc = torch.split(nlist_loc, self.split_sel, -1)[ii]
@@ -196,6 +197,8 @@ class DescrptHybrid(Descriptor):
                                                              nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=input_nlist_tebd, seq_input=seq_input)
                 seq_input = seq_transform(seq_output)
-            return seq_input, env_mat, diff, rot_mat
+                env_mat_list.append(env_mat)
+                diff_list.append(diff)
+            return seq_input, env_mat_list, diff_list, rot_mat
         else:
             raise RuntimeError
