@@ -117,9 +117,7 @@ class Atten2Map(torch.nn.Module):
         # mask the attenmap, nb x nloc x 1 x nnei x 1
         attnw_mask_c = ~nlist_mask.unsqueeze(2).unsqueeze(-1)
         if self.smooth:
-            attnw_sw = sw.unsqueeze(2).unsqueeze(2)
-            attnw_sw_c = sw.unsqueeze(2).unsqueeze(-1)
-            attnw = (attnw + self.attnw_shift) * attnw_sw * attnw_sw_c - self.attnw_shift
+            attnw = (attnw + self.attnw_shift) * sw[:,:,None,:,None] * sw[:,:,None,None,:] - self.attnw_shift
         else:
             attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
         attnw = torch.softmax(attnw, dim=-1)
@@ -127,8 +125,7 @@ class Atten2Map(torch.nn.Module):
         # nb x nloc x nh x nnei x nnei
         attnw = attnw.masked_fill(attnw_mask_c, float(0.0), )
         if self.smooth:
-            attnw = attnw * attnw_sw
-            attnw = attnw * attnw_sw_c
+            attnw = attnw * sw[:,:,None,:,None] * sw[:,:,None,None,:]
         # nb x nloc x nnei x nnei
         h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3. ** 0.5
         # nb x nloc x nh x nnei x nnei
