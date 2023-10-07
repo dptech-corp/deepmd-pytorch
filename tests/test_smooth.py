@@ -22,10 +22,10 @@ class TestSmooth:
       self,
   ):
     # displacement of atoms
-    epsilon = 1e-5
+    epsilon = 1e-5 if self.epsilon is None else self.epsilon
     # required prec. relative prec is not checked.
     rprec = 0
-    aprec = 1e-5
+    aprec = 1e-5 if self.aprec is None else self.aprec
 
     natoms = 10
     cell = 8.6 * torch.eye(3, dtype=dtype).to(env.DEVICE)
@@ -61,9 +61,10 @@ class TestSmooth:
 
     def compare(ret0, ret1):
       torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=rprec, atol=aprec)
-      torch.testing.assert_close(ret0['force'], ret1['force'], rtol=rprec, atol=aprec)
+      # plus 1. to avoid the divided-by-zero issue
+      torch.testing.assert_close(1.+ret0['force'], 1.+ret1['force'], rtol=rprec, atol=aprec)
       if not hasattr(self, "test_virial") or self.test_virial:
-        torch.testing.assert_close(ret0['virial'], ret1['virial'], rtol=rprec, atol=aprec)
+        torch.testing.assert_close(1.+ret0['virial'], 1.+ret1['virial'], rtol=rprec, atol=aprec)
 
     compare(ret0, ret1)
     compare(ret1, ret2)
@@ -76,16 +77,20 @@ class TestEnergyModelSeA(unittest.TestCase, TestSmooth):
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
 
 
-@unittest.skip("not smooth at the moment")
+# @unittest.skip("not smooth at the moment")
 class TestEnergyModelDPA1(unittest.TestCase, TestSmooth):
   def setUp(self):
     model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
-
+    # less degree of smoothness,
+    # error can be systematically removed by reducing epsilon
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
 
 class TestEnergyModelDPAUni(unittest.TestCase, TestSmooth):
   def setUp(self):
@@ -95,6 +100,7 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestSmooth):
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
 
 
 class TestEnergyModelDPAUni2(unittest.TestCase, TestSmooth):
@@ -106,6 +112,7 @@ class TestEnergyModelDPAUni2(unittest.TestCase, TestSmooth):
     self.type_split = True
     self.test_virial = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
 
 
 class TestEnergyModelDPAUni3(unittest.TestCase, TestSmooth):
@@ -117,6 +124,7 @@ class TestEnergyModelDPAUni3(unittest.TestCase, TestSmooth):
     self.type_split = True
     self.test_virial = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
 
 
 class TestEnergyModelHybrid(unittest.TestCase, TestSmooth):
@@ -125,6 +133,7 @@ class TestEnergyModelHybrid(unittest.TestCase, TestSmooth):
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
 
 
 # class TestEnergyFoo(unittest.TestCase):
