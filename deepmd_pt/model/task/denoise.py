@@ -54,7 +54,7 @@ class DenoiseNet(TaskBaseMethod):
                 self.pair2coord_proj.append(_pair2coord_proj)
             self.pair2coord_proj = torch.nn.ModuleList(self.pair2coord_proj)
 
-    def forward(self, coord, pair_weights, diff, nlist_mask, features, masked_tokens: Optional[torch.Tensor]=None):
+    def forward(self, pair_weights, diff, nlist_mask, features, masked_tokens: Optional[torch.Tensor]=None):
         """Calculate the updated coord.
         Args:
         - coord: Input noisy coord with shape [nframes, nloc, 3].
@@ -72,7 +72,7 @@ class DenoiseNet(TaskBaseMethod):
             coord_update = (attn_probs * diff).sum(dim=-2) / (nlist_mask.sum(dim=-1).unsqueeze(-1)+1e-6)
             return coord_update, logits
         else:
-            assert len(self.prefactor)==self.ndescriptor
+            assert len(self.prefactor) == self.ndescriptor
             all_coord_update = []
             assert len(pair_weights) == len(diff) == len(nlist_mask) == self.ndescriptor
             for ii in range(self.ndescriptor):
