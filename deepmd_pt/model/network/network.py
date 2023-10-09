@@ -784,7 +784,8 @@ class GatedSelfAttetion(nn.Module):
         nei_mask = nei_mask.view(-1, self.nnei)
         if self.smooth:
             # [nframes * nloc, nnei]
-            sw = sw.view([-1, self.nnei])          
+            assert sw is not None
+            sw = sw.view([-1, self.nnei])
             attn_weights = (attn_weights + attnw_shift) * sw[:,:,None] * sw[:,None,:] - attnw_shift
         else:
             attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(1), float("-inf"))
@@ -795,6 +796,7 @@ class GatedSelfAttetion(nn.Module):
             angular_weight = torch.bmm(input_r, input_r.transpose(1, 2))
             attn_weights = attn_weights * angular_weight
         if not self.dotr and self.smooth: 
+            assert sw is not None
             attn_weights = attn_weights * sw[:,:,None] * sw[:,None,:]
         o = torch.bmm(attn_weights, v)
         output = self.out_proj(o)
