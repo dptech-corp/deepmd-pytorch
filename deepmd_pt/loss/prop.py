@@ -29,8 +29,6 @@ class PropertyLoss(TaskLoss):
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
         atom_norm = 1. / natoms
-        import logging
-        logging.info(f"righr")
         if not self.use_l1_all:
             l2_prop_loss = torch.mean(torch.square(model_pred['property'] - label['property']))
             more_loss['l2_prop_loss'] = l2_prop_loss.detach()

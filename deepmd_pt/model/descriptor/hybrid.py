@@ -105,7 +105,6 @@ class DescrptHybrid(Descriptor):
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
         """
-        import logging
         sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
         for ii, descrpt in enumerate(self.descriptor_list):
             merged_tmp = [{key: item[key] if not isinstance(item[key], list) else item[key][ii] for key in item} for

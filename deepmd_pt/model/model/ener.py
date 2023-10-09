@@ -1,4 +1,4 @@
-import torch, logging
+import torch
 from typing import Optional, List, Union, Dict
 from deepmd_pt.model.descriptor import Descriptor
 from deepmd_pt.model.task import Fitting, DenoiseNet
@@ -100,7 +100,7 @@ class EnergyModel(BaseModel):
         if fitting_net:     #ener/force or property
             fitting_net['type'] = fitting_net.get('type', 'ener')
             self.fitting_type = fitting_net['type']
-            if 'ener' or 'force' in fitting_net["type"]:    #ener/force
+            if ('ener' in self.fitting_net) or ('force' in self.fitting_net):    #ener/force
                 if self.descriptor_type not in ['se_e2_a']:
                     fitting_net['ntypes'] = 1
                     fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
@@ -235,7 +235,6 @@ class EnergyModel(BaseModel):
         # energy, force
         if self.fitting_net is not None:
             if ('ener' in self.fitting_type) or ('force' in self.fitting_type):
-                logging.info(f"{self.fitting_type}")
                 atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
                 energy = atom_energy.sum(dim=1)
                 model_predict = {'energy': energy,

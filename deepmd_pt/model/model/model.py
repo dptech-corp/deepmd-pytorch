@@ -66,7 +66,6 @@ class BaseModel(torch.nn.Module):
                                                 type_map=type_map)
             else:  # load stat
                 target_type_map = type_map
-                logging.info(f"{stat_file_path}")
                 if not isinstance(stat_file_path, list):
                     logging.info(f'Loading stat file from {stat_file_path}')
                     stats = np.load(stat_file_path)
@@ -127,7 +126,6 @@ class BaseModel(torch.nn.Module):
                                 sys[key] = sys[key].to(env.DEVICE)
                 sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
 
-                logging.info(f"{sampled[0].keys()}")
                 property = [item['property'] for item in sampled]
                 mixed_type = 'real_natoms_vec' in sampled[0]
                 if mixed_type:
@@ -153,7 +151,6 @@ class BaseModel(torch.nn.Module):
                                                 type_map=type_map)
             else:  # load stat
                 target_type_map = type_map
-                logging.info(f"{stat_file_path}")
                 if not isinstance(stat_file_path, list):
                     logging.info(f'Loading stat file from {stat_file_path}')
                     stats = np.load(stat_file_path)
