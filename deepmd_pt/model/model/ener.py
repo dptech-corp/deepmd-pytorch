@@ -1,4 +1,4 @@
-import torch
+import torch, logging
 from typing import Optional, List, Union, Dict
 from deepmd_pt.model.descriptor import Descriptor
 from deepmd_pt.model.task import Fitting, DenoiseNet
@@ -97,23 +97,35 @@ class EnergyModel(BaseModel):
                                   sampled=sampled)
 
         # Fitting
-        if fitting_net:
+        if fitting_net:     #ener/force or property
             fitting_net['type'] = fitting_net.get('type', 'ener')
-            if self.descriptor_type not in ['se_e2_a']:
-                fitting_net['ntypes'] = 1
-                fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
-            else:
-                fitting_net['ntypes'] = self.descriptor.ntypes
-                fitting_net['use_tebd'] = False
-                fitting_net['embedding_width'] = self.descriptor.dim_out
+            self.fitting_type = fitting_net['type']
+            if 'ener' or 'force' in fitting_net["type"]:    #ener/force
+                if self.descriptor_type not in ['se_e2_a']:
+                    fitting_net['ntypes'] = 1
+                    fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
+                else:
+                    fitting_net['ntypes'] = self.descriptor.ntypes
+                    fitting_net['use_tebd'] = False
+                    fitting_net['embedding_width'] = self.descriptor.dim_out
 
-            self.grad_force = 'direct' not in fitting_net['type']
-            if not self.grad_force:
-                fitting_net['out_dim'] = self.descriptor.dim_emb
-                if 'ener' in fitting_net['type']:
-                    fitting_net['return_energy'] = True
+                self.grad_force = 'direct' not in fitting_net['type']
+                if not self.grad_force:
+                    fitting_net['out_dim'] = self.descriptor.dim_emb
+                    if 'ener' in fitting_net['type']:
+                        fitting_net['return_energy'] = True
+            elif 'prop' in fitting_net["type"]:    #property
+                if self.descriptor_type not in ['se_e2_a']:
+                    fitting_net['ntypes'] = 1
+                    fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
+                else:
+                    fitting_net['ntypes'] = self.descriptor.ntypes
+                    fitting_net['use_tebd'] = False
+                    fitting_net['embedding_width'] = self.descriptor.dim_out
+            else:
+                raise RuntimeError(f"Unknown fitting type :{fitting_net['type']}")
             self.fitting_net = Fitting(**fitting_net)
-        else:
+        else: #denoise
             self.fitting_net = None
             self.grad_force = False
             if not self.split_nlist:
@@ -166,22 +178,23 @@ class EnergyModel(BaseModel):
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
         model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
-        if self.fitting_net is not None:
-            if self.grad_force:
-                mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
-                force = torch.zeros_like(coord)
-                model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping,
-                                                                src=model_predict_lower['extended_force'], reduce='sum')
-                atomic_virial = torch.zeros_like(coord).unsqueeze(-1).expand(-1, -1, -1, 3)
-                mapping = mapping.unsqueeze(-1).expand(-1, -1, -1, 3)
-                reduced_virial = torch.scatter_reduce(atomic_virial, 1, index=mapping,
-                                                  src=model_predict_lower['extended_virial'],
-                                                  reduce='sum')
-                model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
-                if do_atomic_virial:
-                    model_predict_lower['atomic_virial'] = reduced_virial
-            else:
-                model_predict_lower['force'] = model_predict_lower['dforce']
+        if self.fitting_net is not None: #energy/force or property
+            if ('ener' in self.fitting_type) or ('force' in self.fitting_type):
+                if self.grad_force:
+                    mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
+                    force = torch.zeros_like(coord)
+                    model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping,
+                                                                    src=model_predict_lower['extended_force'], reduce='sum')
+                    atomic_virial = torch.zeros_like(coord).unsqueeze(-1).expand(-1, -1, -1, 3)
+                    mapping = mapping.unsqueeze(-1).expand(-1, -1, -1, 3)
+                    reduced_virial = torch.scatter_reduce(atomic_virial, 1, index=mapping,
+                                                    src=model_predict_lower['extended_virial'],
+                                                    reduce='sum')
+                    model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
+                    if do_atomic_virial:
+                        model_predict_lower['atomic_virial'] = reduced_virial
+                else:
+                    model_predict_lower['force'] = model_predict_lower['dforce']
         else:
             model_predict_lower['updated_coord'] += coord
         return model_predict_lower
@@ -221,28 +234,38 @@ class EnergyModel(BaseModel):
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
-            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
-            energy = atom_energy.sum(dim=1)
-            model_predict = {'energy': energy,
-                            'atom_energy': atom_energy,
-                            }
-            if self.grad_force:
-                faked_grad = torch.ones_like(energy)
-                lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-                extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-                assert extended_force is not None
-                extended_force = -extended_force
-                extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
-                model_predict['extended_force'] = extended_force
-                if do_atomic_virial:
-                    # the correction sums to zero, which does not contribute to global virial
-                    extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
-                    model_predict['extended_virial'] = extended_virial + extended_virial_corr
+            if ('ener' in self.fitting_type) or ('force' in self.fitting_type):
+                logging.info(f"{self.fitting_type}")
+                atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+                energy = atom_energy.sum(dim=1)
+                model_predict = {'energy': energy,
+                                'atom_energy': atom_energy,
+                                }
+                if self.grad_force:
+                    faked_grad = torch.ones_like(energy)
+                    lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
+                    extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
+                    assert extended_force is not None
+                    extended_force = -extended_force
+                    extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
+                    model_predict['extended_force'] = extended_force
+                    if do_atomic_virial:
+                        # the correction sums to zero, which does not contribute to global virial
+                        extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
+                        model_predict['extended_virial'] = extended_virial + extended_virial_corr
+                    else:
+                        model_predict['extended_virial'] = extended_virial
                 else:
-                    model_predict['extended_virial'] = extended_virial
-            else:
-                assert dforce is not None
-                model_predict['dforce'] = dforce
+                    assert dforce is not None
+                    model_predict['dforce'] = dforce
+            elif 'prop' in self.fitting_type:
+                atom_property = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+                #TODO : distinguish extensive quantity and intensive quantity
+                property = atom_property.sum(dim=1)
+                #property = atom_property.mean(dim=1)
+                model_predict = {'property': property,
+                                'atom_property': atom_property,
+                                }
         # denoise
         else:
             nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))

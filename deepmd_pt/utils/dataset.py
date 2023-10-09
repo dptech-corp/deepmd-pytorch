@@ -74,7 +74,6 @@ class DeepmdDataSystem(object):
             if not self.mixed_type:
                 atom_type = [type_map.index(self._type_map[ii]) for ii in self._atom_type]
                 self._atom_type = np.array(atom_type, dtype=np.int32)
-
             else:
                 self.enforce_type_map = True
                 sorter = np.argsort(type_map)
@@ -96,6 +95,7 @@ class DeepmdDataSystem(object):
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
         self.add('virial', 9, atomic=False, must=False, high_prec=False)
+        self.add('property', 1, atomic=False, must=False, high_prec=True)
 
         self._sys_path = sys_path
         self.rcut = rcut

@@ -26,3 +26,4 @@ JIT = False
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
 TEST_CONFIG = 'tests/water/se_e2_a.json'
 ENERGY_BIAS_TRAINABLE = True
+PROPERTY_BIAS_TRAINABLE = True

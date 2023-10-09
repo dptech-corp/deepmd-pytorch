@@ -235,6 +235,7 @@ class DescrptSeAtten(Descriptor):
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):
     """Collect avg, square avg and count of descriptors in a batch."""
+    import logging
     ntypes = natoms.shape[1] - 2
     if not mixed_type:
         sysr = []  # 每类元素的径向均值

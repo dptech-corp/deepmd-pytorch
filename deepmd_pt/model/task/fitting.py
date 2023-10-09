@@ -41,6 +41,7 @@ class Fitting(TaskBaseMethod):
                 fitting_type = kwargs["type"]
             except KeyError:
                 raise KeyError("the type of fitting should be set by `type`")
+            logging.info(f"{Fitting.__plugins.plugins}")
             if fitting_type in Fitting.__plugins.plugins:
                 cls = Fitting.__plugins.plugins[fitting_type]
             else:
