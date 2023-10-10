@@ -95,6 +95,8 @@ class DeepmdDataSystem(object):
         self.add('energy', 1, atomic=False, must=False, high_prec=True)
         self.add('force', 3, atomic=True, must=False, high_prec=False)
         self.add('virial', 9, atomic=False, must=False, high_prec=False)
+        self.add('property_intensive', 1, atomic=False, must=False, high_prec=True)
+        self.add('property_extensive', 1, atomic=False, must=False, high_prec=True)
         self.add('property', 1, atomic=False, must=False, high_prec=True)
 
         self._sys_path = sys_path
@@ -549,6 +551,17 @@ class DeepmdDataSystem(object):
             batch['nlist_type'] = nlist_type
             batch['shift'] = shift
             batch['mapping'] = mapping
+            
+            # property
+            #logging.info(f"init prop:{batch['property_intensive']}")
+            tmp_property = batch.pop("property")
+            if batch['find_property_intensive']:
+                batch['property'] = batch['property_intensive'] * len(batch['atype'])
+            elif batch['find_property_extensive']:
+                batch['property'] = batch["property_extensive"]
+            else:
+                batch["property"] = tmp_property
+            #logging.info(f"init prop after:{batch['property']}")
             return batch
         else:
             batch['clean_type'] = clean_type

@@ -16,6 +16,7 @@ class EnergyStdLoss(TaskLoss):
                  start_pref_v=0.0,
                  limit_pref_v=0.0,
                  use_l1_all: bool = False,
+                 l2_loss: bool = False,
                  **kwargs):
         """Construct a layer to compute loss on energy, force and virial."""
         super(EnergyStdLoss, self).__init__()
@@ -30,6 +31,7 @@ class EnergyStdLoss(TaskLoss):
         self.start_pref_v = start_pref_v
         self.limit_pref_v = limit_pref_v
         self.use_l1_all = use_l1_all
+        self.l2_loss = l2_loss
 
     def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on loss and force.
@@ -62,8 +64,12 @@ class EnergyStdLoss(TaskLoss):
                 more_loss['rmse_e'] = rmse_e.detach()
                 # more_loss['log_keys'].append('rmse_e')
             else:  # use l1 and for all atoms
-                l1_ener_loss = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="sum")
-                loss += (pref_e * l1_ener_loss)
+                if self.l2_loss:
+                    l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
+                    loss += atom_norm * (pref_e * l2_ener_loss)
+                else:
+                    l1_ener_loss = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="sum")
+                    loss += (pref_e * l1_ener_loss)
                 more_loss['mae_e'] = F.l1_loss(model_pred['energy'].reshape(-1), label['energy'].reshape(-1), reduction="mean").detach()
                 # more_loss['log_keys'].append('rmse_e')
             if mae:

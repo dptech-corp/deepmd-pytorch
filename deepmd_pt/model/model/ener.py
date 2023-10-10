@@ -100,7 +100,7 @@ class EnergyModel(BaseModel):
         if fitting_net:     #ener/force or property
             fitting_net['type'] = fitting_net.get('type', 'ener')
             self.fitting_type = fitting_net['type']
-            if ('ener' in self.fitting_net) or ('force' in self.fitting_net):    #ener/force
+            if ('ener' in self.fitting_type) or ('force' in self.fitting_type):    #ener/force
                 if self.descriptor_type not in ['se_e2_a']:
                     fitting_net['ntypes'] = 1
                     fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
@@ -115,6 +115,8 @@ class EnergyModel(BaseModel):
                     if 'ener' in fitting_net['type']:
                         fitting_net['return_energy'] = True
             elif 'prop' in fitting_net["type"]:    #property
+                self.grad_force = False
+                self.prop_type = fitting_net.get('prop_type','extensive')
                 if self.descriptor_type not in ['se_e2_a']:
                     fitting_net['ntypes'] = 1
                     fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
@@ -258,10 +260,17 @@ class EnergyModel(BaseModel):
                     assert dforce is not None
                     model_predict['dforce'] = dforce
             elif 'prop' in self.fitting_type:
+                import logging
                 atom_property = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
                 #TODO : distinguish extensive quantity and intensive quantity
-                property = atom_property.sum(dim=1)
-                #property = atom_property.mean(dim=1)
+                if self.prop_type == 'extensive':
+                    property = atom_property.sum(dim=1)
+                elif self.prop_type == 'intensive':
+                    property = atom_property.mean(dim=1)
+                    #logging.info(f"pred_property:{property}")
+                    #logging.info(f"atom_pred_property:{atom_property}")
+                else:
+                    raise RuntimeError(f"Unknow property type {self.prop_type}")
                 model_predict = {'property': property,
                                 'atom_property': atom_property,
                                 }

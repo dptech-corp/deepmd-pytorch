@@ -31,7 +31,7 @@ def make_stat_input(datasets, dataloaders, nbatches):
         "nlist_loc",
         "nlist_type",
         "shift",
-        "property",
+        "property"
     ]
     if datasets[0].mixed_type:
         keys.append("real_natoms_vec")
