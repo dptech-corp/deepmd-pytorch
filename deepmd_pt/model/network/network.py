@@ -648,7 +648,13 @@ class NeighborWiseAttention(nn.Module):
                                                                temperature=temperature))
         self.attention_layers = nn.ModuleList(attention_layers)
 
-    def forward(self, input_G, nei_mask, input_r: Optional[torch.Tensor]=None):
+    def forward(
+        self, 
+        input_G,
+        nei_mask,
+        input_r: Optional[torch.Tensor]=None,
+        sw: Optional[torch.Tensor]=None,
+    ):
         """
 
         Args:
@@ -663,7 +669,7 @@ class NeighborWiseAttention(nn.Module):
         out = input_G
         # https://github.com/pytorch/pytorch/issues/39165#issuecomment-635472592
         for layer in self.attention_layers:
-            out = layer(out, nei_mask, input_r=input_r)
+            out = layer(out, nei_mask, input_r=input_r, sw=sw)
         return out
 
 
@@ -694,11 +700,17 @@ class NeighborWiseAttentionLayer(nn.Module):
             self.fc2 = nn.Linear(self.ffn_embed_dim, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
             self.final_layer_norm = nn.LayerNorm(self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
-    def forward(self, x, nei_mask, input_r: Optional[torch.Tensor]=None):
+    def forward(
+        self,
+        x,
+        nei_mask,
+        input_r: Optional[torch.Tensor]=None,
+        sw: Optional[torch.Tensor]=None,
+    ):
         residual = x
         if not self.post_ln:
             x = self.attn_layer_norm(x)
-        x = self.attention_layer(x, nei_mask, input_r=input_r)
+        x = self.attention_layer(x, nei_mask, input_r=input_r, sw=sw)
         x = residual + x
         if self.post_ln:
             x = self.attn_layer_norm(x)
@@ -717,7 +729,7 @@ class NeighborWiseAttentionLayer(nn.Module):
 
 class GatedSelfAttetion(nn.Module):
     def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None, bias=True):
+                 head_num=1, normalize=True, temperature=None, bias=True, smooth=True):
         """Construct a neighbor-wise attention net.
         """
         super(GatedSelfAttetion, self).__init__()
@@ -734,8 +746,16 @@ class GatedSelfAttetion(nn.Module):
         self.normalize = normalize
         self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=bias)
         self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=bias)
+        self.smooth = smooth
 
-    def forward(self, query, nei_mask, input_r: Optional[torch.Tensor]=None):
+    def forward(
+        self,
+        query,
+        nei_mask,
+        input_r: Optional[torch.Tensor]=None,
+        sw: Optional[torch.Tensor]=None,
+        attnw_shift: float = 20.0,
+    ):
         """
 
         Args:
@@ -762,13 +782,22 @@ class GatedSelfAttetion(nn.Module):
         attn_weights = torch.bmm(q, k)
         #  [nframes * nloc, nnei]
         nei_mask = nei_mask.view(-1, self.nnei)
-        attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(1), float("-inf"))
+        if self.smooth:
+            # [nframes * nloc, nnei]
+            assert sw is not None
+            sw = sw.view([-1, self.nnei])
+            attn_weights = (attn_weights + attnw_shift) * sw[:,:,None] * sw[:,None,:] - attnw_shift
+        else:
+            attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(1), float("-inf"))
         attn_weights = F.softmax(attn_weights, dim=-1)
         attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(-1), float(0.0))
         if self.dotr:
             assert input_r is not None, "input_r must be provided when dotr is True!"
             angular_weight = torch.bmm(input_r, input_r.transpose(1, 2))
             attn_weights = attn_weights * angular_weight
+        if not self.dotr and self.smooth: 
+            assert sw is not None
+            attn_weights = attn_weights * sw[:,:,None] * sw[:,None,:]
         o = torch.bmm(attn_weights, v)
         output = self.out_proj(o)
         return output

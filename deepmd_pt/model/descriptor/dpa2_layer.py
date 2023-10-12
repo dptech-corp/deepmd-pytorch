@@ -79,6 +79,7 @@ class Atten2Map(torch.nn.Module):
             nh: int,
             has_gate: bool = False,  # apply gate to attn map
             smooth: bool = True,
+            attnw_shift: float = 20.0,
     ):
         super(Atten2Map, self).__init__()
         self.ni = ni
@@ -87,6 +88,7 @@ class Atten2Map(torch.nn.Module):
         self.mapqk = SimpleLinear(ni, nd * 2 * nh, bias=False)
         self.has_gate = has_gate
         self.smooth = smooth
+        self.attnw_shift = attnw_shift
 
     def forward(
             self,
@@ -114,16 +116,16 @@ class Atten2Map(torch.nn.Module):
         attnw_mask = ~nlist_mask.unsqueeze(2).unsqueeze(2)
         # mask the attenmap, nb x nloc x 1 x nnei x 1
         attnw_mask_c = ~nlist_mask.unsqueeze(2).unsqueeze(-1)
-        attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
+        if self.smooth:
+            attnw = (attnw + self.attnw_shift) * sw[:,:,None,:,None] * sw[:,:,None,None,:] - self.attnw_shift
+        else:
+            attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
         attnw = torch.softmax(attnw, dim=-1)
         attnw = attnw.masked_fill(attnw_mask, float(0.0), )
         # nb x nloc x nh x nnei x nnei
         attnw = attnw.masked_fill(attnw_mask_c, float(0.0), )
         if self.smooth:
-            attnw_sw = sw.unsqueeze(2).unsqueeze(2)
-            attnw_sw_c = sw.unsqueeze(2).unsqueeze(-1)
-            attnw = attnw * attnw_sw
-            attnw = attnw * attnw_sw_c
+            attnw = attnw * sw[:,:,None,:,None] * sw[:,:,None,None,:]
         # nb x nloc x nnei x nnei
         h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3. ** 0.5
         # nb x nloc x nh x nnei x nnei
@@ -206,6 +208,7 @@ class LocalAtten(torch.nn.Module):
             nd: int,
             nh: int,
             smooth: bool = True,
+            attnw_shift: float = 20.0,
     ):
         super(LocalAtten, self).__init__()
         self.ni = ni
@@ -215,6 +218,7 @@ class LocalAtten(torch.nn.Module):
         self.mapkv = SimpleLinear(ni, (nd + ni) * nh, bias=False)
         self.head_map = SimpleLinear(ni * nh, ni)
         self.smooth = smooth
+        self.attnw_shift = attnw_shift
 
     def forward(
             self,
@@ -246,7 +250,10 @@ class LocalAtten(torch.nn.Module):
         # mask the attenmap, nb x nloc x 1 x nnei
         attnw_mask = ~nlist_mask.unsqueeze(-2)
         # nb x nloc x nh x nnei
-        attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
+        if self.smooth:
+            attnw = (attnw - self.attnw_shift) * sw.unsqueeze(-2) + self.attnw_shift
+        else:
+            attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
         attnw = torch.softmax(attnw, dim=-1)
         attnw = attnw.masked_fill(attnw_mask, float(0.0), )
         if self.smooth:
