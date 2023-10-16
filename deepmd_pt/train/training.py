@@ -307,7 +307,7 @@ class Trainer(object):
             self.optimizer = torch.optim.Adam(
                 self.wrapper.parameters(), lr=self.lr_exp.start_lr
             )
-            if optimizer_state_dict is not None:
+            if optimizer_state_dict is not None and self.restart_training:
                 self.optimizer.load_state_dict(optimizer_state_dict)
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
@@ -408,7 +408,7 @@ class Trainer(object):
             # Log and persist
             if _step_id % self.disp_freq == 0:
                 self.wrapper.eval()
-                msg = f"step={_step_id}, lr={cur_lr:.4f}"
+                msg = f"step={_step_id}, lr={cur_lr:.2e}"
 
                 def log_loss_train(_loss, _more_loss, _task_key='Default'):
                     results = {}
