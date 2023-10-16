@@ -222,6 +222,8 @@ class Trainer(object):
             origin_model = finetune_model if finetune_model is not None else resume_model
             logging.info(f"Resuming from {origin_model}.")
             state_dict = torch.load(origin_model, map_location=DEVICE)
+            #logging.info(f"{state_dict.keys()}")
+            #logging.info(state_dict['model.OC2M_direct.fitting_net.filter_layers.0.deep_layers.2.idt'][0])
             if "model" in state_dict:
                 optimizer_state_dict = state_dict["optimizer"] if finetune_model is None else None
                 state_dict = state_dict["model"]
@@ -252,6 +254,8 @@ class Trainer(object):
                     model_branch_chosen = model_params['model_branch_chosen']
                     new_fitting = model_params.get('new_fitting', False)
                     target_state_dict = self.wrapper.state_dict()
+                    #logging.info(f"{model_branch_chosen}")
+                    #logging.info(target_state_dict['model.Default.fitting_net.filter_layers.0.deep_layers.2.idt'][0])
                     target_keys = [i for i in target_state_dict.keys() if i != '_extra_state']
                     for item_key in target_keys:
                         if new_fitting and '.fitting_net.' in item_key:
@@ -262,10 +266,15 @@ class Trainer(object):
                             # print(f'Replace {item_key} with {new_key} in pretrained_model!')
                             new_state_dict[item_key] = state_dict[new_key].clone().detach()
                     state_dict = new_state_dict
+                    #logging.info(state_dict['model.Default.fitting_net.filter_layers.0.deep_layers.2.idt'][0])
                 if finetune_model is not None:
+                    #logging.info(f"{self.wrapper.state_dict()['model.Default.type_embedding.embedding.weight'][0]}")
+                    #logging.info(f"{state_dict['model.Default.type_embedding.embedding.weight'][0]}")
                     state_dict['_extra_state'] = self.wrapper.state_dict()['_extra_state']
-
-                self.wrapper.load_state_dict(state_dict)
+                    #logging.info(f"{state_dict['_extra_state']['model_params']}")
+                self.wrapper.load_state_dict(state_dict, strict = False)
+                #logging.info(f"{self.wrapper.state_dict()['model.Default.type_embedding.embedding.weight'][0]}")
+                #logging.info(f"{self.wrapper.state_dict()['model.Default.fitting_net.bias_atom_p']}")
                 # finetune
                 if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',
                                                                                                       'direct_force_ener',

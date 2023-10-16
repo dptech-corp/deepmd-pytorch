@@ -6,7 +6,7 @@ from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
-
+import logging
 
 class EnergyModel(BaseModel):
     """Energy model.
@@ -95,7 +95,8 @@ class EnergyModel(BaseModel):
                                   stat_file_dir=stat_file_dir,
                                   stat_file_path=stat_file_path,
                                   sampled=sampled)
-
+        
+        #logging.info(f"{fitting_net}")
         # Fitting
         if fitting_net:     #ener/force or property
             fitting_net['type'] = fitting_net.get('type', 'ener')
@@ -233,6 +234,9 @@ class EnergyModel(BaseModel):
         descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
+        
+        #logging.info(f"{descriptor[0][0]}")
+        
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
@@ -260,7 +264,6 @@ class EnergyModel(BaseModel):
                     assert dforce is not None
                     model_predict['dforce'] = dforce
             elif 'prop' in self.fitting_type:
-                import logging
                 atom_property = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
                 #TODO : distinguish extensive quantity and intensive quantity
                 if self.prop_type == 'extensive':

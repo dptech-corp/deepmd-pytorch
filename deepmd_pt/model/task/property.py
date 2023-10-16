@@ -30,6 +30,8 @@ class PropertyFittingNet(Fitting):
         if not use_tebd:
             assert self.ntypes == len(bias_atom_p), 'Element count mismatches!'
         bias_atom_p = torch.tensor(bias_atom_p)
+        self.mean = kwargs.get("mean",None)
+        self.std = kwargs.get("std",None)
         self.register_buffer('bias_atom_p', bias_atom_p)
 
         filter_layers = []
@@ -61,7 +63,18 @@ class PropertyFittingNet(Fitting):
         if self.use_tebd:
             if atype_tebd is not None:
                 inputs = torch.concat([inputs, atype_tebd], dim=-1)
-            atom_prop = self.filter_layers[0](inputs) + self.bias_atom_p[atype].unsqueeze(-1)
+            if (self.mean is not None) and (self.std is not None):
+                atom_prop = (self.filter_layers[0](inputs) * self.std) + self.mean
+                #logging.info(f"{self.filter_layers[0](inputs)}")
+                #logging.info(f"{self.filter_layers[0](inputs) * self.std}")
+                #logging.info(f"{atom_prop}")
+            else:
+                atom_prop = self.filter_layers[0](inputs) + self.bias_atom_p[atype].unsqueeze(-1)           
+            #logging.info(f"{atom_prop[0][0]}")
+            #logging.info(f"atype:{atype}")
+            #logging.info(f"self.filter:{self.filter_layers[0](inputs)}")
+            #logging.info(f"bias:{self.bias_atom_p[atype]}")
+            #logging.info(f"self.bias_atom_p:{self.bias_atom_p}")
             outs = outs + atom_prop  # Shape is [nframes, natoms[0], 1]
         else:
             for type_i, filter_layer in enumerate(self.filter_layers):

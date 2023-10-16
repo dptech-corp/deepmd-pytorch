@@ -18,6 +18,10 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
         if 'model' in state_dict:
             state_dict = state_dict['model']
         last_model_params = state_dict['_extra_state']['model_params']
+        if 'fitting_net' not in last_model_params:
+            denoise = True
+        else:
+            denoise = False
         finetune_multi_task = "model_dict" in last_model_params
         trainable_param = {"type_embedding": True, "descriptor": True, "fitting_net": True}
         for net_type in trainable_param:
@@ -27,6 +31,8 @@ def change_finetune_model_params(ckpt, finetune_model, model_config, multi_task=
             old_type_map, new_type_map = last_model_params['type_map'], model_config['type_map']
             assert set(new_type_map).issubset(
                 old_type_map), "Only support for smaller type map when finetuning or resuming."
+            if denoise:
+                last_model_params['fitting_net'] = model_config['fitting_net']
             model_config = last_model_params
             logging.info("Change the model configurations according to the pretrained one...")
             model_config["new_type_map"] = new_type_map

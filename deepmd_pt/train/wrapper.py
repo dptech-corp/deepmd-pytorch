@@ -63,6 +63,7 @@ class ModelWrapper(torch.nn.Module):
                 else:
                     if net_type in self.model_params["model_dict"][model_item]:
                         trainable = self.model_params["model_dict"][model_item][net_type].get("trainable", True)
+                logging.info(f"{net_type},{trainable}")
                 if hasattr(self.model[model_item], net_type) and getattr(self.model[model_item], net_type) is not None:
                     for param in self.model[model_item].__getattr__(net_type).parameters():
                         param.requires_grad = trainable

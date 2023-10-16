@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 import torch
-from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
+from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss, PropertyLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils import dp_random
@@ -59,6 +59,7 @@ class Tester(object):
             self.noise_settings = None
             loss_params = config.pop("loss")
             loss_type = loss_params.pop("type", "ener")
+            self.loss_type = loss_type
             if loss_type == 'ener':
                 loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
                 self.loss = EnergyStdLoss(**loss_params)
@@ -74,6 +75,8 @@ class Tester(object):
                                            "mask_type_idx": len(model_params["type_map"]) - 1}
                 loss_params['ntypes'] = len(model_params['type_map'])
                 self.loss = DenoiseLoss(**loss_params)
+            elif loss_type == 'prop':
+                self.loss = PropertyLoss(**loss_params)
             else:
                 raise NotImplementedError
 
@@ -96,7 +99,7 @@ class Tester(object):
             else:
                 input_dict[item] = None
         label_dict = {}
-        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
+        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask", "property"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict
@@ -105,6 +108,7 @@ class Tester(object):
         systems = self.dataset_params["systems"]
         system_results = {}
         global_sum_natoms = 0
+        global_sum_frames = 0
         for cc, system in enumerate(systems):
             logging.info("# ---------------output of dp test--------------- ")
             logging.info(f"# testing system : {system}")
@@ -120,9 +124,11 @@ class Tester(object):
                 drop_last=False,
             )
             data = iter(dataloader)
+            logging.info(f"{data}")
 
             single_results = {}
             sum_natoms = 0
+            sum_frames = 0
             sys_natoms = None
             for _ in range(self.numb_test):
                 try:
@@ -134,31 +140,47 @@ class Tester(object):
                 system_label.append({item: label_dict[item].detach().cpu().numpy() for item in label_dict})
                 natoms = int(input_dict["atype"].shape[-1])
                 _, more_loss = self.loss(model_pred, label_dict, natoms, 1.0, mae=True)  # TODO: lr here is useless
+                #logging.info(f"{more_loss}")
                 if sys_natoms is None:
                     sys_natoms = natoms
                 else:
                     assert sys_natoms == natoms, "Frames in one system must be the same!"
                 sum_natoms += natoms
+                sum_frames += 1
                 for k, v in more_loss.items():
                     if "mae" in k:
-                        single_results[k] = single_results.get(k, 0.0) + v * natoms
+                        if self.loss_type == 'prop':
+                            single_results[k] = single_results.get(k, 0.0) + v
+                        else:
+                            single_results[k] = single_results.get(k, 0.0) + v * natoms
                     else:
                         single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
             if self.detail_file is not None:
                 save_detail_file(Path(self.detail_file), system_pred, system_label, sys_natoms, system_name=system, append=(cc != 0))
-            results = {
-                k: v / sum_natoms if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
-            }
+            if self.loss_type == 'prop':
+                results = {
+                    k: v / sum_frames if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
+                }
+            else:
+                results = {
+                    k: v / sum_natoms if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
+                }
             for item in sorted(list(results.keys())):
                 logging.info(f"{item}: {results[item]:.4f}")
             logging.info("# ----------------------------------------------- ")
             for k, v in single_results.items():
                 system_results[k] = system_results.get(k, 0.0) + v
             global_sum_natoms += sum_natoms
-
-        global_results = {
-            k: v / global_sum_natoms if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
-        }
+            global_sum_frames += sum_frames
+        
+        if self.loss_type == 'prop':
+            global_results = {
+                k: v / global_sum_frames if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
+            }
+        else:
+            global_results = {
+                k: v / global_sum_natoms if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
+            }
         logging.info("# ----------weighted average of errors----------- ")
         logging.info(f"# number of systems : {len(systems)}")
         for item in sorted(list(global_results.keys())):

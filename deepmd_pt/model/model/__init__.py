@@ -12,6 +12,7 @@ from .dpa2_lcc_force import ForceModelDPA2Lcc
 from .hybrid_ener import EnergyModelHybrid
 from .hybrid_force import ForceModelHybrid
 from .ener import EnergyModel
+import logging
 
 
 def get_model(model_params, sampled=None):

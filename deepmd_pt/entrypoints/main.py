@@ -106,7 +106,6 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
                                                 model_params_single,
                                                 type_split=type_split, noise_settings=noise_settings)
         return train_data_single, validation_data_single, sampled_single
-
     if not multi_task:
         train_data, validation_data, sampled = \
             prepare_trainer_input_single(config['model'],

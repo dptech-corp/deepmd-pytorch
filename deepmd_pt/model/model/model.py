@@ -118,6 +118,7 @@ class BaseModel(torch.nn.Module):
         if not resuming:
             if sampled is not None:  # compute stat
                 for sys in sampled:
+                    #logging.info(f"{sys['real_natoms_vec']}")
                     for key in sys:
                         if isinstance(sys[key], list):
                             sys[key] = [item.to(env.DEVICE) for item in sys[key]]
@@ -126,14 +127,23 @@ class BaseModel(torch.nn.Module):
                                 sys[key] = sys[key].to(env.DEVICE)
                 sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
 
-                property = [item['property'] for item in sampled]
-                mixed_type = 'real_natoms_vec' in sampled[0]
-                if mixed_type:
-                    input_natoms = [item['real_natoms_vec'] for item in sampled]
+                zero_bias_atom_p = fitting_param.get("zero_bias_atom_p", False)
+                set_bias = fitting_param.get("set_bias", None)
+                if (set_bias is not None) and (len(set_bias) == 1):
+                    set_bias = set_bias[0]
+                if zero_bias_atom_p:
+                    fitting_param['bias_atom_p'] = [0.0] * ntypes
+                elif set_bias is not None:
+                    fitting_param['bias_atom_p'] = [set_bias] * ntypes
                 else:
-                    input_natoms = [item['natoms'] for item in sampled]
-                tmp = compute_output_stats(property, input_natoms)
-                fitting_param['bias_atom_p'] = tmp[:, 0]
+                    property = [item['property'] for item in sampled]
+                    mixed_type = 'real_natoms_vec' in sampled[0]
+                    if mixed_type:
+                        input_natoms = [item['real_natoms_vec'] for item in sampled]
+                    else:
+                        input_natoms = [item['natoms'] for item in sampled]
+                    tmp = compute_output_stats(property, input_natoms)
+                    fitting_param['bias_atom_p'] = tmp[:, 0]
                 if stat_file_path is not None:
                     if not os.path.exists(stat_file_dir):
                         os.mkdir(stat_file_dir)

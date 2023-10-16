@@ -103,5 +103,8 @@ def compute_output_stats(energy, natoms, rcond=None):
         natoms[i] = natoms[i].double().mean(dim=0, keepdim=True)
     sys_ener = torch.cat(energy).cpu()
     sys_tynatom = torch.cat(natoms)[:, 2:].cpu()
+    #logging.info(f"{sys_ener}")
+    #logging.info(f"{sys_tynatom}")
     energy_coef, _, _, _ = np.linalg.lstsq(sys_tynatom, sys_ener, rcond)
+    #logging.info(f"{energy_coef}")
     return energy_coef

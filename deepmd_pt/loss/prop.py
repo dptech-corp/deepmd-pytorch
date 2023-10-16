@@ -35,7 +35,7 @@ class PropertyLoss(TaskLoss):
         atom_norm = 1. / natoms
 
         import logging
-        #logging.info(f"loss label after:{label['property']}")
+        #logging.info(f"loss label before:{label['property']}")
         if self.prop_type == 'intensive':
             label['property'] = label['property']/natoms
         if not self.use_l1_all:
@@ -45,7 +45,7 @@ class PropertyLoss(TaskLoss):
             rmse_p = l2_prop_loss.sqrt() * atom_norm
             more_loss['rmse_p'] = rmse_p.detach()
         else: # use l1 and for all atoms
-            #logging.info(f"loss model pred:{model_pred['property']}")
+            #logging.info(f"natoms: {natoms}")
             #logging.info(f"loss label:{label['property']}")
             if self.l2_loss:
                 l2_prop_loss = torch.mean(torch.square(model_pred['property'] - label['property']))
@@ -57,8 +57,11 @@ class PropertyLoss(TaskLoss):
                 l1_prop_loss = F.l1_loss(model_pred['property'].reshape(-1), label['property'].reshape(-1), reduction="sum")
                 loss += l1_prop_loss 
             more_loss['mae_p'] = F.l1_loss(model_pred['property'].reshape(-1), label['property'].reshape(-1), reduction="mean").detach()
+            #logging.info(f"mae:{more_loss['mae_p']}\n\n\n")
             # more_loss['log_keys'].append('rmse_e')
         if mae:
+            #logging.info(f"loss model pred:{model_pred['property']}")
+            #logging.info(f"loss label:{label['property']}")
             mae_p = torch.mean(torch.abs(model_pred['property'] - label['property'])) * atom_norm
             more_loss['mae_p'] = mae_p.detach()
             mae_p_all = torch.mean(torch.abs(model_pred['property'] - label['property']))
