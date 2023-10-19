@@ -15,6 +15,8 @@ from deepmd_pt.utils.finetune import change_finetune_model_params
 from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.utils.multi_task import preprocess_shared_params
 
+from deepmd_pt import __version__
+
 
 def get_trainer(config, init_model=None, restart_model=None, finetune_model=None, model_branch='', force_load=False):
     # Initialize DDP
@@ -165,6 +167,7 @@ def main(args=None):
         level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
         format=f"%(asctime)-15s {os.environ.get('RANK') or ''} [%(filename)s:%(lineno)d] %(levelname)s %(message)s"
     )
+    logging.info('DeepMD version: %s', __version__)
     parser = argparse.ArgumentParser(description='A tool to manager deep models of potential energy surface.')
     subparsers = parser.add_subparsers(dest='command')
     train_parser = subparsers.add_parser('train', help='Train a model.')
