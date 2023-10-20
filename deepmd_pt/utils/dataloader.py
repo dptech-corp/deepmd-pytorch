@@ -2,6 +2,7 @@ import logging
 import os
 import queue
 import time
+import numpy as np
 from threading import Thread
 from typing import Callable, Dict, List, Tuple, Type, Union
 from multiprocessing.dummy import Pool
@@ -11,7 +12,7 @@ import torch
 import torch.distributed as dist
 from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 import torch.multiprocessing
@@ -75,6 +76,7 @@ class DpLoaderSet(Dataset):
 
         self.sampler_list: List[DistributedSampler] = []
         self.index = []
+        self.total_batch = 0
 
         self.dataloaders = []
         for system in self.systems:
@@ -105,9 +107,8 @@ class DpLoaderSet(Dataset):
                 shuffle=(not dist.is_initialized()) and shuffle,
             )
             self.dataloaders.append(system_dataloader)
-            for _ in range(len(system_dataloader)):
-                self.index.append(len(self.dataloaders) - 1)
-
+            self.index.append(len(system_dataloader))
+            self.total_batch += len(system_dataloader)
         # Initialize iterator instances for DataLoader
         self.iters = []
         for item in self.dataloaders:
@@ -124,11 +125,11 @@ class DpLoaderSet(Dataset):
             system.set_noise(noise_settings)
 
     def __len__(self):
-        return len(self.index)
+        return len(self.dataloaders)
 
     def __getitem__(self, idx):
-        # logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
-        return next(self.iters[self.index[idx]])
+        #logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
+        return next(self.iters[idx])
 
 
 _sentinel = object()
@@ -257,3 +258,63 @@ def collate_batch(batch):
             else:
                 result[key] = collate_tensor_fn([d[key] for d in batch])
     return result
+
+def get_weighted_sampler(training_data,prob_style,sys_prob=False):
+    if sys_prob == False:
+        if prob_style == "prob_uniform":
+            prob_v = 1.0 / float(training_data.__len__())
+            probs = [prob_v for ii in range(training_data.__len__())]
+        elif prob_style == "prob_sys_size":
+            probs = []
+            for ii in range(len(training_data.dataloaders)):
+                prob_v = float(training_data.index[ii]) / float(training_data.total_batch)
+                probs.append(prob_v)
+        else:#prob_sys_size;A:B:p1;C:D:p2
+            probs = prob_sys_size_ext(prob_style,len(training_data),training_data.index)
+    else:
+        probs = process_sys_probs(prob_style,training_data.index)
+    logging.info("Generated weighted sampler with prob array: "+str(probs))
+    #training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iteraters
+    sampler = WeightedRandomSampler(probs,training_data.total_batch, replacement = True)
+    return sampler
+
+def prob_sys_size_ext(keywords,nsystems,nbatch):
+    block_str = keywords.split(";")[1:]
+    print(block_str)
+    print(nbatch)
+    block_stt = []
+    block_end = []
+    block_weights = []
+    for ii in block_str:
+        stt = int(ii.split(":")[0])
+        end = int(ii.split(":")[1])
+        weight = float(ii.split(":")[2])
+        assert weight >= 0, "the weight of a block should be no less than 0"
+        block_stt.append(stt)
+        block_end.append(end)
+        block_weights.append(weight)
+    nblocks = len(block_str)
+    block_probs = np.array(block_weights) / np.sum(block_weights)
+    sys_probs = np.zeros([nsystems])
+    for ii in range(nblocks):
+        nbatch_block = nbatch[block_stt[ii] : block_end[ii]]
+        tmp_prob = [float(i) for i in nbatch_block] / np.sum(nbatch_block)
+        sys_probs[block_stt[ii] : block_end[ii]] = tmp_prob * block_probs[ii]
+    return sys_probs
+def process_sys_probs(sys_probs,nbatch):
+        sys_probs = np.array(sys_probs)
+        type_filter = sys_probs >= 0
+        assigned_sum_prob = np.sum(type_filter * sys_probs)
+        # 1e-8 is to handle floating point error; See #1917
+        assert (
+            assigned_sum_prob <= 1.0 + 1e-8
+        ), "the sum of assigned probability should be less than 1"
+        rest_sum_prob = 1.0 - assigned_sum_prob
+        if not np.isclose(rest_sum_prob, 0):
+            rest_nbatch = (1 - type_filter) * nbatch
+            rest_prob = rest_sum_prob * rest_nbatch / np.sum(rest_nbatch)
+            ret_prob = rest_prob + type_filter * sys_probs
+        else:
+            ret_prob = sys_probs
+        assert np.isclose(np.sum(ret_prob), 1), "sum of probs should be 1"
+        return ret_prob
