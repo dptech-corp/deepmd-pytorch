@@ -280,8 +280,6 @@ def get_weighted_sampler(training_data,prob_style,sys_prob=False):
 
 def prob_sys_size_ext(keywords,nsystems,nbatch):
     block_str = keywords.split(";")[1:]
-    print(block_str)
-    print(nbatch)
     block_stt = []
     block_end = []
     block_weights = []
