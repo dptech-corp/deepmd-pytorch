@@ -1,17 +1,12 @@
 import numpy as np
 import os
-import torch
 import unittest
 import json
 
-from deepmd.descriptor.se_a import DescrptSeA as DescrptSeA_tf
-from deepmd.fit.ener import EnerFitting
 from deepmd.utils.data_system import DeepmdDataSystem
 from deepmd.utils import random as tf_random
 from deepmd.common import expand_sys_str
 
-from deepmd_pt.utils.dataset import DeepmdDataSet
-from deepmd_pt.model.descriptor import DescrptSeA
 from deepmd_pt.utils.dataloader import DpLoaderSet, get_weighted_sampler
 from deepmd_pt.utils import env
 
