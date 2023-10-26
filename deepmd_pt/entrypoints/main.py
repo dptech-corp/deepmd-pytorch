@@ -160,9 +160,14 @@ def freeze(FLAGS):
         # TODO: _extra_files
     })
 
-
+#avoid logger conflicts of tf version
+def clean_loggers():
+    logger = logging.getLogger()
+    while logger.hasHandlers():
+        logger.removeHandler(logger.handlers[0])
 @record
 def main(args=None):
+    clean_loggers()
     logging.basicConfig(
         level=logging.WARNING if env.LOCAL_RANK else logging.INFO,
         format=f"%(asctime)-15s {os.environ.get('RANK') or ''} [%(filename)s:%(lineno)d] %(levelname)s %(message)s"
