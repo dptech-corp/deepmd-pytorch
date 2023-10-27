@@ -176,6 +176,8 @@ class DescrptSeUni(Descriptor):
     nlist_mask = (nlist != -1)
     masked_nlist_loc = nlist_loc * nlist_mask
     sw = torch.squeeze(sw, -1)
+    # beyond the cutoff sw should be 0.0
+    sw = sw.masked_fill(~nlist_mask, float(0.0))
 
     # [nframes, nloc, tebd_dim]
     if seq_input is not None:
