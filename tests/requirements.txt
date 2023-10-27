@@ -1,4 +1,4 @@
-tensorflow==2.10.0
+tensorflow>=2.14.0
 deepmd-kit>=2.2.7.dev15 --extra-index-url https://deepmodeling.github.io/deepmd-kit/simple
 coverage
 pytest
