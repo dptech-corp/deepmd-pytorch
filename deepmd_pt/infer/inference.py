@@ -82,7 +82,8 @@ class Tester(object):
         batch_data = next(iter(data))
         for key in batch_data.keys():
             if not isinstance(batch_data[key], list):
-                batch_data[key] = batch_data[key].to(DEVICE)
+                if batch_data[key] is not None:
+                    batch_data[key] = batch_data[key].to(DEVICE)
             else:
                 batch_data[key] = [item.to(DEVICE) for item in batch_data[key]]
         input_dict = {}

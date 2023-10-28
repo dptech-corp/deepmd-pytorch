@@ -143,7 +143,7 @@ class Fitting(TaskBaseMethod):
             if bias_shift == "delta":
                 coord = test_data["coord"].to(DEVICE)
                 atype = test_data['atype'].to(DEVICE)
-                box = test_data['box'].to(DEVICE)
+                box = test_data['box'].to(DEVICE) if test_data['box'] is not None else None
                 ret = model(coord, atype, box)
                 energy_predict.append(ret['energy'].reshape([nframes, 1]).detach().cpu().numpy())
         type_numbs = np.concatenate(type_numbs)
