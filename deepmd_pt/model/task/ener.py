@@ -36,7 +36,7 @@ class EnergyFittingNet(Fitting):
 
         filter_layers = []
         for type_i in range(self.ntypes):
-            bias_type = 0.0 if self.use_tebd else bias_atom_e[type_i]
+            bias_type = 0.0
             one = ResidualDeep(type_i, embedding_width, neuron, bias_type, resnet_dt=resnet_dt)
             filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
@@ -69,8 +69,7 @@ class EnergyFittingNet(Fitting):
             for type_i, filter_layer in enumerate(self.filter_layers):
                 mask = atype == type_i
                 atom_energy = filter_layer(inputs)
-                if not env.ENERGY_BIAS_TRAINABLE:
-                    atom_energy = atom_energy + self.bias_atom_e[type_i]
+                atom_energy = atom_energy + self.bias_atom_e[type_i]
                 atom_energy = atom_energy * mask.unsqueeze(-1)
                 outs = outs + atom_energy # Shape is [nframes, natoms[0], 1]
         return outs.to(env.GLOBAL_PT_FLOAT_PRECISION), None

@@ -31,12 +31,13 @@ def gen_key(type_id, layer_id, w_or_b):
     return (type_id, layer_id, w_or_b)
 
 
-def base_fitting_net(dp_fn, embedding, natoms):
+def base_fitting_net(dp_fn, embedding, natoms, atype):
     g = tf.Graph()
     with g.as_default():
         t_embedding = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None])
         t_natoms = tf.placeholder(tf.int32, [None])
-        t_energy = dp_fn.build(t_embedding, t_natoms, {})
+        t_atype = tf.placeholder(tf.int32, [None, None])
+        t_energy = dp_fn.build(t_embedding, t_natoms, {'atype': t_atype})
         init_op = tf.global_variables_initializer()
         t_vars = {}
         for var in tf.global_variables():
@@ -55,7 +56,8 @@ def base_fitting_net(dp_fn, embedding, natoms):
         sess.run(init_op)
         energy, values = sess.run([t_energy, t_vars], feed_dict={
             t_embedding: embedding,
-            t_natoms: natoms
+            t_natoms: natoms,
+            t_atype: atype,
         })
         return energy, values
 
@@ -69,14 +71,18 @@ class TestFittingNet(unittest.TestCase):
         self.embedding = np.random.uniform(size=[4, nloc * self.embedding_width])
         self.ntypes = self.natoms.size - 2
         self.n_neuron = [32, 32, 32]
+        self.atype = np.zeros([4, nloc], dtype=np.int32)
+        cnt = 0
+        for i in range(self.ntypes):
+            self.atype[:, cnt:cnt + self.natoms[i + 2]] = i
+            cnt += self.natoms[i + 2]
 
         fake_d = FakeDescriptor(2, 30)
         self.dp_fn = EnerFitting(fake_d, self.n_neuron)
         self.dp_fn.bias_atom_e = np.random.uniform(size=[self.ntypes])
-        self.dp_fn.bias_atom_e = [1e8, 0]
 
     def test_consistency(self):
-        dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms)
+        dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms, self.atype)
         my_fn = EnergyFittingNet(self.ntypes, self.embedding_width, self.n_neuron, self.dp_fn.bias_atom_e, use_tebd=False)
         for name, param in my_fn.named_parameters():
             matched = re.match('filter_layers\.(\d).deep_layers\.(\d)\.([a-z]+)', name)
@@ -94,12 +100,7 @@ class TestFittingNet(unittest.TestCase):
                 param.data.copy_(torch.from_numpy(var))
         embedding = torch.from_numpy(self.embedding)
         embedding = embedding.view(4, -1, self.embedding_width)
-        natoms = torch.from_numpy(self.natoms)
-        atype = torch.zeros(1, natoms[0], dtype=torch.long)
-        cnt = 0
-        for i in range(natoms.shape[0] - 2):
-            atype[:, cnt:cnt + natoms[i + 2]] = i
-            cnt += natoms[i + 2]
+        atype = torch.from_numpy(self.atype)
         my_energy, _ = my_fn(embedding, atype)
         my_energy = my_energy.detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
