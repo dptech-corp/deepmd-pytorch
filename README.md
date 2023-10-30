@@ -8,15 +8,14 @@ It is supposed to offer comparable accuracy and performance to the TF implementa
 This package requires PyTorch 2.
 ```bash
 # PyTorch 2 recommends Python >= 3.8 .
-conda create -n deepmd-pt python=3.10
-conda activate deepmd-pt
-# Following instructions on pytorch.org
-conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
-git clone https://github.com/dptech-corp/deepmd-pytorch.git
-pip install deepmd-pytorch
 
-# ... or
-pip install git+https://github.com/dptech-corp/deepmd-pytorch.git
+conda create -n deepmd-pt pytorch=2 torchvision torchaudio pytorch-cuda -c pytorch -c nvidia
+conda activate deepmd-pt
+pip install git+https://github.com/dptech-corp/deepmd-pytorch.git@devel
+
+# OR
+git clone https://github.com/dptech-corp/deepmd-pytorch.git -b devel
+pip install deepmd-pytorch
 ```
 
 ## Run
@@ -78,6 +77,44 @@ export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/sha
 cmake -B build
 cd build
 cmake --build .
+```
+
+# Running MD
+```bash
+conda activate deepmd-pt
+
+# Build deepmd c API
+conda install lammps eigen pytorch=2.1 -c pytorch -c nvidia
+git clone https://github.com/dptech-corp/deepmd-pytorch.git -b devel
+export CMAKE_PREFIX_PATH=`python -c "import torch;print(torch.__path__[0])"`/share/cmake:$CONDA_PREFIX/share/eigen3/cmake:$CMAKE_PREFIX_PATH
+export PATH=/usr/local/cuda/bin:$PATH
+cd deepmd-pytorch/source/api_cc
+cmake -B build
+cmake --build build -j
+
+# Plugin mode: NOT implemented yet
+# export LAMMPS_PLUGIN_PATH=$HOME/deepmd-pytorch/source/api_cc/build # https://docs.lammps.org/plugin.html#description
+
+# Build lammps supporting deepmd pair style
+cd -
+git clone https://github.com/CaRoLZhangxy/lammps
+# See modifications: https://github.com/CaRoLZhangxy/lammps/commit/27347ce4a17d13eeb634ee1c4e5fd0cc687c423f
+# OR: clone lammps/lammps, move cmake/CMakeLists.txt from CaRoLZhangxy/lammps and deepmd-pytorch/source/lmp from deepmd-pytorch
+
+# https://docs.lammps.org/Build_cmake.html#getting-started
+cd lammps
+mkdir build; cd build
+cmake ../cmake/ -DPKG_DEEPMD=ON -DPKG_MOLECULE=ON \
+    -DDEEPMD_INCLUDE_PATH=../../deepmd-pytorch/source/api_cc/include \
+    -DDEEPMD_LIB_PATH=../../deepmd-pytorch/source/api_cc/build
+cmake --build . -j`nproc`
+make install # install to ~/.local/bin/lmp by default; shadows lmp_mpi from conda
+
+# Run MD
+export PATH=$HOME/.local/bin:$PATH
+export LD_LIBRARY_PATH=`python -c "import torch;print(torch.__path__[0])"`/lib:`realpath ../../deepmd-pytorch/source/api_cc/build`:$LD_LIBRARY_PATH
+cd test_example/water_768/
+lmp -in sea_in.lammps
 ```
 
 # Test
