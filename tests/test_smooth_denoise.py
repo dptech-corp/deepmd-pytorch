@@ -4,88 +4,17 @@ from deepmd_pt.utils import env
 from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
-from .test_permutation import (
+from .test_permutation_denoise import (
   make_sample,
-  model_se_e2_a,
-  model_dpa1,
-  model_dpa2,
-  model_dpau,
-  model_hybrid,
+  model_dpa1_denoise,
+  model_dpau_denoise,
+  model_hybrid_denoise,
 )
 from deepmd_pt.infer.deep_eval import eval_model
 
 dtype = torch.float64
 
-model_hybrid_denoise = {
-  "type_map": [
-    "O",
-    "H",
-    "B",
-    "MASKED_TOKEN"
-  ],
-  "descriptor": {
-    "type": "hybrid",
-    "hybrid_mode": "sequential",
-    "list": [
-      {
-        "type": "se_atten",
-        "sel": 120,
-        "rcut_smth": 0.5,
-        "rcut": 6.0,
-        "neuron": [
-          25,
-          50,
-          100
-        ],
-        "resnet_dt": False,
-        "axis_neuron": 16,
-        "seed": 1,
-        "attn": 128,
-        "attn_layer": 0,
-        "attn_dotr": True,
-        "attn_mask": False,
-        "post_ln": True,
-        "ffn": False,
-        "ffn_embed_dim": 1024,
-        "activation": "tanh",
-        "scaling_factor": 1.0,
-        "head_num": 1,
-        "normalize": True,
-        "temperature": 1.0,
-        "_comment": " that's all"
-      },
-      {
-        "type": "se_uni",
-        "sel": 40,
-        "rcut_smth": 0.5,
-        "rcut": 4.0,
-        "nlayers": 2,
-        "g1_dim": 10,
-        "g2_dim": 5,
-        "attn2_hidden": 10,
-        "attn2_nhead": 2,
-        "attn1_hidden": 10,
-        "attn1_nhead": 2,
-        "axis_dim": 4,
-        "update_h2": False,
-        "update_g1_has_conv": True,
-        "update_g1_has_drrd": True,
-        "update_g1_has_grrg": True,
-        "update_g1_has_attn": True,
-        "update_g2_has_g1g1": True,
-        "update_g2_has_attn": True,
-        "attn2_has_gate": True,
-        "add_type_ebd_to_seq": True,
-        "smooth": True,
-        "do_bn_mode": "uniform",
-        "_comment": " that's all"
-      },
-    ]
-  },
-  "_comment": " that's all"
-}
-
-class TestSmooth:
+class TestSmoothDenoise:
   def test(
       self,
   ):
@@ -136,10 +65,64 @@ class TestSmooth:
     compare(ret0, ret3)
 
 @unittest.skip("not smooth at the moment")
-class TestDenoiseModelHybrid(unittest.TestCase, TestSmooth):
+class TestDenoiseModelDPA1(unittest.TestCase, TestSmoothDenoise):
+  def setUp(self):
+    model_params = copy.deepcopy(model_dpa1_denoise)
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    # less degree of smoothness,
+    # error can be systematically removed by reducing epsilon
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
+
+@unittest.skip("not smooth at the moment")
+class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
+  def setUp(self):
+    model_params = copy.deepcopy(model_dpau_denoise)
+    model_params["descriptor"]["sel"] = 8
+    model_params["descriptor"]["rcut_smth"] = 3.5
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
+
+@unittest.skip("not smooth at the moment")
+class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
+  def setUp(self):
+    model_params = copy.deepcopy(model_dpau_denoise)
+    model_params["descriptor"]["combine_grrg"] = True
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
+
+@unittest.skip("not smooth at the moment")
+class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
+  def setUp(self):
+    model_params = copy.deepcopy(model_dpau_denoise)
+    model_params["descriptor"]["gather_g1"] = True
+    sampled = make_sample(model_params)
+    self.type_split = True
+    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    self.epsilon, self.aprec = None, None
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
+
+@unittest.skip("not smooth at the moment")
+class TestDenoiseModelHybrid(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = None, None
+    self.epsilon = 1e-7
+    self.aprec = 1e-5
+  
+if __name__ == '__main__':
+  unittest.main()
