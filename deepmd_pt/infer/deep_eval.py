@@ -66,6 +66,7 @@ def eval_model(
     atom_types: Union[np.ndarray, torch.Tensor, List[int]],
     atomic: bool = False,
     infer_batch_size: int = 2,
+    denoise: bool = False,
 ):
     model = model.to(DEVICE)
     energy_out = []
@@ -73,6 +74,8 @@ def eval_model(
     force_out = []
     virial_out = []
     atomic_virial_out = []
+    updated_coord_out = []
+    logits_out = []
     err_msg = f"All inputs should be the same format, " \
               f"but found {type(coords)}, {type(cells)}, {type(atom_types)} instead! "
     return_tensor = True
@@ -128,6 +131,10 @@ def eval_model(
                 virial_out.append(batch_output['virial'].detach().cpu().numpy())
             if 'atomic_virial' in batch_output:
                 atomic_virial_out.append(batch_output['atomic_virial'].detach().cpu().numpy())
+            if 'updated_coord' in batch_output:
+                updated_coord_out.append(batch_output['updated_coord'].detach().cpu().numpy())
+            if 'logits' in batch_output:
+                logits_out.append(batch_output['logits'].detach().cpu().numpy())
         else:
             if 'energy' in batch_output:
                 energy_out.append(batch_output['energy'])
@@ -139,19 +146,30 @@ def eval_model(
                 virial_out.append(batch_output['virial'])
             if 'atomic_virial' in batch_output:
                 atomic_virial_out.append(batch_output['atomic_virial'])
+            if 'updated_coord' in batch_output:
+                updated_coord_out.append(batch_output['updated_coord'])
+            if 'logits' in batch_output:
+                logits_out.append(batch_output['logits'])
     if not return_tensor:
         energy_out = np.concatenate(energy_out) if energy_out else np.zeros([nframes, 1])
         atomic_energy_out = np.concatenate(atomic_energy_out) if atomic_energy_out else np.zeros([nframes, natoms, 1])
         force_out = np.concatenate(force_out) if force_out else np.zeros([nframes, natoms, 3])
         virial_out = np.concatenate(virial_out) if virial_out else np.zeros([nframes, 3, 3])
         atomic_virial_out = np.concatenate(atomic_virial_out) if atomic_virial_out else np.zeros([nframes, natoms, 3, 3])
+        updated_coord_out = np.concatenate(updated_coord_out) if updated_coord_out else np.zeros([nframes, natoms, 3])
+        logits_out = np.concatenate(logits_out) if logits_out else np.zeros([nframes, natoms, len(model.type_map)-1])
     else:
         energy_out = torch.cat(energy_out) if energy_out else torch.zeros([nframes, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_energy_out = torch.cat(atomic_energy_out) if atomic_energy_out else torch.zeros([nframes, natoms, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         force_out = torch.cat(force_out) if force_out else torch.zeros([nframes, natoms, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         virial_out = torch.cat(virial_out) if virial_out else torch.zeros([nframes, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_virial_out = torch.cat(atomic_virial_out) if atomic_virial_out else torch.zeros([nframes, natoms, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-    if not atomic:
-        return energy_out, force_out, virial_out
-    else:
-        return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
+        updated_coord_out = torch.cat(updated_coord_out) if updated_coord_out else torch.zeros([nframes, natoms, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        logits_out = torch.cat(logits_out) if logits_out else torch.zeros([nframes, natoms, len(model.type_map)-1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+    if denoise:
+        return updated_coord_out, logits_out
+    else:    
+        if not atomic:
+            return energy_out, force_out, virial_out
+        else:
+            return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
