@@ -18,7 +18,16 @@ class LearningRateExp(object):
         if self.decay_steps >= stop_steps:
             self.decay_steps = default_ds
         self.decay_rate = np.exp(np.log(stop_lr / self.start_lr) / (stop_steps / self.decay_steps))
+        if 'decay_rate' in kwargs:
+            self.decay_rate = kwargs['decay_rate']
+        if 'min_lr' in kwargs:
+            self.min_lr = kwargs['min_lr']
+        else:
+            self.min_lr = 3e-10
 
     def value(self, step):
         """Get the learning rate at the given step."""
-        return self.start_lr * np.power(self.decay_rate, step // self.decay_steps)
+        step_lr = self.start_lr * np.power(self.decay_rate, step // self.decay_steps)
+        if step_lr < self.min_lr:
+            step_lr = self.min_lr
+        return step_lr
