@@ -2,6 +2,7 @@ import logging
 import os
 import queue
 import time
+import numpy as np
 from threading import Thread
 from typing import Callable, Dict, List, Tuple, Type, Union
 from multiprocessing.dummy import Pool
@@ -11,11 +12,15 @@ import torch
 import torch.distributed as dist
 from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 import torch.multiprocessing
 
+from deepmd.utils.data_system import (
+    prob_sys_size_ext,
+    process_sys_probs
+)
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
@@ -75,6 +80,7 @@ class DpLoaderSet(Dataset):
 
         self.sampler_list: List[DistributedSampler] = []
         self.index = []
+        self.total_batch = 0
 
         self.dataloaders = []
         for system in self.systems:
@@ -105,9 +111,8 @@ class DpLoaderSet(Dataset):
                 shuffle=(not dist.is_initialized()) and shuffle,
             )
             self.dataloaders.append(system_dataloader)
-            for _ in range(len(system_dataloader)):
-                self.index.append(len(self.dataloaders) - 1)
-
+            self.index.append(len(system_dataloader))
+            self.total_batch += len(system_dataloader)
         # Initialize iterator instances for DataLoader
         self.iters = []
         for item in self.dataloaders:
@@ -124,11 +129,11 @@ class DpLoaderSet(Dataset):
             system.set_noise(noise_settings)
 
     def __len__(self):
-        return len(self.index)
+        return len(self.dataloaders)
 
     def __getitem__(self, idx):
-        # logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
-        return next(self.iters[self.index[idx]])
+        #logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
+        return next(self.iters[idx])
 
 
 _sentinel = object()
@@ -257,3 +262,21 @@ def collate_batch(batch):
             else:
                 result[key] = collate_tensor_fn([d[key] for d in batch])
     return result
+
+def get_weighted_sampler(training_data,prob_style,sys_prob=False):
+    if sys_prob == False:
+        if prob_style == "prob_uniform":
+            prob_v = 1.0 / float(training_data.__len__())
+            probs = [prob_v for ii in range(training_data.__len__())]
+        else:#prob_sys_size;A:B:p1;C:D:p2 or prob_sys_size = prob_sys_size;0:nsys:1.0
+            if prob_style == "prob_sys_size":
+                style = "prob_sys_size;0:{}:1.0".format(len(training_data))
+            else:
+                style = prob_style
+            probs = prob_sys_size_ext(style,len(training_data),training_data.index)
+    else:
+        probs = process_sys_probs(prob_style,training_data.index)
+    logging.info("Generated weighted sampler with prob array: "+str(probs))
+    #training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iteraters
+    sampler = WeightedRandomSampler(probs,training_data.total_batch, replacement = True)
+    return sampler

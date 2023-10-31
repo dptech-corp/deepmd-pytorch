@@ -14,7 +14,7 @@ from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
-from deepmd_pt.utils.dataloader import BufferedIterator
+from deepmd_pt.utils.dataloader import BufferedIterator, get_weighted_sampler
 from pathlib import Path
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -99,9 +99,23 @@ class Trainer(object):
             return opt_type, opt_param
 
         def get_data_loader(_training_data, _validation_data, _training_params):
+            if 'auto_prob' in  _training_params['training_data']:
+                train_sampler = get_weighted_sampler(_training_data, _training_params['training_data']['auto_prob'])
+            elif 'sys_probs' in _training_params['training_data']:
+                train_sampler = get_weighted_sampler(_training_data, _training_params['training_data']['sys_probs'],sys_prob=True)
+            else:
+                train_sampler = get_weighted_sampler(_training_data, 'prob_sys_size')
+
+
+            if 'auto_prob' in  _training_params['validation_data']:
+                valid_sampler = get_weighted_sampler(_validation_data, _training_params['validation_data']['auto_prob'])
+            elif 'sys_probs' in _training_params['validation_data']:
+                valid_sampler = get_weighted_sampler(_validation_data, _training_params['validation_data']['sys_probs'],sys_prob=True)
+            else:
+                valid_sampler = get_weighted_sampler(_validation_data, 'prob_sys_size')
             training_dataloader = DataLoader(
                 _training_data,
-                sampler=torch.utils.data.RandomSampler(_training_data),
+                sampler=train_sampler,
                 batch_size=None,
                 num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
@@ -110,7 +124,7 @@ class Trainer(object):
             training_data_buffered = BufferedIterator(iter(training_dataloader))
             validation_dataloader = DataLoader(
                 _validation_data,
-                sampler=torch.utils.data.RandomSampler(_validation_data),
+                sampler=valid_sampler,
                 batch_size=None,
                 num_workers=1,
                 drop_last=False,
