@@ -41,7 +41,6 @@ class TestRotDenoise():
     torch.testing.assert_close(torch.matmul(ret0['updated_coord'], rmat), ret1['updated_coord'], rtol=prec, atol=prec)
     torch.testing.assert_close(ret0['logits'], ret1['logits'], rtol=prec, atol=prec)
     
-    '''
     # rotate coord and cell
     torch.manual_seed(0)
     cell = torch.rand([3, 3], dtype=dtype).to(env.DEVICE)
@@ -51,17 +50,12 @@ class TestRotDenoise():
     atype = torch.IntTensor([0, 0, 0, 1, 1]).to(env.DEVICE)
     coord_rot = torch.matmul(coord, rmat)
     cell_rot = torch.matmul(cell, rmat)
-    e0, f0, v0 = eval_model(self.model, coord.unsqueeze(0), cell.unsqueeze(0), atype)
-    ret0 = {'energy': e0.squeeze(0), 'force': f0.squeeze(0), 'virial': v0.squeeze(0)}
-    e1, f1, v1 = eval_model(self.model, coord_rot.unsqueeze(0), cell_rot.unsqueeze(0), atype)
-    ret1 = {'energy': e1.squeeze(0), 'force': f1.squeeze(0), 'virial': v1.squeeze(0)}
-    torch.testing.assert_close(ret0['energy'], ret1['energy'], rtol=prec, atol=prec)
-    torch.testing.assert_close(torch.matmul(ret0['force'], rmat), ret1['force'], rtol=prec, atol=prec)
-    if not hasattr(self, "test_virial") or self.test_virial:
-      torch.testing.assert_close(
-        torch.matmul(rmat.T, torch.matmul(ret0['virial'], rmat)), 
-        ret1['virial'], rtol=prec, atol=prec)  
-    ''' 
+    update_c0, logits0 = eval_model(self.model, coord.unsqueeze(0), cell.unsqueeze(0), atype, denoise=True)
+    ret0 = {'updated_coord': update_c0.squeeze(0), 'logits': logits0.squeeze(0)}
+    update_c1, logits1 = eval_model(self.model, coord_rot.unsqueeze(0), cell_rot.unsqueeze(0), atype, denoise=True)
+    ret1 = {'updated_coord': update_c1.squeeze(0), 'logits': logits1.squeeze(0)}
+    torch.testing.assert_close(ret0['logits'], ret1['logits'], rtol=prec, atol=prec)
+    torch.testing.assert_close(torch.matmul(ret0['updated_coord'], rmat), ret1['updated_coord'], rtol=prec, atol=prec)
 
 class TestDenoiseModelDPA1(unittest.TestCase, TestRotDenoise):
   def setUp(self):
