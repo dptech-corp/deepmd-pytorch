@@ -268,13 +268,12 @@ def get_weighted_sampler(training_data,prob_style,sys_prob=False):
         if prob_style == "prob_uniform":
             prob_v = 1.0 / float(training_data.__len__())
             probs = [prob_v for ii in range(training_data.__len__())]
-        elif prob_style == "prob_sys_size":
-            probs = []
-            for ii in range(len(training_data.dataloaders)):
-                prob_v = float(training_data.index[ii]) / float(training_data.total_batch)
-                probs.append(prob_v)
-        else:#prob_sys_size;A:B:p1;C:D:p2
-            probs = prob_sys_size_ext(prob_style,len(training_data),training_data.index)
+        else:#prob_sys_size;A:B:p1;C:D:p2 or prob_sys_size = prob_sys_size;0:nsys:1.0
+            if prob_style == "prob_sys_size":
+                style = "prob_sys_size;0:{}:1.0".format(len(training_data))
+            else:
+                style = prob_style
+            probs = prob_sys_size_ext(style,len(training_data),training_data.index)
     else:
         probs = process_sys_probs(prob_style,training_data.index)
     logging.info("Generated weighted sampler with prob array: "+str(probs))
