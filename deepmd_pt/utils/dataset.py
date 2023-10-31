@@ -355,7 +355,6 @@ class DeepmdDataSystem(object):
                     ),
                     axis=-1,
                 )
-
             return data
         else:
             data = {}
@@ -575,8 +574,12 @@ class DeepmdDataSystem(object):
                 mask_num = 0
                 if self.noise_mode == "fix_num":
                     mask_num = self.mask_num
+                    if(len(batch["clean_type"])<mask_num):
+                        mask_num = len(batch["clean_type"])
                 elif self.noise_mode == "prob":
                     mask_num = int(self.mask_prob * nloc)
+                    if mask_num == 0:
+                        mask_num = 1
                 else:
                     NotImplementedError(f"Unknown noise mode {self.noise_mode}!")
                 coord_mask_res = np.random.choice(range(nloc), mask_num, replace=False).tolist()

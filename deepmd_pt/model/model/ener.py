@@ -270,6 +270,8 @@ class EnergyModel(BaseModel):
                     property = atom_property.sum(dim=1)
                 elif self.prop_type == 'intensive':
                     property = atom_property.mean(dim=1)
+                    if (self.fitting_net.mean is not None) and (self.fitting_net.std is not None):
+                        property = (property * self.fitting_net.std) + self.fitting_net.mean
                     #logging.info(f"pred_property:{property}")
                     #logging.info(f"atom_pred_property:{atom_property}")
                 else:

@@ -130,9 +130,12 @@ class Tester(object):
             sum_natoms = 0
             sum_frames = 0
             sys_natoms = None
-            for _ in range(self.numb_test):
+            num = 0
+            #for _ in range(self.numb_test):
+            while(1):
                 try:
                     input_dict, label_dict = self.get_data(data)
+                    num += 1
                 except StopIteration:
                     break
                 model_pred, _, _ = self.wrapper(**input_dict)
@@ -155,6 +158,7 @@ class Tester(object):
                             single_results[k] = single_results.get(k, 0.0) + v * natoms
                     else:
                         single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
+            logging.info(f"{num}")
             if self.detail_file is not None:
                 save_detail_file(Path(self.detail_file), system_pred, system_label, sys_natoms, system_name=system, append=(cc != 0))
             if self.loss_type == 'prop':

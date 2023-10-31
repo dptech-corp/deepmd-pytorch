@@ -63,13 +63,16 @@ class PropertyFittingNet(Fitting):
         if self.use_tebd:
             if atype_tebd is not None:
                 inputs = torch.concat([inputs, atype_tebd], dim=-1)
+            '''
             if (self.mean is not None) and (self.std is not None):
                 atom_prop = (self.filter_layers[0](inputs) * self.std) + self.mean
                 #logging.info(f"{self.filter_layers[0](inputs)}")
                 #logging.info(f"{self.filter_layers[0](inputs) * self.std}")
                 #logging.info(f"{atom_prop}")
             else:
-                atom_prop = self.filter_layers[0](inputs) + self.bias_atom_p[atype].unsqueeze(-1)           
+                atom_prop = self.filter_layers[0](inputs) + self.bias_atom_p[atype].unsqueeze(-1)
+            '''
+            atom_prop = self.filter_layers[0](inputs) + self.bias_atom_p[atype].unsqueeze(-1)
             #logging.info(f"{atom_prop[0][0]}")
             #logging.info(f"atype:{atype}")
             #logging.info(f"self.filter:{self.filter_layers[0](inputs)}")

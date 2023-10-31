@@ -223,7 +223,7 @@ def main(args=None):
     freeze_parser.add_argument("-o", "--output", type=str, default='frozen_model.pth',
                                help="The frozen model path")
     freeze_parser.add_argument("-i", "--input-script", type=str, default=None, help="Assign the input script to freeze.")
-
+    logging.info(f"The version is deepmd-pytorch-property!")
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
         train(FLAGS)
