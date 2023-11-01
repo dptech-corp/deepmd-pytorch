@@ -114,6 +114,8 @@ class Tester(object):
             dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params,
                                   type_split=self.type_split, noise_settings=self.noise_settings, shuffle=self.shuffle_test)
             sampler = RandomSampler(dataset,replacement=True,num_samples=dataset.total_batch)
+            if sampler == None:
+                logging.warning("Sampler not specified!")
             dataloader = DataLoader(
                 dataset,
                 sampler=sampler,

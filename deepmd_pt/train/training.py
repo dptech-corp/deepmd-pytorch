@@ -113,6 +113,9 @@ class Trainer(object):
                 valid_sampler = get_weighted_sampler(_validation_data, _training_params['validation_data']['sys_probs'],sys_prob=True)
             else:
                 valid_sampler = get_weighted_sampler(_validation_data, 'prob_sys_size')
+
+            if train_sampler == None or valid_sampler == None:
+                logging.warning("Sampler not specified!")
             training_dataloader = DataLoader(
                 _training_data,
                 sampler=train_sampler,
