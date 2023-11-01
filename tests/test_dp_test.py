@@ -26,7 +26,11 @@ class TestDPTest(unittest.TestCase):
         _, _, more_loss = trainer.wrapper(**input_dict, label=label_dict, cur_lr=1.0)
 
         tester = inference.Tester(deepcopy(self.config), "model.pt")
-        res = tester.run()
+        try:
+            res = tester.run()
+        except StopIteration:
+            print("Unexpected stop iteration.(test step < total batch)")
+            raise StopIteration
         for k, v in res.items():
             if k == "rmse" or "mae" in k:
                 continue

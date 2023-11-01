@@ -13,7 +13,7 @@ from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
 from deepmd_pt.utils.env import DEVICE, JIT
 from deepmd_pt.utils.stat import make_stat_input
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 
 if torch.__version__.startswith("2"):
     import torch._dynamo
@@ -113,9 +113,10 @@ class Tester(object):
             system_label = []
             dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params,
                                   type_split=self.type_split, noise_settings=self.noise_settings, shuffle=self.shuffle_test)
+            sampler = RandomSampler(dataset,replacement=True,num_samples=dataset.total_batch)
             dataloader = DataLoader(
                 dataset,
-                sampler=None,
+                sampler=sampler,
                 batch_size=None,
                 num_workers=1,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
@@ -125,11 +126,14 @@ class Tester(object):
             single_results = {}
             sum_natoms = 0
             sys_natoms = None
-            for _ in range(self.numb_test):
+            for ii in range(self.numb_test):
                 try:
                     input_dict, label_dict = self.get_data(data)
                 except StopIteration:
-                    break
+                    if ii < dataset.total_batch:#Unexpected stop iteration.(test step < total batch)
+                        raise StopIteration
+                    else:
+                        break
                 model_pred, _, _ = self.wrapper(**input_dict)
                 system_pred.append({item: model_pred[item].detach().cpu().numpy() for item in model_pred})
                 system_label.append({item: label_dict[item].detach().cpu().numpy() for item in label_dict})
