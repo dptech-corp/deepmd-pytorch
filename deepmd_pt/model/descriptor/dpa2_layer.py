@@ -251,7 +251,7 @@ class LocalAtten(torch.nn.Module):
         attnw_mask = ~nlist_mask.unsqueeze(-2)
         # nb x nloc x nh x nnei
         if self.smooth:
-            attnw = (attnw - self.attnw_shift) * sw.unsqueeze(-2) + self.attnw_shift
+            attnw = (attnw + self.attnw_shift) * sw.unsqueeze(-2) - self.attnw_shift
         else:
             attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
         attnw = torch.softmax(attnw, dim=-1)
