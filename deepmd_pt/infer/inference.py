@@ -115,7 +115,7 @@ class Tester(object):
                                   type_split=self.type_split, noise_settings=self.noise_settings, shuffle=self.shuffle_test)
             sampler = RandomSampler(dataset,replacement=True,num_samples=dataset.total_batch)
             if sampler == None:
-                logging.warning("Sampler not specified!")
+                logging.warning("Sampler not specified!")#None sampler will lead to a premature stop iteration. Replacement should be True in attribute of the sampler to produce expected number of items in one iteration.  
             dataloader = DataLoader(
                 dataset,
                 sampler=sampler,
