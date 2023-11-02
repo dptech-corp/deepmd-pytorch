@@ -115,7 +115,7 @@ class Trainer(object):
                 valid_sampler = get_weighted_sampler(_validation_data, 'prob_sys_size')
 
             if train_sampler == None or valid_sampler == None:
-                logging.warning("Sampler not specified!")
+                logging.warning("Sampler not specified!")#None sampler will lead to a premature stop iteration. Replacement should be True in attribute of the sampler to produce expected number of items in one iteration.  
             training_dataloader = DataLoader(
                 _training_data,
                 sampler=train_sampler,
