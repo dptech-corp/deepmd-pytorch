@@ -263,8 +263,10 @@ class EnergyModel(BaseModel):
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }
+
         if inference_descriptor:
             model_predict["descriptor"] = descriptor
+
         return model_predict
 
 
