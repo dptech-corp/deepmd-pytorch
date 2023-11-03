@@ -67,6 +67,7 @@ def eval_model(
     atomic: bool = False,
     infer_batch_size: int = 2,
     denoise: bool = False,
+    inference_descriptor: bool = False,
 ):
     model = model.to(DEVICE)
     energy_out = []
@@ -76,6 +77,7 @@ def eval_model(
     atomic_virial_out = []
     updated_coord_out = []
     logits_out = []
+    descriptor_out = []
     err_msg = f"All inputs should be the same format, " \
               f"but found {type(coords)}, {type(cells)}, {type(atom_types)} instead! "
     return_tensor = True
@@ -117,7 +119,7 @@ def eval_model(
         batch_box = None
         if pbc:
             batch_box = box_input[ii * infer_batch_size:(ii + 1) * infer_batch_size]
-        batch_output = model(batch_coord, batch_atype, box=batch_box)
+        batch_output = model(batch_coord, batch_atype, box=batch_box, inference_descriptor=inference_descriptor)
         if isinstance(batch_output, tuple):
             batch_output = batch_output[0]
         if not return_tensor:
@@ -135,6 +137,8 @@ def eval_model(
                 updated_coord_out.append(batch_output['updated_coord'].detach().cpu().numpy())
             if 'logits' in batch_output:
                 logits_out.append(batch_output['logits'].detach().cpu().numpy())
+            if 'descriptor' in batch_output:
+                descriptor_out.append(batch_output['descriptor'].detach().cpu().numpy())
         else:
             if 'energy' in batch_output:
                 energy_out.append(batch_output['energy'])
@@ -150,6 +154,12 @@ def eval_model(
                 updated_coord_out.append(batch_output['updated_coord'])
             if 'logits' in batch_output:
                 logits_out.append(batch_output['logits'])
+            if 'descriptor' in batch_output:
+                descriptor_out.append(batch_output['descriptor'])
+    try:
+        type_map = model.type_map #model is EnergyModel
+    except:
+        type_map = model.model[list(model.model.keys())[0]].type_map #model is Wrapper
     if not return_tensor:
         energy_out = np.concatenate(energy_out) if energy_out else np.zeros([nframes, 1])
         atomic_energy_out = np.concatenate(atomic_energy_out) if atomic_energy_out else np.zeros([nframes, natoms, 1])
@@ -157,7 +167,8 @@ def eval_model(
         virial_out = np.concatenate(virial_out) if virial_out else np.zeros([nframes, 3, 3])
         atomic_virial_out = np.concatenate(atomic_virial_out) if atomic_virial_out else np.zeros([nframes, natoms, 3, 3])
         updated_coord_out = np.concatenate(updated_coord_out) if updated_coord_out else np.zeros([nframes, natoms, 3])
-        logits_out = np.concatenate(logits_out) if logits_out else np.zeros([nframes, natoms, len(model.type_map)-1])
+        logits_out = np.concatenate(logits_out) if logits_out else np.zeros([nframes, natoms, len(type_map)-1])
+        descriptor_out = np.concatenate(descriptor_out) if descriptor_out else np.zeros([nframes, natoms, 3])
     else:
         energy_out = torch.cat(energy_out) if energy_out else torch.zeros([nframes, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_energy_out = torch.cat(atomic_energy_out) if atomic_energy_out else torch.zeros([nframes, natoms, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
@@ -165,7 +176,10 @@ def eval_model(
         virial_out = torch.cat(virial_out) if virial_out else torch.zeros([nframes, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_virial_out = torch.cat(atomic_virial_out) if atomic_virial_out else torch.zeros([nframes, natoms, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         updated_coord_out = torch.cat(updated_coord_out) if updated_coord_out else torch.zeros([nframes, natoms, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-        logits_out = torch.cat(logits_out) if logits_out else torch.zeros([nframes, natoms, len(model.type_map)-1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        logits_out = torch.cat(logits_out) if logits_out else torch.zeros([nframes, natoms, len(type_map)-1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        descriptor_out = torch.cat(descriptor_out) if descriptor_out else torch.zeros([nframes, natoms, 3], dtype = GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+    if inference_descriptor:
+        return descriptor_out
     if denoise:
         return updated_coord_out, logits_out
     else:    

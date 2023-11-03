@@ -129,6 +129,7 @@ class EnergyModel(BaseModel):
         atype,
         box: Optional[torch.Tensor] = None, 
         do_atomic_virial: bool = False,
+        inference_descriptor: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """Return total energy of the system.
         Args:
@@ -165,7 +166,7 @@ class EnergyModel(BaseModel):
                         rcut, sel, distinguish_types=self.type_split))
             nlist = torch.cat(nlist_list, -1)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
+        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial, inference_descriptor = inference_descriptor)
         if self.fitting_net is not None:
             if self.grad_force:
                 mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
@@ -192,6 +193,7 @@ class EnergyModel(BaseModel):
         extended_atype, 
         nlist, mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
+        inference_descriptor: bool = False
     ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
@@ -261,7 +263,8 @@ class EnergyModel(BaseModel):
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }
-
+        if inference_descriptor:
+            model_predict["descriptor"] = descriptor
         return model_predict
 
 
