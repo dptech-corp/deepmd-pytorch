@@ -100,7 +100,7 @@ class TestEnergyModelDPAUni(unittest.TestCase, TestSmooth):
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
-    self.epsilon, self.aprec = 1e-5, 1e-4
+    self.epsilon, self.aprec = None, None
 
 
 class TestEnergyModelDPAUni2(unittest.TestCase, TestSmooth):
