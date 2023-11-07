@@ -309,8 +309,10 @@ void PairDeepMD::compute(int eflag, int vflag) {
   multi_models_mod_devi =
       (numb_models > 1 && (out_freq > 0 && update->ntimestep % out_freq == 0));
 
+  InputNlist lmp_list(list->inum, list->ilist, list->numneigh,
+                                       list->firstneigh);
   if (single_model || multi_models_no_mod_devi) {
-    deep_pot.compute<double, double>(dener, dforce, dvirial, dcoord, dtype, dbox);
+    deep_pot.compute<double, double>(dener, dforce, dvirial, dcoord, dtype, dbox,lmp_list,ago);
   }
   else if (multi_models_mod_devi) {
     vector<vector<double>> all_virial;
@@ -318,6 +320,7 @@ void PairDeepMD::compute(int eflag, int vflag) {
     deep_pot_model_devi.compute<double, double>(all_energy, all_force, all_virial, dcoord, dtype, dbox);
     dener = all_energy[0];
     dforce = all_force[0];
+    std::cout << dforce << std::endl;
     dvirial = all_virial[0];
     if (out_freq > 0 && update->ntimestep % out_freq == 0) {
       int rank = comm->me;
