@@ -457,5 +457,23 @@ void make_env_mat(std::vector<std::vector<int>>& nlist,
 //     std::cout << nlist_type[ii] << std::endl;
 //   }
 }
-
+struct InputNlist
+{
+  int inum;
+  int * ilist;
+  int * numneigh;
+  int ** firstneigh;
+  InputNlist () 
+      : inum(0), ilist(NULL), numneigh(NULL), firstneigh(NULL)
+      {};
+  InputNlist (
+      int inum_, 
+      int * ilist_,
+      int * numneigh_, 
+      int ** firstneigh_
+      ) 
+      : inum(inum_), ilist(ilist_), numneigh(numneigh_), firstneigh(firstneigh_)
+      {};
+  ~InputNlist(){};
+};
 #endif

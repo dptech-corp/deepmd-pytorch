@@ -15,14 +15,73 @@ void DeepPot::compute(ENERGYVTYPE& ener,
             std::vector<VALUETYPE>& virial,
             const std::vector<VALUETYPE>& coord,
             const std::vector<int>& atype,
+            const std::vector<VALUETYPE>& box,
+            const InputNlist& lmp_list,
+            const int& ago)
+{
+    if(ago == 0)
+    {
+      for (int i = 0; i < lmp_list.inum; i++) {
+          std::cout << "ilist " << i << ": " << lmp_list.ilist[i] << std::endl;
+          std::cout << "numneigh " << i << ": " << lmp_list.numneigh[i] << std::endl;
+      }
+    }
+    auto device = torch::kCUDA;
+    module.to(device);
+    std::vector<VALUETYPE> coord_wrapped = coord;
+    int natoms = atype.size();
+    auto options = torch::TensorOptions().dtype(torch::kFloat64);
+    auto int_options = torch::TensorOptions().dtype(torch::kInt64);
+    std::vector<torch::jit::IValue> inputs;
+    at::Tensor coord_wrapped_Tensor = torch::from_blob(coord_wrapped.data(), {1, natoms, 3}, options).to(device);
+    // for (int ii=0; ii<natoms[0]; ii++) { printf("%.4e %.4e %.4e\n", coord_wrapped[3*ii+0], coord_wrapped[3*ii+1], coord_wrapped[3*ii+2]); } printf("\n");
+    inputs.push_back(coord_wrapped_Tensor);
+    std::vector<int64_t> atype_64(atype.begin(), atype.end());
+    at::Tensor atype_Tensor = torch::from_blob(atype_64.data(), {1, natoms}, int_options).to(device);
+    inputs.push_back(atype_Tensor);
+    at::Tensor box_Tensor = torch::from_blob(const_cast<VALUETYPE*>(box.data()), {1, 9}, options).to(device);
+    inputs.push_back(box_Tensor);
+    c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
+
+
+    c10::IValue energy_ = outputs.at("energy");
+    c10::IValue force_ = outputs.at("force");
+    c10::IValue virial_ = outputs.at("virial");
+    // std::cout << energy_ << std::endl;
+    // std::cout << force_ << std::endl;
+    ener = energy_.toTensor().item<double>();
+
+    torch::Tensor flat_force_ = force_.toTensor().view({-1});
+    torch::Tensor cpu_force_ = flat_force_.to(torch::kCPU);
+    force.assign(cpu_force_.data_ptr<double>(), cpu_force_.data_ptr<double>() + cpu_force_.numel());
+
+    torch::Tensor flat_virial_ = virial_.toTensor().view({-1});
+    torch::Tensor cpu_virial_ = flat_virial_.to(torch::kCPU);
+    virial.assign(cpu_virial_.data_ptr<double>(), cpu_virial_.data_ptr<double>() + cpu_virial_.numel());
+
+}
+template void DeepPot::compute<double, double>(double& ener,
+            std::vector<double>& force,
+            std::vector<double>& virial,
+            const std::vector<double>& coord,
+            const std::vector<int>& atype,
+            const std::vector<double>& box,
+            const InputNlist& lmp_list,
+            const int& ago);
+
+
+template <typename VALUETYPE, typename ENERGYVTYPE>
+void DeepPot::compute(ENERGYVTYPE& ener,
+            std::vector<VALUETYPE>& force,
+            std::vector<VALUETYPE>& virial,
+            const std::vector<VALUETYPE>& coord,
+            const std::vector<int>& atype,
             const std::vector<VALUETYPE>& box)
 {
     auto device = torch::kCUDA;
     module.to(device);
     std::vector<VALUETYPE> coord_wrapped = coord;
     int natoms = atype.size();
-    //make_env_mat(nlist, nlist_loc, nlist_type, merged_coord_shift, merged_mapping, coord_wrapped, coord, atype, box, rcut, sec);
-    // auto device = torch::kCPU;
     auto options = torch::TensorOptions().dtype(torch::kFloat64);
     auto int_options = torch::TensorOptions().dtype(torch::kInt64);
     std::vector<torch::jit::IValue> inputs;
@@ -59,7 +118,6 @@ template void DeepPot::compute<double, double>(double& ener,
             const std::vector<double>& coord,
             const std::vector<int>& atype,
             const std::vector<double>& box);
-
 DeepPotModelDevi::DeepPotModelDevi() { }
 
 DeepPotModelDevi::~DeepPotModelDevi() { }
