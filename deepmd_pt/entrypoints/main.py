@@ -138,24 +138,19 @@ def train(FLAGS):
 
 
 def test(FLAGS):
-    logging.info('Configuration path: %s', FLAGS.INPUT)
-    with open(FLAGS.INPUT, 'r') as fin:
-        config = json.load(fin)
-    trainer = inference.Tester(config, FLAGS.CKPT, FLAGS.numb_test, FLAGS.detail_file, FLAGS.shuffle_test)
+    trainer = inference.Tester(FLAGS.model,
+                               input_script=FLAGS.input_script,
+                               system=FLAGS.system,
+                               datafile=FLAGS.datafile,
+                               numb_test=FLAGS.numb_test,
+                               detail_file=FLAGS.detail_file,
+                               shuffle_test=FLAGS.shuffle_test,
+                               head=FLAGS.head)
     trainer.run()
 
 
 def freeze(FLAGS):
-    if FLAGS.input_script is not None:
-        with open(FLAGS.input_script, 'r') as fin:
-            config = json.load(fin)
-    else:
-        pt_model = torch.load(FLAGS.CKPT)
-        if 'model' in pt_model.keys():
-            config = {'model': pt_model['model']['_extra_state']['model_params']}
-        else:
-            config = {'model': pt_model['_extra_state']['model_params']}
-    model = torch.jit.script(inference.Tester(config, FLAGS.CKPT, 1).model)
+    model = torch.jit.script(inference.Tester(FLAGS.model, numb_test=1, head=FLAGS.head).model)
     torch.jit.save(model, FLAGS.output, {
         # TODO: _extra_files
     })
@@ -210,8 +205,41 @@ def main(args=None):
                               help='Force load from ckpt, other missing tensors will init from scratch')
 
     test_parser = subparsers.add_parser('test', help='Test a model.')
-    test_parser.add_argument('INPUT', help='A Json-format configuration file.')
-    test_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+    test_parser_subgroup = test_parser.add_mutually_exclusive_group()
+    test_parser_subgroup.add_argument(
+        "-s",
+        "--system",
+        default=None,
+        type=str,
+        help="The system dir. Recursively detect systems in this directory",
+    )
+    test_parser_subgroup.add_argument(
+        "-f",
+        "--datafile",
+        default=None,
+        type=str,
+        help="The path to file of test list.",
+    )
+    test_parser_subgroup.add_argument(
+        "-i",
+        "--input-script",
+        default=None,
+        type=str,
+        help="The path to the input script, the validation systems will be tested.",
+    )
+    test_parser.add_argument(
+        "-m",
+        "--model",
+        default="model.pt",
+        type=str,
+        help="Model checkpoint to import",
+    )
+    test_parser.add_argument(
+        "--head",
+        default=None,
+        type=str,
+        help="Task head to test if in multi-task mode.",
+    )
     test_parser.add_argument("-n", "--numb-test", default=100, type=int, help="The number of data for test")
     test_parser.add_argument(
         "-d",
@@ -225,10 +253,15 @@ def main(args=None):
     )
 
     freeze_parser = subparsers.add_parser('freeze', help='Freeze a model.')
-    freeze_parser.add_argument('CKPT', help='Resumes from checkpoint.')
+    freeze_parser.add_argument('model', help='Resumes from checkpoint.')
     freeze_parser.add_argument("-o", "--output", type=str, default='frozen_model.pth',
                                help="The frozen model path")
-    freeze_parser.add_argument("-i", "--input-script", type=str, default=None, help="Assign the input script to freeze.")
+    freeze_parser.add_argument(
+        "--head",
+        default=None,
+        type=str,
+        help="Task head to freeze if in multi-task mode.",
+    )
 
     FLAGS = parser.parse_args(args)
     if FLAGS.command == 'train':
