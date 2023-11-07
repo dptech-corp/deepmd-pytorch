@@ -55,3 +55,32 @@ template void build_neighbor_list<double>(std::vector<std::vector<int>>& nlist,
                          const std::vector<std::vector<int>>& cell_list,
                          bool type_split = true,
                          bool min_check = false);
+void NeighborListData::copy_from_nlist(const InputNlist& inlist) 
+{
+  int inum = inlist.inum;
+  ilist.resize(inum);
+  jlist.resize(inum);
+  memcpy(&ilist[0], inlist.ilist, inum * sizeof(int));
+  for (int ii = 0; ii < inum; ++ii) {
+    int jnum = inlist.numneigh[ii];
+    jlist[ii].resize(jnum);
+    memcpy(&jlist[ii][0], inlist.firstneigh[ii], jnum * sizeof(int));
+}
+}
+void NeighborListData::make_inlist(InputNlist& inlist, int& max_num_neighbors) {
+  int tmp = 0;
+  int nloc = ilist.size();
+  numneigh.resize(nloc);
+  firstneigh.resize(nloc);
+  for (int ii = 0; ii < nloc; ++ii) {
+    numneigh[ii] = jlist[ii].size();
+    if(numneigh[ii] > tmp)
+        tmp = numneigh[ii];
+    firstneigh[ii] = &jlist[ii][0];
+  }
+  inlist.inum = nloc;
+  inlist.ilist = &ilist[0];
+  inlist.numneigh = &numneigh[0];
+  inlist.firstneigh = &firstneigh[0];
+  max_num_neighbors = tmp;
+}

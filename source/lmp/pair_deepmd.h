@@ -20,13 +20,13 @@ class PairDeepMD : public Pair {
   PairDeepMD(class LAMMPS *);
   ~PairDeepMD() override;
   void compute(int, int) override;
-  // void *extract(const char *, int &) override;
+  void *extract(const char *, int &) override;
   void settings(int, char **) override;
   void coeff(int, char **) override;
   // void init_style() override;
   // void write_restart(FILE *) override;
   // void read_restart(FILE *) override;
-  // double init_one(int i, int j) override;
+  double init_one(int i, int j) override;
   // int pack_reverse_comm(int, int, double *) override;
   // void unpack_reverse_comm(int, int *, double *) override;
   // void print_summary(const std::string pre) const;

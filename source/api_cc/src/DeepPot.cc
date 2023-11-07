@@ -21,9 +21,15 @@ void DeepPot::compute(ENERGYVTYPE& ener,
 {
     if(ago == 0)
     {
-      for (int i = 0; i < lmp_list.inum; i++) {
-          std::cout << "ilist " << i << ": " << lmp_list.ilist[i] << std::endl;
-          std::cout << "numneigh " << i << ": " << lmp_list.numneigh[i] << std::endl;
+      nlist_data.copy_from_nlist(lmp_list);
+      nlist_data.make_inlist(nlist,max_num_neighbors);
+      std::cout << "max num neighbor"<< max_num_neighbors << std::endl;
+      for (int i = 0; i < 2; i++) {
+          std::cout << "numneigh " << i << ": " << nlist.numneigh[i] << std::endl;
+          for(int j = 0; j < nlist.numneigh[i]; j++)
+          {
+            std::cout << "first neigh " << i << j << ": " << nlist.firstneigh[i][j] << std::endl;
+          }
       }
     }
     auto device = torch::kCUDA;

@@ -59,8 +59,19 @@ class DeepPot {
                 const std::vector<VALUETYPE>& box,
                 const InputNlist& lmp_list,
                 const int& ago);
+   /**
+   * @brief Get the cutoff radius.
+   * @return The cutoff radius.
+   **/
+  double cutoff() const {
+    return rcut;
+  };
  private:
   torch::jit::script::Module module;
+  double rcut;
+  NeighborListData nlist_data;
+  InputNlist nlist;
+  int max_num_neighbors;
 };
 
 template <typename VALUETYPE>
@@ -73,7 +84,8 @@ void DeepPot::init(const std::string& model) {
     catch (const c10::Error& e) {
         std::cerr << "Error loading the model\n";
     }
-
+    auto rcut_ = module.run_method("get_rcut").toDouble();
+    rcut = static_cast<VALUETYPE>(rcut_);
 
 }
 
@@ -168,10 +180,17 @@ class DeepPotModelDevi {
   void compute_relative_std_f(std::vector<VALUETYPE>& std,
                               const std::vector<VALUETYPE>& avg,
                               const VALUETYPE eps);
-
+   /**
+   * @brief Get the cutoff radius.
+   * @return The cutoff radius.
+   **/
+  double cutoff() const {
+    return rcut;
+  };
  private:
   unsigned numb_models;
   std::vector<torch::jit::script::Module> modules;
+  double rcut;
 };
 
 template <typename VALUETYPE>
@@ -189,5 +208,8 @@ void DeepPotModelDevi::init(const std::vector<std::string>& models) {
     catch (const c10::Error& e) {
         std::cerr << "Error loading the model\n";
     }
+
+    auto rcut_ = modules[0].run_method("get_rcut").toDouble();
+    rcut = static_cast<VALUETYPE>(rcut_);
 }
 }  // namespace deepmd

@@ -70,6 +70,7 @@ PairDeepMD::PairDeepMD(LAMMPS *lmp)
         "Pair deepmd requires metal unit, please set it by \"units metal\"");
   }
   numb_models = 0;
+  cutoff = 0.;
 
 }
 
@@ -108,6 +109,8 @@ void PairDeepMD::settings(int narg, char **arg) {
     // } catch (deepmd_compat::deepmd_exception &e) {
       // error->one(FLERR, e.what());
     // }
+    cutoff = deep_pot.cutoff();
+     std::cout << cutoff << std::endl;
   }
   else {
     // try {
@@ -116,6 +119,7 @@ void PairDeepMD::settings(int narg, char **arg) {
     // } catch (deepmd_compat::deepmd_exception &e) {
       // error->one(FLERR, e.what());
     // }
+    cutoff = deep_pot_model_devi.cutoff();
 
   }
 
@@ -493,4 +497,33 @@ void PairDeepMD::allocate() {
       scale[i][j] = 1;
     }
   }
+}
+double PairDeepMD::init_one(int i, int j) {
+  if (i > numb_types || j > numb_types) {
+    char warning_msg[1024];
+    sprintf(warning_msg,
+            "Interaction between types %d and %d is set with deepmd, but will "
+            "be ignored.\n Deepmd model has only %d types, it only computes "
+            "the mulitbody interaction of types: 1-%d.",
+            i, j, numb_types, numb_types);
+    error->warning(FLERR, warning_msg);
+  }
+
+  if (setflag[i][j] == 0) {
+    scale[i][j] = 1.0;
+  }
+  scale[j][i] = scale[i][j];
+
+  return cutoff;
+}
+void *PairDeepMD::extract(const char *str, int &dim) {
+  if (strcmp(str, "cut_coul") == 0) {
+    dim = 0;
+    return (void *)&cutoff;
+  }
+  if (strcmp(str, "scale") == 0) {
+    dim = 2;
+    return (void *)scale;
+  }
+  return NULL;
 }
