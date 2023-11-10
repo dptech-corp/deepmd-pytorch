@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any, Dict
 from pathlib import Path
 import numpy as np
+import json
 
 import torch
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
@@ -14,6 +15,9 @@ from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
 from deepmd_pt.utils.env import DEVICE, JIT
 from deepmd_pt.utils.stat import make_stat_input
 from torch.utils.data import DataLoader, RandomSampler
+from deepmd.common import (
+    expand_sys_str,
+)
 
 if torch.__version__.startswith("2"):
     import torch._dynamo
@@ -21,7 +25,8 @@ if torch.__version__.startswith("2"):
 
 class Tester(object):
 
-    def __init__(self, config: Dict[str, Any], ckpt, numb_test=100, detail_file=None, shuffle_test=False):
+    def __init__(self, model_ckpt, input_script=None, system=None, datafile=None,
+                 numb_test=100, detail_file=None, shuffle_test=False, head=None):
         """Construct a DeePMD tester.
 
         Args:
@@ -30,52 +35,89 @@ class Tester(object):
         self.numb_test = numb_test
         self.detail_file = detail_file
         self.shuffle_test = shuffle_test
-        model_params = config['model']
-        # Data + Model
-        if 'training' in config:
-            training_params = config['training']
-            dp_random.seed(training_params['seed'])
-            self.dataset_params = training_params.pop('validation_data')
+        # Model
+        state_dict = torch.load(model_ckpt, map_location=DEVICE)
+        if "model" in state_dict:
+            state_dict = state_dict["model"]
+        model_params = state_dict['_extra_state']['model_params']
+        self.multi_task = "model_dict" in model_params
+        if self.multi_task:
+            assert head is not None, "Head must be specified in multitask mode!"
+            self.head = head
+            assert head in model_params['model_dict'], f"Specified head {head} not found in model {model_ckpt}! " \
+                                                       f"Available ones are {list(model_params['model_dict'].keys())}."
+            model_params = model_params['model_dict'][head]
+            state_dict_head = {"_extra_state": state_dict["_extra_state"]}
+            for item in state_dict:
+                if f"model.{head}." in item:
+                    state_dict_head[item.replace(f"model.{head}.", "model.Default.")] = state_dict[item].clone()
+            state_dict = state_dict_head
+
+        # Data
+        if input_script is not None:
+            with open(input_script, 'r') as fin:
+                self.input_script = json.load(fin)
+            training_params = self.input_script["training"]
+            if not self.multi_task:
+                assert "validation_data" in training_params, f"Validation systems not found in {input_script}!"
+                self.systems = training_params["validation_data"]["systems"]
+                self.batchsize = training_params["validation_data"]["batch_size"]
+                logging.info(f"Testing validation systems in input script: {input_script}")
+            else:
+                assert "data_dict" in training_params, f"Input script {input_script} is not in multi-task mode!"
+                assert head in training_params["data_dict"], \
+                    f"Specified head {head} not found in input script {input_script}! " \
+                    f"Available ones are {list(training_params['data_dict'].keys())}."
+                assert "validation_data" in training_params["data_dict"][head], \
+                    f"Validation systems not found in head {head} of {input_script}!"
+                self.systems = training_params["data_dict"][head]["validation_data"]["systems"]
+                self.batchsize = training_params["data_dict"][head]["validation_data"]["batch_size"]
+                logging.info(f"Testing validation systems in head {head} of input script: {input_script}")
+        elif system is not None:
+            self.systems = expand_sys_str(system)
+            self.batchsize = "auto"
+            logging.info("Testing systems in path: %s", system)
+        elif datafile is not None:
+            with open(datafile, 'r') as fin:
+                self.systems = fin.read().splitlines()
+            self.batchsize = "auto"
+            logging.info("Testing systems in file: %s", datafile)
+        else:
+            self.systems = None
+            self.batchsize = None
+
         self.type_split = False
-        if model_params['descriptor']['type'] in ['se_e2_a']:
+        if model_params["descriptor"]["type"] in ["se_e2_a"]:
             self.type_split = True
         self.model_params = deepcopy(model_params)
-
-        model_params["resuming"] = (ckpt is not None)  # should always be True for inferencing
+        model_params["resuming"] = True
         self.model = get_model(model_params).to(DEVICE)
 
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model)  # inference only
         if JIT:
             self.wrapper = torch.jit.script(self.wrapper)
-
-        state_dict = torch.load(ckpt, map_location=DEVICE)
-        if "model" in state_dict:
-            state_dict = state_dict["model"]
         self.wrapper.load_state_dict(state_dict)
 
         # Loss
-        if 'loss' in config:
-            self.noise_settings = None
-            loss_params = config.pop("loss")
+        if "fitting_net" not in model_params:
+            assert input_script is not None, "Denoise model must use --input-script mode!"
+            loss_params = self.input_script["loss"]
             loss_type = loss_params.pop("type", "ener")
-            if loss_type == 'ener':
-                loss_params["starter_learning_rate"] = 1.0  # TODO: lr here is useless
-                self.loss = EnergyStdLoss(**loss_params)
-            elif loss_type == 'denoise':
-                if loss_type == 'denoise':
-                    self.noise_settings = {"noise_type": loss_params.pop("noise_type", "uniform"),
-                                           "noise": loss_params.pop("noise", 1.0),
-                                           "noise_mode": loss_params.pop("noise_mode", "fix_num"),
-                                           "mask_num": loss_params.pop("mask_num", 8),
-                                           "same_mask": loss_params.pop("same_mask", False),
-                                           "mask_coord": loss_params.pop("mask_coord", False),
-                                           "mask_type": loss_params.pop("mask_type", False),
-                                           "mask_type_idx": len(model_params["type_map"]) - 1}
-                loss_params['ntypes'] = len(model_params['type_map'])
-                self.loss = DenoiseLoss(**loss_params)
-            else:
-                raise NotImplementedError
+            assert loss_type == 'denoise', "Models without fitting_net only support denoise test!"
+            self.noise_settings = {"noise_type": loss_params.pop("noise_type", "uniform"),
+                                   "noise": loss_params.pop("noise", 1.0),
+                                   "noise_mode": loss_params.pop("noise_mode", "fix_num"),
+                                   "mask_num": loss_params.pop("mask_num", 8),
+                                   "same_mask": loss_params.pop("same_mask", False),
+                                   "mask_coord": loss_params.pop("mask_coord", False),
+                                   "mask_type": loss_params.pop("mask_type", False),
+                                   "mask_type_idx": len(model_params["type_map"]) - 1}
+            loss_params['ntypes'] = len(model_params['type_map'])
+            self.loss = DenoiseLoss(**loss_params)
+        else:
+            self.noise_settings = None
+            self.loss = EnergyStdLoss(inference=True)
 
     @staticmethod
     def get_data(data):
@@ -103,7 +145,7 @@ class Tester(object):
         return input_dict, label_dict
 
     def run(self):
-        systems = self.dataset_params["systems"]
+        systems = self.systems
         system_results = {}
         global_sum_natoms = 0
         for cc, system in enumerate(systems):
@@ -111,7 +153,7 @@ class Tester(object):
             logging.info(f"# testing system : {system}")
             system_pred = []
             system_label = []
-            dataset = DpLoaderSet([system], self.dataset_params['batch_size'], self.model_params,
+            dataset = DpLoaderSet([system], self.batchsize, self.model_params,
                                   type_split=self.type_split, noise_settings=self.noise_settings, shuffle=self.shuffle_test)
             sampler = RandomSampler(dataset,replacement=True,num_samples=dataset.total_batch)
             if sampler == None:
@@ -167,7 +209,10 @@ class Tester(object):
             k: v / global_sum_natoms if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
         }
         logging.info("# ----------weighted average of errors----------- ")
-        logging.info(f"# number of systems : {len(systems)}")
+        if not self.multi_task:
+            logging.info(f"# number of systems : {len(systems)}")
+        else:
+            logging.info(f"# number of systems for {self.head}: {len(systems)}")
         for item in sorted(list(global_results.keys())):
             logging.info(f"{item}: {global_results[item]:.4f}")
         logging.info("# ----------------------------------------------- ")

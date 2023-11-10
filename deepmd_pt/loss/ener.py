@@ -8,7 +8,7 @@ import torch.nn.functional as F
 class EnergyStdLoss(TaskLoss):
 
     def __init__(self,
-                 starter_learning_rate,
+                 starter_learning_rate=1.0,
                  start_pref_e=0.0,
                  limit_pref_e=0.0,
                  start_pref_f=0.0,
@@ -16,13 +16,14 @@ class EnergyStdLoss(TaskLoss):
                  start_pref_v=0.0,
                  limit_pref_v=0.0,
                  use_l1_all: bool = False,
+                 inference=False,
                  **kwargs):
         """Construct a layer to compute loss on energy, force and virial."""
         super(EnergyStdLoss, self).__init__()
         self.starter_learning_rate = starter_learning_rate
-        self.has_e = start_pref_e != 0.0 and limit_pref_e != 0.0
-        self.has_f = start_pref_f != 0.0 and limit_pref_f != 0.0
-        self.has_v = start_pref_v != 0.0 and limit_pref_v != 0.0
+        self.has_e = (start_pref_e != 0.0 and limit_pref_e != 0.0) or inference
+        self.has_f = (start_pref_f != 0.0 and limit_pref_f != 0.0) or inference
+        self.has_v = (start_pref_v != 0.0 and limit_pref_v != 0.0) or inference
         self.start_pref_e = start_pref_e
         self.limit_pref_e = limit_pref_e
         self.start_pref_f = start_pref_f
@@ -30,6 +31,7 @@ class EnergyStdLoss(TaskLoss):
         self.start_pref_v = start_pref_v
         self.limit_pref_v = limit_pref_v
         self.use_l1_all = use_l1_all
+        self.inference = inference
 
     def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on loss and force.
@@ -56,7 +58,8 @@ class EnergyStdLoss(TaskLoss):
         if self.has_e and 'energy' in model_pred and 'energy' in label:
             if not self.use_l1_all:
                 l2_ener_loss = torch.mean(torch.square(model_pred['energy'] - label['energy']))
-                more_loss['l2_ener_loss'] = l2_ener_loss.detach()
+                if not self.inference:
+                    more_loss['l2_ener_loss'] = l2_ener_loss.detach()
                 loss += atom_norm * (pref_e * l2_ener_loss)
                 rmse_e = l2_ener_loss.sqrt() * atom_norm
                 more_loss['rmse_e'] = rmse_e.detach()
@@ -85,7 +88,8 @@ class EnergyStdLoss(TaskLoss):
                 else:
                     diff_f = label['force'] - model_pred['force']
                     l2_force_loss = torch.mean(torch.square(diff_f))
-                more_loss['l2_force_loss'] = l2_force_loss.detach()
+                if not self.inference:
+                    more_loss['l2_force_loss'] = l2_force_loss.detach()
                 loss += (pref_f * l2_force_loss).to(GLOBAL_PT_FLOAT_PRECISION)
                 rmse_f = l2_force_loss.sqrt()
                 more_loss['rmse_f'] = rmse_f.detach()
@@ -107,12 +111,14 @@ class EnergyStdLoss(TaskLoss):
         if self.has_v and 'virial' in model_pred and 'virial' in label:
             diff_v = label['virial'] - model_pred['virial'].reshape(-1, 9)
             l2_virial_loss = torch.mean(torch.square(diff_v))
-            more_loss['l2_virial_loss'] = l2_virial_loss.detach()
+            if not self.inference:
+                more_loss['l2_virial_loss'] = l2_virial_loss.detach()
             loss += atom_norm * (pref_v * l2_virial_loss)
             rmse_v = l2_virial_loss.sqrt() * atom_norm
             more_loss['rmse_v'] = rmse_v.detach()
             if mae:
                 mae_v = torch.mean(torch.abs(diff_v)) * atom_norm
                 more_loss['mae_v'] = mae_v.detach()
-        more_loss['rmse'] = torch.sqrt(loss.detach())
+        if not self.inference:
+            more_loss['rmse'] = torch.sqrt(loss.detach())
         return loss, more_loss
