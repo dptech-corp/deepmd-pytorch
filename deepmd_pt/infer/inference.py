@@ -49,8 +49,8 @@ class Tester(object):
             model_params = model_params['model_dict'][head]
             state_dict_head = {"_extra_state": state_dict["_extra_state"]}
             for item in state_dict:
-                if f"model.{head}" in item:
-                    state_dict_head[item.replace(head, "Default")] = state_dict[item].clone()
+                if f"model.{head}." in item:
+                    state_dict_head[item.replace(f"model.{head}.", "model.Default.")] = state_dict[item].clone()
             state_dict = state_dict_head
 
         # Data
