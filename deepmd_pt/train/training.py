@@ -67,6 +67,7 @@ class Trainer(object):
         # Init wandb
         self.wandb_config = training_params.get("wandb_config", {})
         self.wandb_enabled = self.wandb_config.get("wandb_enabled", False)
+        self.wandb_run = None
         if self.wandb_enabled:
             entity = self.wandb_config.get("entity", None)
             assert (
@@ -81,7 +82,7 @@ class Trainer(object):
                 name_path = os.path.abspath(".").split("/")
                 job_name = name_path[-2] + "/" + name_path[-1]
             if self.rank == 0:
-                wb.init(
+                self.wandb_run = wb.init(
                     project=project,
                     entity=entity,
                     config=model_params,
@@ -560,6 +561,8 @@ class Trainer(object):
             except OSError:
                 self.save_model(self.save_ckpt, lr=0, step=self.num_steps)
             logging.info(f"Trained model has been saved to: {self.save_ckpt}")
+            if self.wandb_enabled and self.wandb_run is not None:
+                self.wandb_run.finish(quiet=True)
 
         if fout:
             fout.close()
