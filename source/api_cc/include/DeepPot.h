@@ -70,7 +70,7 @@ class DeepPot {
   torch::jit::script::Module module;
   double rcut;
   NeighborListData nlist_data;
-  InputNlist nlist;
+  //InputNlist nlist;
   int max_num_neighbors;
 };
 

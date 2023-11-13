@@ -23,7 +23,7 @@ class PairDeepMD : public Pair {
   void *extract(const char *, int &) override;
   void settings(int, char **) override;
   void coeff(int, char **) override;
-  // void init_style() override;
+  void init_style() override;
   // void write_restart(FILE *) override;
   // void read_restart(FILE *) override;
   double init_one(int i, int j) override;

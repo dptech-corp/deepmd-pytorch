@@ -4,7 +4,7 @@ from deepmd_pt.model.descriptor import Descriptor
 from deepmd_pt.model.task import Fitting, DenoiseNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
-from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
+from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list, sort_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
 
 
@@ -86,6 +86,7 @@ class EnergyModel(BaseModel):
         self.descriptor = Descriptor(**descriptor)
         self.rcut = self.descriptor.rcut
         self.sel = self.descriptor.sel
+        self.nnei = self.descriptor.nnei
         self.split_nlist = descriptor['type'] in ['hybrid']
 
         # Statistics
@@ -127,8 +128,9 @@ class EnergyModel(BaseModel):
         self,
         coord,
         atype,
+        lmp_list: Optional[torch.Tensor] = None,
         box: Optional[torch.Tensor] = None, 
-        do_atomic_virial: bool = False,
+        do_atomic_virial: bool = False
     ) -> Dict[str, torch.Tensor]:
         """Return total energy of the system.
         Args:
@@ -141,6 +143,13 @@ class EnergyModel(BaseModel):
         - energy: Energy per atom.
         - force: XYZ force per atom.
         """
+        
+        if lmp_list is not None:
+            if lmp_list.shape[1] > self.nnei:
+                sort_list = sort_neighbor_list(coord, self.rcut,self.nnei,lmp_list)
+            else:
+                sort_list = lmp_list
+            return self.forward_lower(coord,atype,sort_list,None,False)
         nframes, nloc = atype.shape[:2]
         if box is not None:
             coord_normalized = normalize_coord(coord, box.reshape(-1, 3, 3))
@@ -185,16 +194,18 @@ class EnergyModel(BaseModel):
         else:
             model_predict_lower['updated_coord'] += coord
         return model_predict_lower
-
+    @torch.jit.export
     def forward_lower(
         self, 
         extended_coord, 
         extended_atype, 
-        nlist, mapping: Optional[torch.Tensor] = None,
+        nlist: torch.Tensor, 
+        mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
+        print(atype)
         if self.grad_force:
             extended_coord.requires_grad_(True)
         if self.type_embedding is not None:

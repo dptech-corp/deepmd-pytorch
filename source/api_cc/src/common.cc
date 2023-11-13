@@ -55,32 +55,30 @@ template void build_neighbor_list<double>(std::vector<std::vector<int>>& nlist,
                          const std::vector<std::vector<int>>& cell_list,
                          bool type_split = true,
                          bool min_check = false);
-void NeighborListData::copy_from_nlist(const InputNlist& inlist) 
+void NeighborListData::copy_from_nlist(const InputNlist& inlist, int& max_num_neighbors) 
 {
   int inum = inlist.inum;
   ilist.resize(inum);
-  jlist.resize(inum);
+  numneigh.resize(inum);
   memcpy(&ilist[0], inlist.ilist, inum * sizeof(int));
+  int* max_element = std::max_element(inlist.numneigh, inlist.numneigh + inum);
+  max_num_neighbors = *max_element;
+  jlist = (int*)malloc(inum * max_num_neighbors * sizeof(int));
+  memset(jlist, -1 , inum * max_num_neighbors * sizeof(int));
   for (int ii = 0; ii < inum; ++ii) {
     int jnum = inlist.numneigh[ii];
-    jlist[ii].resize(jnum);
-    memcpy(&jlist[ii][0], inlist.firstneigh[ii], jnum * sizeof(int));
-}
-}
-void NeighborListData::make_inlist(InputNlist& inlist, int& max_num_neighbors) {
-  int tmp = 0;
-  int nloc = ilist.size();
-  numneigh.resize(nloc);
-  firstneigh.resize(nloc);
-  for (int ii = 0; ii < nloc; ++ii) {
-    numneigh[ii] = jlist[ii].size();
-    if(numneigh[ii] > tmp)
-        tmp = numneigh[ii];
-    firstneigh[ii] = &jlist[ii][0];
+    numneigh[ii] = inlist.numneigh[ii];
+    memcpy(&jlist[ii * max_num_neighbors], inlist.firstneigh[ii], jnum * sizeof(int));
   }
-  inlist.inum = nloc;
-  inlist.ilist = &ilist[0];
-  inlist.numneigh = &numneigh[0];
-  inlist.firstneigh = &firstneigh[0];
-  max_num_neighbors = tmp;
 }
+// void NeighborListData::make_inlist(InputNlist& inlist) {
+//   int nloc = ilist.size();
+//   firstneigh.resize(nloc);
+//   for (int ii = 0; ii < nloc; ++ii) {
+//     firstneigh[ii] = &jlist[ii][0];
+//   }
+//   inlist.inum = nloc;
+//   inlist.ilist = &ilist[0];
+//   inlist.numneigh = &numneigh[0];
+//   inlist.firstneigh = &firstneigh[0];
+// }

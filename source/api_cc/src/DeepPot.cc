@@ -19,37 +19,38 @@ void DeepPot::compute(ENERGYVTYPE& ener,
             const InputNlist& lmp_list,
             const int& ago)
 {
-    if(ago == 0)
-    {
-      nlist_data.copy_from_nlist(lmp_list);
-      nlist_data.make_inlist(nlist,max_num_neighbors);
-      std::cout << "max num neighbor"<< max_num_neighbors << std::endl;
-      for (int i = 0; i < 2; i++) {
-          std::cout << "numneigh " << i << ": " << nlist.numneigh[i] << std::endl;
-          for(int j = 0; j < nlist.numneigh[i]; j++)
-          {
-            std::cout << "first neigh " << i << j << ": " << nlist.firstneigh[i][j] << std::endl;
-          }
-      }
-    }
     auto device = torch::kCUDA;
     module.to(device);
     std::vector<VALUETYPE> coord_wrapped = coord;
     int natoms = atype.size();
     auto options = torch::TensorOptions().dtype(torch::kFloat64);
     auto int_options = torch::TensorOptions().dtype(torch::kInt64);
+    auto int32_options = torch::TensorOptions().dtype(torch::kInt32);
     std::vector<torch::jit::IValue> inputs;
-    at::Tensor coord_wrapped_Tensor = torch::from_blob(coord_wrapped.data(), {1, natoms, 3}, options).to(device);
+    at::Tensor coord_wrapped_Tensor = torch::from_blob(coord_wrapped.data(), {1,natoms, 3}, options).to(device);
     // for (int ii=0; ii<natoms[0]; ii++) { printf("%.4e %.4e %.4e\n", coord_wrapped[3*ii+0], coord_wrapped[3*ii+1], coord_wrapped[3*ii+2]); } printf("\n");
     inputs.push_back(coord_wrapped_Tensor);
     std::vector<int64_t> atype_64(atype.begin(), atype.end());
-    at::Tensor atype_Tensor = torch::from_blob(atype_64.data(), {1, natoms}, int_options).to(device);
+    at::Tensor atype_Tensor = torch::from_blob(atype_64.data(), {1,natoms}, int_options).to(device);
     inputs.push_back(atype_Tensor);
-    at::Tensor box_Tensor = torch::from_blob(const_cast<VALUETYPE*>(box.data()), {1, 9}, options).to(device);
-    inputs.push_back(box_Tensor);
+    // at::Tensor box_Tensor = torch::from_blob(const_cast<VALUETYPE*>(box.data()), {1, 9}, options).to(device);
+    // inputs.push_back(box_Tensor);
+    if(ago == 0)
+    {
+      nlist_data.copy_from_nlist(lmp_list,max_num_neighbors);
+      // std::cout << "max num neighbor"<< max_num_neighbors << std::endl;
+      // for (int i = 0; i < 2; i++) {
+      //     std::cout << "list for " << i << std::endl;
+      //     for(int j = 0; j < lmp_list.numneigh[i]; j++)
+      //     {
+      //       std::cout << lmp_list.firstneigh[i][j] << " ";
+      //     }
+      // }
+    }
+    at::Tensor firstneigh = torch::from_blob(nlist_data.jlist, {lmp_list.inum,max_num_neighbors}, int32_options);
+    at::Tensor firstneigh_tensor = firstneigh.to(torch::kInt64).to(device);
+    inputs.push_back(firstneigh_tensor);
     c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
-
-
     c10::IValue energy_ = outputs.at("energy");
     c10::IValue force_ = outputs.at("force");
     c10::IValue virial_ = outputs.at("virial");

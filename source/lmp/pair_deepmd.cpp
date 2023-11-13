@@ -110,7 +110,7 @@ void PairDeepMD::settings(int narg, char **arg) {
       // error->one(FLERR, e.what());
     // }
     cutoff = deep_pot.cutoff();
-     std::cout << cutoff << std::endl;
+    std::cout << cutoff << std::endl;
   }
   else {
     // try {
@@ -272,15 +272,17 @@ void PairDeepMD::compute(int eflag, int vflag) {
   double **f = atom->f;
   int *type = atom->type;
   int nlocal = atom->nlocal;
+  int nghost = atom->nghost;
+  int nall = nlocal + nghost;
 
   double dener(0);
-  vector<double> dforce(nlocal * 3);
+  vector<double> dforce(nall * 3);
   vector<double> dvirial(9, 0);
-  vector<double> dcoord(nlocal * 3, 0.);
-  vector<int> dtype(nlocal);
+  vector<double> dcoord(nall * 3, 0.);
+  vector<int> dtype(nall);
   vector<double> dbox(9, 0);
 
-  for (int ii=0; ii<nlocal; ii++) {
+  for (int ii=0; ii<nall; ii++) {
     for (int jj=0; jj<3; jj++) {
       dcoord[3*ii+jj] = x[ii][jj];
     }
@@ -422,7 +424,7 @@ void PairDeepMD::compute(int eflag, int vflag) {
   }
 
   
-  for (int ii=0; ii<nlocal; ii++) {
+  for (int ii=0; ii<nall; ii++) {
     for (int jj=0; jj<3; jj++) {
       f[ii][jj] = dforce[3*ii+jj];
     }
@@ -496,6 +498,19 @@ void PairDeepMD::allocate() {
       setflag[i][j] = 1;
       scale[i][j] = 1;
     }
+  }
+}
+void PairDeepMD::init_style() {
+  neighbor->add_request(this, NeighConst::REQ_FULL);
+  if (out_each == 1) {
+    int ntotal = atom->natoms;
+    int nprocs = comm->nprocs;
+    memory->create(counts, nprocs, "deepmd:counts");
+    memory->create(displacements, nprocs, "deepmd:displacements");
+    memory->create(stdfsend, ntotal, "deepmd:stdfsendall");
+    memory->create(stdfrecv, ntotal, "deepmd:stdfrecvall");
+    memory->create(tagsend, ntotal, "deepmd:tagsendall");
+    memory->create(tagrecv, ntotal, "deepmd:tagrecvall");
   }
 }
 double PairDeepMD::init_one(int i, int j) {
