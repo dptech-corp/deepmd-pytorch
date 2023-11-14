@@ -123,7 +123,9 @@ class Tester(object):
     def get_data(data):
         batch_data = next(iter(data))
         for key in batch_data.keys():
-            if not isinstance(batch_data[key], list):
+            if key == 'sid' or key == 'fid':
+                continue
+            elif not isinstance(batch_data[key], list):
                 if batch_data[key] is not None:
                     batch_data[key] = batch_data[key].to(DEVICE)
             else:

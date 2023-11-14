@@ -644,6 +644,7 @@ class DeepmdDataSystem(object):
                 break
         frames = self._load_set(self._dirs[i - 1])
         frame = self.single_preprocess(frames, index - self.prefix_sum[i - 1])
+        frame['fid'] = index
         return frame
 
 
