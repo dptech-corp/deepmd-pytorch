@@ -156,16 +156,16 @@ def eval_model(
         force_out = np.concatenate(force_out) if force_out else np.zeros([nframes, natoms, 3])
         virial_out = np.concatenate(virial_out) if virial_out else np.zeros([nframes, 3, 3])
         atomic_virial_out = np.concatenate(atomic_virial_out) if atomic_virial_out else np.zeros([nframes, natoms, 3, 3])
-        updated_coord_out = np.concatenate(updated_coord_out) if updated_coord_out else np.zeros([nframes, natoms, 3])
-        logits_out = np.concatenate(logits_out) if logits_out else np.zeros([nframes, natoms, len(model.type_map)-1])
+        updated_coord_out = np.concatenate(updated_coord_out) if updated_coord_out else None
+        logits_out = np.concatenate(logits_out) if logits_out else None
     else:
         energy_out = torch.cat(energy_out) if energy_out else torch.zeros([nframes, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_energy_out = torch.cat(atomic_energy_out) if atomic_energy_out else torch.zeros([nframes, natoms, 1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         force_out = torch.cat(force_out) if force_out else torch.zeros([nframes, natoms, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         virial_out = torch.cat(virial_out) if virial_out else torch.zeros([nframes, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
         atomic_virial_out = torch.cat(atomic_virial_out) if atomic_virial_out else torch.zeros([nframes, natoms, 3, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-        updated_coord_out = torch.cat(updated_coord_out) if updated_coord_out else torch.zeros([nframes, natoms, 3], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-        logits_out = torch.cat(logits_out) if logits_out else torch.zeros([nframes, natoms, len(model.type_map)-1], dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        updated_coord_out = torch.cat(updated_coord_out) if updated_coord_out else None
+        logits_out = torch.cat(logits_out) if logits_out else None
     if denoise:
         return updated_coord_out, logits_out
     else:    
