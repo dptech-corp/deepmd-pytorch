@@ -6,7 +6,7 @@ import dpdata
 
 
 class DPCalculator(Calculator):
-    implemented_properties = ["energy", "forces"]
+    implemented_properties = ["energy", "forces", "virial", "stress"]
 
     def __init__(
             self,
