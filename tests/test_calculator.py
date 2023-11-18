@@ -53,7 +53,7 @@ class TestCalculator(unittest.TestCase):
             calculator=self.calculator,
         )
         e0, f0 = ase_atoms0.get_potential_energy(), ase_atoms0.get_forces()
-        s0, v0 = ase_atoms0.get_stress(), -ase_atoms0.get_stress() * ase_atoms0.get_volume()
+        s0, v0 = ase_atoms0.get_stress(voigt=True), -ase_atoms0.get_stress(voigt=False) * ase_atoms0.get_volume()
 
         ase_atoms1 = Atoms(
             numbers=[atomic_numbers[i] for i in idx_perm],
@@ -63,7 +63,7 @@ class TestCalculator(unittest.TestCase):
             calculator=self.calculator,
         )
         e1, f1 = ase_atoms1.get_potential_energy(), ase_atoms1.get_forces()
-        s1, v1 = ase_atoms1.get_stress(), -ase_atoms1.get_stress() * ase_atoms1.get_volume()
+        s1, v1 = ase_atoms1.get_stress(voigt=True), -ase_atoms1.get_stress(voigt=False) * ase_atoms1.get_volume()
 
         assert type(e0) == float
         assert f0.shape == (natoms, 3)
