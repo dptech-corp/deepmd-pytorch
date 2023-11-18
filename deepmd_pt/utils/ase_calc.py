@@ -32,7 +32,7 @@ class DPCalculator(Calculator):
 
         # convert virial into stress for lattice relaxation
         if "stress" in properties:
-            if sum(atoms.get_pbc()) > 0:
+            if sum(atoms.get_pbc()) > 0 or (atoms.cell is not None):
                 # the usual convention (tensile stress is positive)
                 # stress = -virial / volume
                 stress = -0.5 * (self.results["virial"].copy() + self.results["virial"].copy().T) / atoms.get_volume()
