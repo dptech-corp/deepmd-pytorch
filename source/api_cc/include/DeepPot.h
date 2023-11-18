@@ -1,5 +1,5 @@
 #include "common.h"
-
+#include <torch/torch.h>
 namespace deepmd {
 /**
  * @brief Deep Potential.
@@ -17,7 +17,7 @@ class DeepPot {
    * @param[in] model The name of the frozen model file.
    **/
   template <typename VALUETYPE>
-  void init(const std::string& model);
+  void init(const std::string& model, const int& gpu_rank);
 
   /**
    * @brief Evaluate the energy, force and virial by using this DP.
@@ -72,21 +72,22 @@ class DeepPot {
   NeighborListData nlist_data;
   //InputNlist nlist;
   int max_num_neighbors;
+  int gpu_id;
 };
 
 template <typename VALUETYPE>
-void DeepPot::init(const std::string& model) {
+void DeepPot::init(const std::string& model, const int& gpu_rank) {
     // cublasCreate(&handle);
+    std::cout << "load model from: " <<model <<" to gpu "<< gpu_rank << std::endl;
+    gpu_id = gpu_rank;
+    torch::Device device(torch::kCUDA, gpu_rank);
 
-    try {
-        module = torch::jit::load(model);
-    }
-    catch (const c10::Error& e) {
-        std::cerr << "Error loading the model\n";
-    }
+    module = torch::jit::load(model,device);
+    //module = torch::jit::load(model);
+    
     auto rcut_ = module.run_method("get_rcut").toDouble();
     rcut = static_cast<VALUETYPE>(rcut_);
-
+    std::cout << "success" << std::endl;
 }
 
 class DeepPotModelDevi {

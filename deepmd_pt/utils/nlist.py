@@ -12,7 +12,6 @@ from typing import (
   Union,
   Optional
 )
-from IPython import embed
 
 
 def _build_neighbor_list(

@@ -7,7 +7,7 @@ DeepPot::~DeepPot() { }//cublasDestroy(handle);}
 
 
 
-template void DeepPot::init<double>(const std::string& model);
+template void DeepPot::init<double>(const std::string& model, const int& gpu_rank);
 
 template <typename VALUETYPE, typename ENERGYVTYPE>
 void DeepPot::compute(ENERGYVTYPE& ener,
@@ -19,8 +19,8 @@ void DeepPot::compute(ENERGYVTYPE& ener,
             const InputNlist& lmp_list,
             const int& ago)
 {
-    auto device = torch::kCUDA;
-    module.to(device);
+    torch::Device device(torch::kCUDA, gpu_id);
+    //module.to(device);
     std::vector<VALUETYPE> coord_wrapped = coord;
     int natoms = atype.size();
     auto options = torch::TensorOptions().dtype(torch::kFloat64);
@@ -52,8 +52,8 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     inputs.push_back(firstneigh_tensor);
     c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
     c10::IValue energy_ = outputs.at("energy");
-    c10::IValue force_ = outputs.at("force");
-    c10::IValue virial_ = outputs.at("virial");
+    c10::IValue force_ = outputs.at("extended_force");
+    c10::IValue virial_ = outputs.at("extended_virial");
     // std::cout << energy_ << std::endl;
     // std::cout << force_ << std::endl;
     ener = energy_.toTensor().item<double>();
