@@ -1,4 +1,5 @@
 tensorflow>=2.14.0
 deepmd-kit>=2.2.7
+ase
 coverage
 pytest
