@@ -66,6 +66,7 @@ class DeepPot {
   double cutoff() const {
     return rcut;
   };
+  void get_type_map(std::string &type_map);
  private:
   torch::jit::script::Module module;
   double rcut;

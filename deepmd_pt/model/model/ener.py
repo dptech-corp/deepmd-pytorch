@@ -278,6 +278,9 @@ class EnergyModel(BaseModel):
     @torch.jit.export
     def get_rcut(self):
         return self.descriptor.rcut
+    @torch.jit.export
+    def get_type_map(self):
+        return self.type_map
     
     def atomic_virial_corr(self, extended_coord, atom_energy):
       nall = extended_coord.shape[1]

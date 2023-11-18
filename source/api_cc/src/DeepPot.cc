@@ -125,6 +125,14 @@ template void DeepPot::compute<double, double>(double& ener,
             const std::vector<double>& coord,
             const std::vector<int>& atype,
             const std::vector<double>& box);
+
+void DeepPot::get_type_map(std::string& type_map) {
+  auto ret = module.run_method("get_type_map").toList();
+  for (const torch::IValue& element : ret) {
+      type_map += torch::str(element); // Convert each element to a string
+      type_map += " "; // Add a space between elements (adjust as needed)
+  }
+}
 DeepPotModelDevi::DeepPotModelDevi() { }
 
 DeepPotModelDevi::~DeepPotModelDevi() { }
