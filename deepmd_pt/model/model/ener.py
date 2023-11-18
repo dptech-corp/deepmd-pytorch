@@ -205,7 +205,6 @@ class EnergyModel(BaseModel):
     ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
         atype = extended_atype[:, :nloc]
-        print(atype)
         if self.grad_force:
             extended_coord.requires_grad_(True)
         if self.type_embedding is not None:

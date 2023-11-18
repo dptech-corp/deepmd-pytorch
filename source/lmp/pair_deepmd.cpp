@@ -83,7 +83,67 @@ PairDeepMD::~PairDeepMD() {
     memory->destroy(scale);
   }
 }
+static int stringCmp(const void *a, const void *b) {
+  char *m = (char *)a;
+  char *n = (char *)b;
+  int i, sum = 0;
 
+  for (i = 0; i < MPI_MAX_PROCESSOR_NAME; i++) {
+    if (m[i] == n[i]) {
+      continue;
+    } else {
+      sum = m[i] - n[i];
+      break;
+    }
+  }
+  return sum;
+}
+int PairDeepMD::get_node_rank() {
+  char host_name[MPI_MAX_PROCESSOR_NAME];
+  memset(host_name, '\0', sizeof(char) * MPI_MAX_PROCESSOR_NAME);
+  char(*host_names)[MPI_MAX_PROCESSOR_NAME];
+  int n, namelen, color, rank, nprocs, myrank;
+  size_t bytes;
+  MPI_Comm nodeComm;
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+  MPI_Get_processor_name(host_name, &namelen);
+
+  bytes = nprocs * sizeof(char[MPI_MAX_PROCESSOR_NAME]);
+  host_names = (char(*)[MPI_MAX_PROCESSOR_NAME])malloc(bytes);
+  for (int ii = 0; ii < nprocs; ii++) {
+    memset(host_names[ii], '\0', sizeof(char) * MPI_MAX_PROCESSOR_NAME);
+  }
+
+  strcpy(host_names[rank], host_name);
+
+  for (n = 0; n < nprocs; n++) {
+    MPI_Bcast(&(host_names[n]), MPI_MAX_PROCESSOR_NAME, MPI_CHAR, n,
+              MPI_COMM_WORLD);
+  }
+  qsort(host_names, nprocs, sizeof(char[MPI_MAX_PROCESSOR_NAME]), stringCmp);
+
+  color = 0;
+  for (n = 0; n < nprocs - 1; n++) {
+    if (strcmp(host_name, host_names[n]) == 0) {
+      break;
+    }
+    if (strcmp(host_names[n], host_names[n + 1])) {
+      color++;
+    }
+  }
+
+  MPI_Comm_split(MPI_COMM_WORLD, color, 0, &nodeComm);
+  MPI_Comm_rank(nodeComm, &myrank);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  int looprank = myrank;
+  // printf (" Assigning device %d  to process on node %s rank %d,
+  // OK\n",looprank,  host_name, rank );
+  free(host_names);
+  return looprank;
+}
 /* ---------------------------------------------------------------------- */
 
 void PairDeepMD::settings(int narg, char **arg) {
@@ -105,16 +165,16 @@ void PairDeepMD::settings(int narg, char **arg) {
   numb_models = models.size();
   if (numb_models == 1) {
     // try {
-      deep_pot.init<double>(std::string(arg[0]));
+      deep_pot.init<double>(std::string(arg[0]),get_node_rank());
     // } catch (deepmd_compat::deepmd_exception &e) {
       // error->one(FLERR, e.what());
     // }
     cutoff = deep_pot.cutoff();
-    std::cout << cutoff << std::endl;
+    //std::cout << cutoff << std::endl;
   }
   else {
     // try {
-      deep_pot.init<double>(std::string(arg[0]));
+      deep_pot.init<double>(std::string(arg[0]),get_node_rank());
       deep_pot_model_devi.init<double>(models);
     // } catch (deepmd_compat::deepmd_exception &e) {
       // error->one(FLERR, e.what());
@@ -326,7 +386,7 @@ void PairDeepMD::compute(int eflag, int vflag) {
     deep_pot_model_devi.compute<double, double>(all_energy, all_force, all_virial, dcoord, dtype, dbox);
     dener = all_energy[0];
     dforce = all_force[0];
-    std::cout << dforce << std::endl;
+    //std::cout << dforce << std::endl;
     dvirial = all_virial[0];
     if (out_freq > 0 && update->ntimestep % out_freq == 0) {
       int rank = comm->me;

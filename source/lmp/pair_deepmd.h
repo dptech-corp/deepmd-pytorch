@@ -30,7 +30,7 @@ class PairDeepMD : public Pair {
   // int pack_reverse_comm(int, int, double *) override;
   // void unpack_reverse_comm(int, int *, double *) override;
   // void print_summary(const std::string pre) const;
-  // int get_node_rank();
+  int get_node_rank();
   // void extend(int &extend_inum,
   //             std::vector<int> &extend_ilist,
   //             std::vector<int> &extend_numneigh,
