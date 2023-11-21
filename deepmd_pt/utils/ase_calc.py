@@ -6,7 +6,7 @@ import dpdata
 
 
 class DPCalculator(Calculator):
-    implemented_properties = ["energy", "forces", "virial", "stress"]
+    implemented_properties = ["energy", "free_energy", "forces", "virial", "stress"]
 
     def __init__(
             self,
@@ -26,6 +26,7 @@ class DPCalculator(Calculator):
         model_predict = self.dp.eval(input_coords, input_cells, input_types)
         self.results = {
             "energy": model_predict[0].item(),
+            "free_energy": model_predict[0].item(),
             "forces": model_predict[1].reshape(-1, 3),
             "virial": model_predict[2].reshape(3, 3)
         }
