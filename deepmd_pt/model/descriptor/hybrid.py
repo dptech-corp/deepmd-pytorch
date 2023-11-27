@@ -179,7 +179,7 @@ class DescrptHybrid(Descriptor):
                 out_rot_mat = torch.concat(out_rot_mat_list, dim=-2)
             else:
                 out_rot_mat = None
-            return out_descriptor, None, None, out_rot_mat
+            return out_descriptor, None, None, out_rot_mat, None
         elif self.hybrid_mode == 'sequential':
             seq_input = None
             env_mat, diff, rot_mat = None, None, None
