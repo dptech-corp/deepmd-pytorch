@@ -162,7 +162,7 @@ class DescrptHybrid(Descriptor):
                     input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
                 else:
                     input_nlist_tebd = None
-                descriptor, env_mat, diff, rot_mat = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
+                descriptor, env_mat, diff, rot_mat, sw = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
                                                              nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=input_nlist_tebd)
                 if descriptor.shape[0] == nframes * nloc:
