@@ -242,7 +242,7 @@ class DescrptSeAtten(Descriptor):
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
         return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
                ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
-               rot_mat.view(-1, self.filter_neuron[-1], 3)
+               rot_mat.view(-1, self.filter_neuron[-1], 3), sw
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

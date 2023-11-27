@@ -76,7 +76,6 @@ class TestDenoiseModelDPA1(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
@@ -89,7 +88,6 @@ class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
@@ -101,7 +99,6 @@ class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
@@ -113,7 +110,6 @@ class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelHybrid(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)

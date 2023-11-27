@@ -193,12 +193,12 @@ class DescrptHybrid(Descriptor):
                     input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
                 else:
                     input_nlist_tebd = None
-                seq_output, env_mat, diff, rot_mat = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
+                seq_output, env_mat, diff, rot_mat, sw = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
                                                              nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=input_nlist_tebd, seq_input=seq_input)
                 seq_input = seq_transform(seq_output)
                 env_mat_list.append(env_mat)
                 diff_list.append(diff)
-            return seq_input, env_mat_list, diff_list, rot_mat
+            return seq_input, env_mat_list, diff_list, rot_mat, sw
         else:
             raise RuntimeError
