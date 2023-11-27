@@ -179,10 +179,10 @@ class DescrptHybrid(Descriptor):
                 out_rot_mat = torch.concat(out_rot_mat_list, dim=-2)
             else:
                 out_rot_mat = None
-            return out_descriptor, None, None, out_rot_mat, None
+            return out_descriptor, None, None, out_rot_mat, sw
         elif self.hybrid_mode == 'sequential':
             seq_input = None
-            env_mat, diff, rot_mat = None, None, None
+            env_mat, diff, rot_mat, sw = None, None, None, None
             env_mat_list, diff_list = [], []
             for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
                 if nlist_loc is not None:
