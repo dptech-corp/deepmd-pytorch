@@ -64,18 +64,6 @@ class TestSmoothDenoise:
     compare(ret1, ret2)
     compare(ret0, ret3)
 
-@unittest.skip("not smooth at the moment")
-class TestDenoiseModelDPA1(unittest.TestCase, TestSmoothDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpa1_denoise)
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-    # less degree of smoothness,
-    # error can be systematically removed by reducing epsilon
-    self.epsilon = 1e-7
-    self.aprec = 1e-5
-
 class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
