@@ -346,7 +346,7 @@ void PairDeepMD::compute(int eflag, int vflag) {
     for (int jj=0; jj<3; jj++) {
       dcoord[3*ii+jj] = x[ii][jj];
     }
-    dtype[ii] = type[ii]-1;
+    dtype[ii] = type_idx_map[type[ii] - 1];
   }
 
   // get box
@@ -507,15 +507,76 @@ void PairDeepMD::compute(int eflag, int vflag) {
 /* ----------------------------------------------------------------------
    set coeffs for one or more type pairs
 ------------------------------------------------------------------------- */
-
 void PairDeepMD::coeff(int narg, char **arg) {
   // if (narg < 4 || narg > 5) error->all(FLERR, "Incorrect args for pair coefficients");
   if (!allocated) allocate();
 
+  int n = atom->ntypes;
   int ilo, ihi, jlo, jhi;
-  utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
-  utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
+  ilo = 0;
+  jlo = 0;
+  ihi = n;
+  jhi = n;
+  if (narg >= 2) {
+    utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
+    utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
+    if (ilo != 1 || jlo != 1 || ihi != n || jhi != n) {
+      error->all(FLERR,
+                 "deepmd requires that the scale should be set to all atom "
+                 "types, i.e. pair_coeff * *.");
+    }
+  }
+  if (narg <= 2) {
+    type_idx_map.resize(n);
+    for (int ii = 0; ii < n; ++ii) {
+      type_idx_map[ii] = ii;
+    }
+  } else {
+    int iarg = 2;
 
+    // type_map is a list of strings with undetermined length
+    // note: although we have numb_types from the model, we do not require
+    // the number of types in the system matches that in the model
+    std::vector<std::string> type_map;
+    std::string type_map_str;
+    deep_pot.get_type_map(type_map_str);
+    // convert the string to a vector of strings
+    std::istringstream iss(type_map_str);
+    std::string type_name;
+    while (iss >> type_name) {
+      type_map.push_back(type_name);
+    }
+    type_idx_map.clear();
+    type_names.clear();
+    while (iarg < narg) {
+      std::string type_name = arg[iarg];
+      type_names.push_back(type_name);
+      bool found_element = false;
+      for (int ii = 0; ii < type_map.size(); ++ii) {
+        if (type_map[ii] == type_name) {
+          type_idx_map.push_back(ii);
+          found_element = true;
+          break;
+        }
+      }
+      if (!found_element && "NULL" == type_name) {
+        type_idx_map.push_back(type_map.size());  // ghost type
+        found_element = true;
+      }
+      if (!found_element) {
+        error->all(FLERR, "pair_coeff: element " + type_name +
+                              " not found in the model");
+      }
+      iarg += 1;
+    }
+    numb_types = type_idx_map.size();
+    if (numb_types < n) {
+      type_idx_map.resize(n);
+      for (int ii = numb_types; ii < n; ++ii) {
+        type_idx_map[ii] = -1;
+      }
+    }
+  }
   int count = 0;
   for (int i = ilo; i <= ihi; i++) {
     for (int j = MAX(jlo, i); j <= jhi; j++) {
@@ -523,13 +584,11 @@ void PairDeepMD::coeff(int narg, char **arg) {
       // sigma[i][j] = sigma_one;
       // cut[i][j] = cut_one;
       setflag[i][j] = 1;
+      scale[i][j] = 1.0;
       count++;
     }
   }
-
-  if (count == 0) error->all(FLERR, "Incorrect args for pair coefficients");
 }
-
 
 /* ---------------------------------------------------------------------- */
 
