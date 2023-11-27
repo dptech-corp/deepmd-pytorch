@@ -149,7 +149,7 @@ class DescrptSeA(Descriptor):
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
         nloc = nlist.shape[1]
-        dmatrix, diff, sw = prod_env_mat_se_a(
+        dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,
@@ -171,7 +171,7 @@ class DescrptSeA(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nall, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None, sw
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None, None
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms):
