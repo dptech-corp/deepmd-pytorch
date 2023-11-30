@@ -280,3 +280,30 @@ def save_detail_file(detail_path, system_pred, system_label, natoms, system_name
             header="%s: data_fx data_fy data_fz pred_fx pred_fy pred_fz" % system_name,
             append=append,
         )
+    if "virial" in system_pred[0]:
+        data_v = np.concatenate([item['virial'] for item in system_label]).reshape([-1, 9])
+        pred_v = np.concatenate([item['virial'] for item in system_pred]).reshape([-1, 9])
+        pv = np.concatenate(
+            (
+                data_v,
+                pred_v,
+            ),
+            axis=1,
+        )
+        save_txt_file(
+            detail_path.with_suffix(".v.out"),
+            pv,
+            header=f"{system_name}: data_vxx data_vxy data_vxz data_vyx data_vyy "
+                   "data_vyz data_vzx data_vzy data_vzz pred_vxx pred_vxy pred_vxz pred_vyx "
+                   "pred_vyy pred_vyz pred_vzx pred_vzy pred_vzz",
+            append=append,
+        )
+        pv_atom = pv / natoms
+        save_txt_file(
+            detail_path.with_suffix(".v_peratom.out"),
+            pv_atom,
+            header=f"{system_name}: data_vxx data_vxy data_vxz data_vyx data_vyy "
+                   "data_vyz data_vzx data_vzy data_vzz pred_vxx pred_vxy pred_vxz pred_vyx "
+                   "pred_vyy pred_vyz pred_vzx pred_vzy pred_vzz",
+            append=append,
+        )
