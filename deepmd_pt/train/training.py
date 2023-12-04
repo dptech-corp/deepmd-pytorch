@@ -91,7 +91,10 @@ class Trainer(object):
 
         def get_opt_param(params):
             opt_type = params.get("opt_type", "Adam")
-            opt_param = {'kf_blocksize': params.get("kf_blocksize", 5120),
+            opt_param = {'adam_betas': params.get("adam_betas", [0.9, 0.999]),
+                         'adam_eps': params.get("adam_eps", 0.00000001),
+                         'adam_weight_decay': params.get("adam_weight_decay", 0),
+                         'kf_blocksize': params.get("kf_blocksize", 5120),
                          'kf_start_pref_e': params.get("kf_start_pref_e", 1),
                          'kf_limit_pref_e': params.get("kf_limit_pref_e", 1),
                          'kf_start_pref_f': params.get("kf_start_pref_f", 1),
@@ -322,7 +325,9 @@ class Trainer(object):
         # TODO ZD add optimizers for multitask
         if self.opt_type == "Adam":
             self.optimizer = torch.optim.Adam(
-                self.wrapper.parameters(), lr=self.lr_exp.start_lr
+                self.wrapper.parameters(), lr=self.lr_exp.start_lr,
+                betas=tuple(self.opt_param['adam_betas']), eps=self.opt_param['adam_eps'],
+                weight_decay=self.opt_param['adam_weight_decay']
             )
             if optimizer_state_dict is not None and self.restart_training:
                 self.optimizer.load_state_dict(optimizer_state_dict)
