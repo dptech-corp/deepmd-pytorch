@@ -37,7 +37,7 @@ class LearningRateExp(object):
 class LearningRatePolynomial(object):
 
     def __init__(self, start_lr, stop_lr, stop_steps, **kwargs):
-        """Construct an exponential-decayed learning rate.
+        """Construct an polynomial-decayed learning rate.
 
         Args:
         - start_lr: Initial learning rate.
