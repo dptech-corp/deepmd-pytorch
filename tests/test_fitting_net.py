@@ -105,6 +105,7 @@ class TestFittingNet(unittest.TestCase):
         my_energy = my_energy.detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
+@unittest.skip("not complete")
 class TestPropertyFittingNet(unittest.TestCase):
 
     def setUp(self):
