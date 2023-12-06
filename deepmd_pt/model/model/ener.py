@@ -261,11 +261,13 @@ class EnergyModel(BaseModel):
                     assert dforce is not None
                     model_predict['dforce'] = dforce
             elif 'prop' in self.fitting_type:
-                atom_property = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+                atom_property, _ = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
                 property = atom_property.mean(dim=1)
                 model_predict = {'property': property,
                                 'atom_property': atom_property,
                                 }
+            else:
+                model_predict = {}
         # denoise
         else:
             nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))

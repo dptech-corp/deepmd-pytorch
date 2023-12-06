@@ -62,4 +62,4 @@ class PropertyFittingNet(Fitting):
                 atom_prop = filter_layer(inputs)
                 atom_prop = atom_prop * mask.unsqueeze(-1)
                 outs = outs + atom_prop # Shape is [nframes, natoms[0], 1]
-        return outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
+        return outs.to(env.GLOBAL_PT_FLOAT_PRECISION), None
