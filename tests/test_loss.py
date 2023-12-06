@@ -35,7 +35,7 @@ def get_batch():
     return np_batch, pt_batch
 
 
-class TestLearningRate(unittest.TestCase):
+class TestEnergyStdLoss(unittest.TestCase):
 
     def setUp(self):
         self.start_lr = 1.1
@@ -136,6 +136,44 @@ class TestLearningRate(unittest.TestCase):
         for key in ['ener', 'force', 'virial']:
             self.assertTrue(np.allclose(base_more_loss['l2_%s_loss' % key], my_more_loss['l2_%s_loss' % key]))
 
+@unittest.skip("not complete")
+class TestPropertyLoss(unittest.TestCase):
+
+    def setUp(self):
+        # data
+        np_batch, pt_batch = get_batch()
+        natoms = np_batch['natoms']
+        self.nloc = natoms[0]
+        l_energy, l_force, l_virial = np_batch['energy'], np_batch['force'], np_batch['virial']
+        p_energy, p_force, p_virial = np.ones_like(l_energy), np.ones_like(l_force), np.ones_like(l_virial)
+        nloc = natoms[0]
+        batch_size = pt_batch['coord'].shape[0]
+        atom_energy = np.zeros(shape=[batch_size, nloc])
+        atom_pref = np.zeros(shape=[batch_size, nloc * 3])
+        # torch
+        self.model_pred = {'energy': torch.from_numpy(p_energy),
+                           'force': torch.from_numpy(p_force),
+                           'virial': torch.from_numpy(p_virial),
+                           }
+        self.label = {'energy': torch.from_numpy(l_energy),
+                      'force': torch.from_numpy(l_force),
+                      'virial': torch.from_numpy(l_virial),
+                      }
+        self.natoms = pt_batch['natoms']
+
+    def test_consistency(self):
+        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f,
+                             self.start_pref_v, self.limit_pref_v)
+        my_loss, my_more_loss = mine(
+            self.label,
+            self.model_pred,
+            self.nloc,
+            self.cur_lr,
+        )
+        my_loss = my_loss.detach().cpu()
+        self.assertTrue(np.allclose(base_loss, my_loss.numpy()))
+        for key in ['ener', 'force', 'virial']:
+            self.assertTrue(np.allclose(base_more_loss['l2_%s_loss' % key], my_more_loss['l2_%s_loss' % key]))
 
 if __name__ == '__main__':
     unittest.main()

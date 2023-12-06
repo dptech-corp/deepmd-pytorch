@@ -42,8 +42,8 @@ class BaseModel(torch.nn.Module):
                         input_natoms = [item['natoms'] for item in sampled]
                     tmp = compute_output_stats(energy, input_natoms)
                     fitting_param['bias_atom_e'] = tmp[:, 0]
-                    property_mean = 1.0
-                    property_std = 0.0
+                    property_mean = torch.tensor(1.0, device=env.DEVICE)
+                    property_std = torch.tensor(0.0, device=env.DEVICE)
                 elif 'prop' in fitting_type:
                     fitting_param['bias_atom_e'] = [0.0] * ntypes
                     property = torch.cat([item['property'] for item in sampled]).reshape(-1)

@@ -11,7 +11,7 @@ tf.disable_eager_execution()
 from deepmd.fit.ener import EnerFitting
 
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
-from deepmd_pt.model.task import EnergyFittingNet
+from deepmd_pt.model.task import EnergyFittingNet, PropertyFittingNet
 
 
 class FakeDescriptor(object):
@@ -105,6 +105,40 @@ class TestFittingNet(unittest.TestCase):
         my_energy = my_energy.detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
+class TestPropertyFittingNet(unittest.TestCase):
+
+    def setUp(self):
+        nloc = 7
+        self.embedding_width = 6
+        self.natoms = np.array([nloc, nloc, 2, 5], dtype=np.int32)
+        self.embedding = np.random.uniform(size=[4, nloc*self.embedding_width])
+        self.ntypes = self.natoms.size - 2
+        self.n_neuron = [4, 4]
+        self.atype = np.zeros([4, nloc], dtype=np.int32)
+        cnt = 0
+        for i in range(self.ntypes):
+            self.atype[:, cnt:cnt + self.natoms[i + 2]] = i
+            cnt += self.natoms[i + 2]
+        fake_d = FakeDescriptor(2, 30)
+    
+    def test_consistency(self):
+        my_fn = PropertyFittingNet(self.ntypes, self.embedding_width, self.n_neuron)
+        for name, param in my_fn.named_parameters():
+            matched = re.match('filter_layers\.(\d).deep_layers\.(\d)\.([a-z]+)', name)
+            key = None
+            if matched:
+                key = gen_key(type_id=matched.group(1), layer_id=matched.group(2), w_or_b=matched.group(3))
+            else:
+                matched = re.match('filter_layers\.(\d).final_layer\.([a-z]+)', name)
+                if matched:
+                    key = gen_key(type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2))
+            assert key is not None
+        embedding = torch.from_numpy(self.embedding)
+        embedding = embedding.view(4, -1, self.embedding_width)
+        atype = torch.from_numpy(self.atype)
+        my_property = my_fn(embedding, atype)
+        my_property = my_property.detach()
+        #TODO : How can I judge the result is correct
 
 if __name__ == '__main__':
     unittest.main()
