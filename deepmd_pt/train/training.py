@@ -11,7 +11,7 @@ from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK, DISABLE_TQDM
 from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp, LearningRatePolynomial
-from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
+from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss, PropertyLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.dataloader import BufferedIterator, get_weighted_sampler
@@ -169,6 +169,10 @@ class Trainer(object):
             elif loss_type == 'denoise':
                 loss_params['ntypes'] = _ntypes
                 return DenoiseLoss(**loss_params)
+            elif loss_type == 'prop':
+                loss_params['mean'] = self.model.mean
+                loss_params['std'] = self.model.std
+                return PropertyLoss(**loss_params)
             else:
                 raise NotImplementedError
 
@@ -630,7 +634,7 @@ class Trainer(object):
             else:
                 input_dict[item] = None
         label_dict = {}
-        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
+        for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask", "property"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
         return input_dict, label_dict

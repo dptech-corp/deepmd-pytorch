@@ -32,14 +32,24 @@ class BaseModel(torch.nn.Module):
                                 sys[key] = sys[key].to(env.DEVICE)
                 sumr, suma, sumn, sumr2, suma2 = self.descriptor.compute_input_stats(sampled)
 
-                energy = [item['energy'] for item in sampled]
-                mixed_type = 'real_natoms_vec' in sampled[0]
-                if mixed_type:
-                    input_natoms = [item['real_natoms_vec'] for item in sampled]
-                else:
-                    input_natoms = [item['natoms'] for item in sampled]
-                tmp = compute_output_stats(energy, input_natoms)
-                fitting_param['bias_atom_e'] = tmp[:, 0]
+                fitting_type = fitting_param.get('type', 'ener')
+                if ('ener' in fitting_type) or ('force' in fitting_type):
+                    energy = [item['energy'] for item in sampled]
+                    mixed_type = 'real_natoms_vec' in sampled[0]
+                    if mixed_type:
+                        input_natoms = [item['real_natoms_vec'] for item in sampled]
+                    else:
+                        input_natoms = [item['natoms'] for item in sampled]
+                    tmp = compute_output_stats(energy, input_natoms)
+                    fitting_param['bias_atom_e'] = tmp[:, 0]
+                    property_mean = 1.0
+                    property_std = 0.0
+                elif 'prop' in fitting_type:
+                    fitting_param['bias_atom_e'] = [0.0] * ntypes
+                    property = torch.cat([item['property'] for item in sampled]).reshape(-1)
+                    property_std, property_mean = torch.std_mean(property)
+                    fitting_param['mean'] = property_mean
+                    fitting_param['std'] = property_std
                 if stat_file_path is not None:
                     if not os.path.exists(stat_file_dir):
                         os.mkdir(stat_file_dir)
@@ -47,14 +57,15 @@ class BaseModel(torch.nn.Module):
                         logging.info(f'Saving stat file to {stat_file_path}')
                         np.savez_compressed(stat_file_path,
                                             sumr=sumr, suma=suma, sumn=sumn, sumr2=sumr2, suma2=suma2,
-                                            bias_atom_e=fitting_param['bias_atom_e'], type_map=type_map)
+                                            bias_atom_e=fitting_param['bias_atom_e'], type_map=type_map,
+                                            property_mean=property_mean.cpu(), property_std=property_std.cpu())
                     else:
                         for ii, file_path in enumerate(stat_file_path):
                             logging.info(f'Saving stat file to {file_path}')
                             np.savez_compressed(file_path,
                                                 sumr=sumr[ii], suma=suma[ii], sumn=sumn[ii], sumr2=sumr2[ii], suma2=suma2[ii],
                                                 bias_atom_e=fitting_param['bias_atom_e'],
-                                                type_map=type_map)
+                                                type_map=type_map, property_mean=property_mean.cpu(), property_std=property_std.cpu())
             else:  # load stat
                 target_type_map = type_map
                 if not isinstance(stat_file_path, list):
@@ -72,6 +83,8 @@ class BaseModel(torch.nn.Module):
                     else:
                         sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
                     fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
+                    fitting_param['mean'] = stats["property_mean"]
+                    fitting_param['std'] = stats['property_std']
                 else:
                     sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
                     id_bias_atom_e = None
@@ -95,6 +108,8 @@ class BaseModel(torch.nn.Module):
                         sumr2.append(sumr2_tmp)
                         suma2.append(suma2_tmp)
                         fitting_param['bias_atom_e'] = stats["bias_atom_e"][idx_map]
+                        fitting_param['mean'] = stats["property_mean"]
+                        fitting_param['std'] = stats['property_std']
                         if id_bias_atom_e is None:
                             id_bias_atom_e = fitting_param['bias_atom_e']
                         else:
