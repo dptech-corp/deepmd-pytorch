@@ -437,6 +437,8 @@ class DeepmdDataSystem(object):
         for kk in self._data_dict.keys():
             if "find_" in kk:
                 pass
+            elif kk not in batch:
+                pass
             else:
                 batch[kk] = torch.tensor(batch[kk], dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.PREPROCESS_DEVICE)
                 if self._data_dict[kk]['atomic']:
