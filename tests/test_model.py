@@ -291,7 +291,6 @@ class TestEnergy(unittest.TestCase):
         # Start forward computing
         batch = my_ds.systems[0]._data_system.preprocess(batch)
         batch['coord'].requires_grad_(True)
-        print(batch['coord'].device)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         model_predict = my_model(batch['coord'], batch['atype'], batch['box'], do_atomic_virial=True)
         p_energy, p_force, p_virial, p_atomic_virial = model_predict['energy'], model_predict['force'], model_predict['virial'], model_predict['atomic_virial']
