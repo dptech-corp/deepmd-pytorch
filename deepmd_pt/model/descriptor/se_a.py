@@ -171,7 +171,7 @@ class DescrptSeA(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nall, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None, None
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms):

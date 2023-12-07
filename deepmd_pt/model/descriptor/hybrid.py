@@ -162,7 +162,7 @@ class DescrptHybrid(Descriptor):
                     input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
                 else:
                     input_nlist_tebd = None
-                descriptor, env_mat, diff, rot_mat = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
+                descriptor, env_mat, diff, rot_mat, sw = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
                                                              nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=input_nlist_tebd)
                 if descriptor.shape[0] == nframes * nloc:
@@ -179,10 +179,10 @@ class DescrptHybrid(Descriptor):
                 out_rot_mat = torch.concat(out_rot_mat_list, dim=-2)
             else:
                 out_rot_mat = None
-            return out_descriptor, None, None, out_rot_mat
+            return out_descriptor, None, None, out_rot_mat, sw
         elif self.hybrid_mode == 'sequential':
             seq_input = None
-            env_mat, diff, rot_mat = None, None, None
+            env_mat, diff, rot_mat, sw = None, None, None, None
             env_mat_list, diff_list = [], []
             for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
                 if nlist_loc is not None:
@@ -193,12 +193,12 @@ class DescrptHybrid(Descriptor):
                     input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
                 else:
                     input_nlist_tebd = None
-                seq_output, env_mat, diff, rot_mat = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
+                seq_output, env_mat, diff, rot_mat, sw = descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
                                                              nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=input_nlist_tebd, seq_input=seq_input)
                 seq_input = seq_transform(seq_output)
                 env_mat_list.append(env_mat)
                 diff_list.append(diff)
-            return seq_input, env_mat_list, diff_list, rot_mat
+            return seq_input, env_mat_list, diff_list, rot_mat, sw
         else:
             raise RuntimeError

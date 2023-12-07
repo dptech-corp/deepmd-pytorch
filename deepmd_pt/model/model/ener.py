@@ -215,7 +215,7 @@ class EnergyModel(BaseModel):
             atype_tebd = None
             nlist_tebd = None
 
-        descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
+        descriptor, env_mat, diff, rot_mat, sw = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
                                                              nlist_loc=nlist_loc, atype_tebd=atype_tebd,
                                                              nlist_tebd=nlist_tebd)
         assert descriptor is not None
@@ -257,7 +257,7 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = nlist_list[-1] != -1
-            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor)
+            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }
