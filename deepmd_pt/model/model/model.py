@@ -118,3 +118,14 @@ class BaseModel(torch.nn.Module):
             self.descriptor.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
         else:  # resuming for checkpoint; init model params from scratch
             fitting_param['bias_atom_e'] = [0.0] * ntypes
+            if not isinstance(stat_file_path, list):
+                logging.info(f'Loading stat file from {stat_file_path}')
+                stats = np.load(stat_file_path)
+                fitting_param['mean'] = stats["property_mean"]
+                fitting_param['std'] = stats['property_std']
+            else:
+                for ii, file_path in enumerate(stat_file_path):
+                    logging.info(f'Loading stat file from {file_path}')
+                    stats = np.load(file_path)
+                    fitting_param['mean'] = stats["property_mean"]
+                    fitting_param['std'] = stats['property_std']

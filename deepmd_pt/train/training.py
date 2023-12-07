@@ -291,7 +291,7 @@ class Trainer(object):
                 if finetune_model is not None:
                     state_dict['_extra_state'] = self.wrapper.state_dict()['_extra_state']
 
-                self.wrapper.load_state_dict(state_dict)
+                self.wrapper.load_state_dict(state_dict, strict = False)
                 # finetune
                 if finetune_model is not None and model_params["fitting_net"].get("type", "ener") in ['ener',
                                                                                                       'direct_force_ener',

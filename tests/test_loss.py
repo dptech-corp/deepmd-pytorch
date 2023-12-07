@@ -10,7 +10,7 @@ tf.disable_eager_execution()
 from deepmd.loss.ener import EnerStdLoss
 from deepmd.common import expand_sys_str
 
-from deepmd_pt.loss import EnergyStdLoss
+from deepmd_pt.loss import EnergyStdLoss, PropertyLoss
 from deepmd_pt.utils.env import TEST_CONFIG
 from deepmd_pt.utils.dataset import DeepmdDataSet
 
@@ -141,6 +141,8 @@ class TestPropertyLoss(unittest.TestCase):
 
     def setUp(self):
         # data
+        self.mean = 3.0
+
         np_batch, pt_batch = get_batch()
         natoms = np_batch['natoms']
         self.nloc = natoms[0]
@@ -162,7 +164,7 @@ class TestPropertyLoss(unittest.TestCase):
         self.natoms = pt_batch['natoms']
 
     def test_consistency(self):
-        mine = EnergyStdLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f,
+        mine = PropertyLoss(self.start_lr, self.start_pref_e, self.limit_pref_e, self.start_pref_f, self.limit_pref_f,
                              self.start_pref_v, self.limit_pref_v)
         my_loss, my_more_loss = mine(
             self.label,
