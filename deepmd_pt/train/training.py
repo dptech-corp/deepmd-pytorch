@@ -51,6 +51,7 @@ class Trainer(object):
         model_params = config["model"]
         training_params = config["training"]
         self.multi_task = "model_dict" in model_params
+        self.finetune_multi_task = model_params.pop("finetune_multi_task", False)  # should use pop for next finetune
         self.model_keys = [key for key in model_params["model_dict"]] if self.multi_task else ["Default"]
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -262,10 +263,10 @@ class Trainer(object):
                         slim_keys = [i + '.*' for i in slim_keys]
                         logging.warning(
                             f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
-                elif model_params.get('finetune_multi_task', False):
+                elif self.finetune_multi_task:
                     new_state_dict = {}
-                    model_branch_chosen = model_params['model_branch_chosen']
-                    new_fitting = model_params.get('new_fitting', False)
+                    model_branch_chosen = model_params.pop('model_branch_chosen')
+                    new_fitting = model_params.pop('new_fitting', False)
                     target_state_dict = self.wrapper.state_dict()
                     target_keys = [i for i in target_state_dict.keys() if i != '_extra_state']
                     for item_key in target_keys:
