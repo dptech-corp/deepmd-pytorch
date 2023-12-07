@@ -6,7 +6,7 @@ import json
 from deepmd.utils.data_system import DeepmdDataSystem
 from deepmd.utils import random as tf_random
 from deepmd.common import expand_sys_str
-
+from torch.utils.data import DataLoader
 from deepmd_pt.utils.dataloader import DpLoaderSet, get_weighted_sampler
 from deepmd_pt.utils import env
 
@@ -35,10 +35,27 @@ class TestSampler(unittest.TestCase):
                                               'rcut': self.rcut,
                                           },
                                           'type_map': model_config['type_map']
-                                      }, seed=10)
+                                      }, seed=10, shuffle=False)
 
         tf_random.seed(10)
         self.dp_dataset = DeepmdDataSystem(self.systems, self.batch_size, 1, self.rcut)
+
+    def test_sampler_debug_info(self):
+        dataloader = DataLoader(
+                self.my_dataset,
+                sampler=get_weighted_sampler(self.my_dataset,prob_style='prob_sys_size')
+                batch_size=None,
+                num_workers=1,  # setting to 0 diverges the behavior of its iterator; should be >=1
+                drop_last=False,
+                pin_memory=True
+        )
+        batch_data = next(iter(self.training_data))
+        sid = batch_data['sid']
+        fid = batch_data['fid']
+        coord = batch_data['coord'].squeeze(0)
+        frame = self.my_dataset.systems[sid].__getitem__(fid)
+        assert(coord == frame['coord'])
+
 
     def test_auto_prob_uniform(self):
         auto_prob_style= 'prob_uniform'
