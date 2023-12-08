@@ -5,10 +5,31 @@ DeePMD-PyTorch also supports the multi-task pre-training of  DPA-2, a large atom
 
 ## Use DeePMD-PyTorch
 
+### Usage of DPA-2
+
+1. Acquire a foundation model weight of DPA-2 from [AIS-Square](https://www.aissquare.com/models?page=1&type=models&sort=modify_date&search=DPA_v2).
+2. Fine-tuning the model on a downstream dataset.
+
+    ```bash
+    dp_pt train input.json --finetune foundation.pt
+    ```
+
+3. Test the fine-tuned model.
+
+    ```bash
+    dp_pt test --head Domains_Drug -m finetuned.pt -s path_to_systems
+    ```
+
+4. Freeze the model for molecular dynamics.
+
+    ```bash
+    dp_pt freeze finetuned.pt
+    ```
+
 ### Install
 
 This package requires PyTorch 2. Please refer to [PyTorch's official website](https://pytorch.org/) for installation instructions.
-Since this repo is under active development, please use the `devel` branch.
+Since this repo is under active development, **please use the `devel` branch**.
 
 ```bash
 # PyTorch 2 recommends Python >= 3.8 .
@@ -24,7 +45,7 @@ pip install deepmd-pytorch
 dp_pt -h
 ```
 
-### Train a model
+### Train a foundation model
 
 ```bash
 conda activate deepmd-pt
@@ -38,6 +59,7 @@ We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to l
 To start training with multiple GPUs in one node, set parameter `nproc_per_node` as the number of it:
 
 ```bash
+# Training on 1 node with 4 GPUs
 torchrun --nproc_per_node=4 --no-python dp_pt train input.json
 # Not setting `nproc_per_node` uses only 1 GPU by default
 ```
@@ -45,7 +67,7 @@ torchrun --nproc_per_node=4 --no-python dp_pt train input.json
 To train a model with a cluster, one can manually launch the task using the commands below (usually this should be done by your job management system). Set `nnodes` as the number of available nodes, `node_rank` as the rank of the current node among all nodes (not the rank of processes!), and `nproc_per_node` as the number of available GPUs in one node. Please make sure that every node can access the rendezvous address and port (`rdzv_endpoint` in the command), and has a same amount of GPUs.
 
 ```bash
-# Running DDP on 2 nodes with 4 GPUs each
+# Training on 2 nodes with 4 GPUs each
 # On node 0:
 torchrun --rdzv_endpoint=node0:12321 --nnodes=2 --nproc_per_node=4 --node_rank=0 --no_python dp train tests/water/se_e2_a.json
 # On node 1:
