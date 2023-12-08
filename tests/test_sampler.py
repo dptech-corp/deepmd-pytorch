@@ -49,7 +49,7 @@ class TestSampler(unittest.TestCase):
                 drop_last=False,
                 pin_memory=True
         )
-        batch_data = next(iter(self.training_data))
+        batch_data = next(iter(dataloader))
         sid = batch_data['sid']
         fid = batch_data['fid']
         coord = batch_data['coord'].squeeze(0)
