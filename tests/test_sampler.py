@@ -43,7 +43,7 @@ class TestSampler(unittest.TestCase):
     def test_sampler_debug_info(self):
         dataloader = DataLoader(
                 self.my_dataset,
-                sampler=get_weighted_sampler(self.my_dataset,prob_style='prob_sys_size')
+                sampler=get_weighted_sampler(self.my_dataset,prob_style='prob_sys_size'),
                 batch_size=None,
                 num_workers=1,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
