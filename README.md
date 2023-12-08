@@ -45,7 +45,7 @@ pip install deepmd-pytorch
 dp_pt -h
 ```
 
-### Train a foundation model
+### Train a model
 
 ```bash
 conda activate deepmd-pt
@@ -88,27 +88,6 @@ cd slurm && sbatch distributed_data_parallel_slurm_setup.sbatch
 ```
 
 Files under `slurm` directory are modified from <https://github.com/lkskstlr/distributed_data_parallel_slurm_setup>.
-
-#### Track training progress using Weight & Biases
-
-[Weight & Biases](https://wandb.ai/) helps to track the convergence of loss curves and validation results in the training progress.
-
-The command line entry `wandb` is automatically installed as a requirement for DeePMD-PyTorch.
-
-First, setup with `wandb login`, and set the corresponding fields under the "training" part in your input file (typically `input.json`) as follows:
-
-```jsonc
-// "training": {
-    "wandb_config": {
-        "job_name": "Cu-dpa_adam_bz1_at2",
-        "wandb_enabled": true,
-        "entity": "dp_model_engineering", // a username or team name
-        "project": "DPA"
-    },
-```
-
-Track your runs at <https://wandb.ai/dp_model_engineering/DPA>.
-To disable logging temporarily, set environment variable `WANDB_MODE=disabled`.
 
 ## Test
 
