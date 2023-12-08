@@ -51,10 +51,10 @@ class TestSampler(unittest.TestCase):
         )
         batch_data = next(iter(dataloader))
         sid = batch_data['sid']
-        fid = batch_data['fid'].squeeze(0)
+        fid = batch_data['fid'][0]
         coord = batch_data['coord'].squeeze(0)
         frame = self.my_dataset.systems[sid].__getitem__(fid)
-        assert(coord == frame['coord'])
+        self.assertTrue(np.allclose(coord,frame['coord']))
 
 
     def test_auto_prob_uniform(self):
