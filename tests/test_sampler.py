@@ -50,8 +50,8 @@ class TestSampler(unittest.TestCase):
                 pin_memory=True
         )
         batch_data = next(iter(dataloader))
-        sid = batch_data['sid']
-        fid = batch_data['fid']
+        sid = batch_data['sid'].squeeze(0)
+        fid = batch_data['fid'].squeeze(0)
         coord = batch_data['coord'].squeeze(0)
         frame = self.my_dataset.systems[sid].__getitem__(fid)
         assert(coord == frame['coord'])
