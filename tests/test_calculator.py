@@ -26,7 +26,7 @@ class TestCalculator(unittest.TestCase):
         trainer = get_trainer(deepcopy(self.config))
         trainer.run()
 
-        input_dict, label_dict = trainer.get_data(is_train=False)
+        input_dict, label_dict, _ = trainer.get_data(is_train=False)
         _, _, more_loss = trainer.wrapper(**input_dict, label=label_dict, cur_lr=1.0)
 
         self.calculator = DPCalculator("model.pt")

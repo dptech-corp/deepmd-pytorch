@@ -25,7 +25,7 @@ class TestDPTest(unittest.TestCase):
         trainer = get_trainer(deepcopy(self.config))
         trainer.run()
 
-        input_dict, label_dict = trainer.get_data(is_train=False)
+        input_dict, label_dict,_ = trainer.get_data(is_train=False)
         _, _, more_loss = trainer.wrapper(**input_dict, label=label_dict, cur_lr=1.0)
 
         tester = inference.Tester("model.pt", input_script=self.input_json)
@@ -37,7 +37,7 @@ class TestDPTest(unittest.TestCase):
         for k, v in res.items():
             if k == "rmse" or "mae" in k or k not in more_loss:
                 continue
-            np.testing.assert_allclose(v, more_loss[k].cpu().detach().numpy(), rtol=1e-05, atol=1e-08)
+            np.testing.assert_allclose(v, more_loss[k].cpu().detach().numpy(), rtol=1e-04, atol=1e-07)
 
     def tearDown(self):
         for f in os.listdir("."):

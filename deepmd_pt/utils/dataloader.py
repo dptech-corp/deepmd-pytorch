@@ -117,7 +117,7 @@ class DpLoaderSet(Dataset):
         self.iters = []
         for item in self.dataloaders:
             self.iters.append(iter(item))
-
+        
     def set_noise(self, noise_settings):
         # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
         # noise_settings['noise'] # float, default 1.0
@@ -133,7 +133,14 @@ class DpLoaderSet(Dataset):
 
     def __getitem__(self, idx):
         #logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
-        return next(self.iters[idx])
+        try:
+            batch = next(self.iters[idx])
+        except StopIteration:
+            self.iters[idx] = iter(self.dataloaders[idx])
+            batch = next(self.iters[idx])
+        batch['sid'] = idx
+        return batch
+
 
 
 _sentinel = object()
@@ -259,6 +266,8 @@ def collate_batch(batch):
         else:
             if batch[0][key] is None:
                 result[key] = None
+            elif key == "fid":
+                result[key] = [d[key] for d in batch]
             else:
                 result[key] = collate_tensor_fn([d[key] for d in batch])
     return result
@@ -278,5 +287,6 @@ def get_weighted_sampler(training_data,prob_style,sys_prob=False):
         probs = process_sys_probs(prob_style,training_data.index)
     logging.info("Generated weighted sampler with prob array: "+str(probs))
     #training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iteraters
-    sampler = WeightedRandomSampler(probs,training_data.total_batch, replacement = True)
+    len_sampler = training_data.total_batch * env.NUM_WORKERS
+    sampler = WeightedRandomSampler(probs,len_sampler, replacement = True)
     return sampler
