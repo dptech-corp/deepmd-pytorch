@@ -667,11 +667,11 @@ class Trainer(object):
             for model_key in self.model_keys:
                 if valid_results[model_key] is not None:
                     prop_fmt = "   %11s %11s"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (k + f"_val_{model_key}", k + f"_trn_{model_key}")
                 else:
                     prop_fmt = "   %11s"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (k + f"_trn_{model_key}")
         print_str += "   %8s\n" % "lr"
         fout.write(print_str)
@@ -694,14 +694,14 @@ class Trainer(object):
             for model_key in self.model_keys:
                 if valid_results[model_key] is not None:
                     prop_fmt = "   %11.2e %11.2e"
-                    for k in valid_results[model_key].keys():
+                    for k in sorted(list(valid_results[model_key].keys())):
                         print_str += prop_fmt % (
                             valid_results[model_key][k],
                             train_results[model_key][k],
                         )
                 else:
                     prop_fmt = "   %11.2e"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (train_results[model_key][k])
         print_str += "   %8.1e\n" % cur_lr
         fout.write(print_str)
