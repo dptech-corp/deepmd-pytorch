@@ -74,6 +74,7 @@ class DeepPot {
   //InputNlist nlist;
   int max_num_neighbors;
   int gpu_id;
+  at::Tensor firstneigh_tensor; 
 };
 
 template <typename VALUETYPE>
@@ -88,7 +89,6 @@ void DeepPot::init(const std::string& model, const int& gpu_rank) {
     
     auto rcut_ = module.run_method("get_rcut").toDouble();
     rcut = static_cast<VALUETYPE>(rcut_);
-    std::cout << "success" << std::endl;
 }
 
 class DeepPotModelDevi {

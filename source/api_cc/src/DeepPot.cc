@@ -37,7 +37,8 @@ void DeepPot::compute(ENERGYVTYPE& ener,
     // inputs.push_back(box_Tensor);
     if(ago == 0)
     {
-      nlist_data.copy_from_nlist(lmp_list,max_num_neighbors);
+      int64_t nnei = module.run_method("get_nnei").toInt();
+      nlist_data.copy_from_nlist(lmp_list,max_num_neighbors,nnei);
       // std::cout << "max num neighbor"<< max_num_neighbors << std::endl;
       // for (int i = 0; i < 2; i++) {
       //     std::cout << "list for " << i << std::endl;
@@ -46,9 +47,18 @@ void DeepPot::compute(ENERGYVTYPE& ener,
       //       std::cout << lmp_list.firstneigh[i][j] << " ";
       //     }
       // }
+      if(max_num_neighbors > nnei)
+      {
+        at::Tensor firstneigh = torch::from_blob(nlist_data.jlist, {lmp_list.inum,max_num_neighbors}, int32_options);
+        at::Tensor nlist= firstneigh.to(torch::kInt64).to(device);
+        firstneigh_tensor  = module.run_method("sort_neighbor_list",coord_wrapped_Tensor,nlist).toTensor();
+      }
+      else
+      {
+        at::Tensor firstneigh = torch::from_blob(nlist_data.jlist, {1,lmp_list.inum,max_num_neighbors}, int32_options);
+        firstneigh_tensor = firstneigh.to(torch::kInt64).to(device);
+      }
     }
-    at::Tensor firstneigh = torch::from_blob(nlist_data.jlist, {lmp_list.inum,max_num_neighbors}, int32_options);
-    at::Tensor firstneigh_tensor = firstneigh.to(torch::kInt64).to(device);
     inputs.push_back(firstneigh_tensor);
     c10::Dict<c10::IValue, c10::IValue> outputs = module.forward(inputs).toGenericDict();
     c10::IValue energy_ = outputs.at("energy");

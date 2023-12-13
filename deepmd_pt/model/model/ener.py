@@ -145,11 +145,7 @@ class EnergyModel(BaseModel):
         """
         
         if lmp_list is not None:
-            if lmp_list.shape[1] > self.nnei:
-                sort_list = sort_neighbor_list(coord, self.rcut,self.nnei,lmp_list)
-            else:
-                sort_list = lmp_list
-            return self.forward_lower(coord,atype,sort_list,None,False)
+            return self.forward_lower(coord,atype,lmp_list,None,False)
         nframes, nloc = atype.shape[:2]
         if box is not None:
             coord_normalized = normalize_coord(coord, box.reshape(-1, 3, 3))
@@ -280,6 +276,32 @@ class EnergyModel(BaseModel):
     @torch.jit.export
     def get_type_map(self):
         return self.type_map
+    @torch.jit.export
+    def get_nnei(self):
+        return self.nnei
+    @torch.jit.export
+    def sort_neighbor_list(
+    self,
+    coord: torch.Tensor,
+    lmp_list: torch.Tensor,
+    ) -> torch.Tensor:
+        rcut = self.descriptor.rcut
+        nnei = self.nnei
+        mask = lmp_list >= 0
+        masked_list = lmp_list * mask
+        nloc, max_nnei = lmp_list.shape
+        # nloc, 3
+        coord1 = coord.squeeze(0)
+        coord0 = coord1[:nloc, :]
+        # nloc, nnei, 3
+        coord_nnei = torch.gather(coord1, dim=0, index=masked_list.reshape(-1, 1).expand(-1, 3)).reshape(nloc, max_nnei, 3)
+        diff = coord_nnei - coord0.unsqueeze(1)
+        length = torch.linalg.norm(diff, dim=-1)
+        length = length + (~mask)*(rcut+100.0)
+        rr, nlist_index = torch.sort(length, dim=-1)
+        nlist = lmp_list.gather(-1, nlist_index)
+        nlist_0 = nlist[: , :nnei].unsqueeze(0)
+        return nlist_0
     
     def atomic_virial_corr(self, extended_coord, atom_energy):
       nall = extended_coord.shape[1]
