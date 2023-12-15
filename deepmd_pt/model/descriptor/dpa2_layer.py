@@ -587,12 +587,18 @@ class DescrptDPA2Layer(torch.nn.Module):
             sw: torch.Tensor,  # switch func, nf x nloc x nnei
     ):
         """
-        g1:     nf x nall x ng1         single-atom chanel
+        Parameters:
+        g1_ext: nf x nall x ng1         extended single-atom chanel
         g2:     nf x nloc x nnei x ng2  pair-atom channel, invariant
         h2:     nf x nloc x nnei x 3    pair-atom channel, equivariant
         nlist:  nf x nloc x nnei        neighbor list (padded neis are set to 0)
         nlist_mask:  nf x nloc x nnei   masks of the neighbor list. real nei 1 otherwise 0
         sw:     nf x nloc x nnei        switch function
+
+        Returns:
+        g1:     nf x nloc x ng1         updated single-atom chanel
+        g2:     nf x nloc x nnei x ng2  updated pair-atom channel, invariant
+        h2:     nf x nloc x nnei x 3    updated pair-atom channel, equivariant
         """
         cal_gg1 = self.update_g1_has_drrd or self.update_g1_has_conv or self.update_g1_has_attn or self.update_g2_has_g1g1
 
