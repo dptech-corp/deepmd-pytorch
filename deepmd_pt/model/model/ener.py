@@ -328,7 +328,7 @@ def process_nlist(
 def process_nlist_gathered(
     nlist, 
     extended_atype, 
-    split_sel,
+    split_sel: List[int],
     mapping: Optional[torch.Tensor] = None,
 ):
     nlist_list = list(torch.split(nlist, split_sel, -1))
