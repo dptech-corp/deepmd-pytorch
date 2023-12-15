@@ -165,8 +165,7 @@ class DescrptSeUni(Descriptor):
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
-    assert nlist_type is not None
-    assert nlist_loc is not None
+    del nlist_type, nlist_loc, nlist_tebd
     assert mapping is not None
     nframes, nloc, nnei = nlist.shape
     nall = extended_coord.view(nframes, -1).shape[1] // 3
@@ -175,9 +174,7 @@ class DescrptSeUni(Descriptor):
       extended_coord, nlist, atype,
       self.mean, self.stddev,
       self.rcut, self.rcut_smth)
-    nlist_type[nlist_type == -1] = self.ntypes
     nlist_mask = (nlist != -1)
-    masked_nlist_loc = nlist_loc * nlist_mask
     sw = torch.squeeze(sw, -1)
     # beyond the cutoff sw should be 0.0
     sw = sw.masked_fill(~nlist_mask, float(0.0))
