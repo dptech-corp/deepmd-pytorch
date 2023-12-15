@@ -105,5 +105,6 @@ class TestDPA2(unittest.TestCase):
         nlist_loc=nlist_loc, 
         atype_tebd=atype_tebd,
         nlist_tebd=nlist_tebd,
+        mapping=mapping,
       )
     torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)

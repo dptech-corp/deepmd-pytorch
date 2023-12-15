@@ -21,17 +21,17 @@ def torch_linear(*args, **kwargs):
 
 
 def _make_nei_g1(
-        g1: torch.Tensor,
+        g1_ext: torch.Tensor,
         nlist: torch.Tensor,
 ) -> torch.Tensor:
     nb, nloc, nnei = nlist.shape
-    ng1 = g1.shape[-1]
+    ng1 = g1_ext.shape[-1]
     # nlist: nb x nloc x nnei
     # g1   : nb x nloc x ng1
     # index: nb x (nloc x nnei) x ng1
-    index = nlist.view(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, ng1)
+    index = nlist.reshape(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, ng1)
     # gg1  : nb x (nloc x nnei) x ng1
-    gg1 = torch.gather(g1, dim=1, index=index)
+    gg1 = torch.gather(g1_ext, dim=1, index=index)
     # gg1  : nb x nloc x nnei x ng1
     gg1 = gg1.view(nb, nloc, nnei, ng1)
     return gg1
@@ -410,7 +410,6 @@ class DescrptDPA2Layer(torch.nn.Module):
             self,
             gg1: torch.Tensor,
             g2: torch.Tensor,
-            nlist: torch.Tensor,
             nlist_mask: torch.Tensor,
             sw: torch.Tensor
     ) -> torch.Tensor:
@@ -580,16 +579,26 @@ class DescrptDPA2Layer(torch.nn.Module):
 
     def forward(
             self,
-            g1: torch.Tensor,  # nf x nloc x ng1
+            g1_ext: torch.Tensor,  # nf x nall x ng1
             g2: torch.Tensor,  # nf x nloc x nnei x ng2
             h2: torch.Tensor,  # nf x nloc x nnei x 3
             nlist: torch.Tensor,  # nf x nloc x nnei
-            nlist_mask: torch.Tensor,
+            nlist_mask: torch.Tensor,  # nf x nloc x nnei
             sw: torch.Tensor,  # switch func, nf x nloc x nnei
     ):
+        """
+        g1:     nf x nall x ng1         single-atom chanel
+        g2:     nf x nloc x nnei x ng2  pair-atom channel, invariant
+        h2:     nf x nloc x nnei x 3    pair-atom channel, equivariant
+        nlist:  nf x nloc x nnei        neighbor list (padded neis are set to 0)
+        nlist_mask:  nf x nloc x nnei   masks of the neighbor list. real nei 1 otherwise 0
+        sw:     nf x nloc x nnei        switch function
+        """
         cal_gg1 = self.update_g1_has_drrd or self.update_g1_has_conv or self.update_g1_has_attn or self.update_g2_has_g1g1
 
         nb, nloc, nnei, _ = g2.shape
+        nall = g1_ext.shape[1]
+        g1,_ = torch.split(g1_ext, [nloc,nall-nloc], dim=1)
         assert (nb, nloc) == g1.shape[:2]
         assert (nb, nloc, nnei) == h2.shape[:3]
         ng1 = g1.shape[-1]
@@ -609,7 +618,7 @@ class DescrptDPA2Layer(torch.nn.Module):
         g1_mlp: List[torch.Tensor] = [g1]
 
         if cal_gg1:
-            gg1 = _make_nei_g1(g1, nlist)
+            gg1 = _make_nei_g1(g1_ext, nlist)
         else:
             gg1 = None
 
@@ -641,7 +650,7 @@ class DescrptDPA2Layer(torch.nn.Module):
 
         if self.update_g1_has_conv:
             assert gg1 is not None
-            g1_mlp.append(self._update_g1_conv(gg1, g2, nlist, nlist_mask, sw))
+            g1_mlp.append(self._update_g1_conv(gg1, g2, nlist_mask, sw))
 
         if self.update_g1_has_grrg:
             g1_mlp.append(self._update_g1_grrg(g2, h2, nlist_mask, sw))

@@ -157,7 +157,8 @@ class DescrptSeUni(Descriptor):
           nlist_loc: Optional[torch.Tensor] = None,
           atype_tebd: Optional[torch.Tensor] = None,
           nlist_tebd: Optional[torch.Tensor] = None,
-          seq_input: Optional[torch.Tensor] = None
+          seq_input: Optional[torch.Tensor] = None,
+          mapping: Optional[torch.Tensor] = None,
   ):
 
     """
@@ -166,7 +167,9 @@ class DescrptSeUni(Descriptor):
     """
     assert nlist_type is not None
     assert nlist_loc is not None
-    nframes, nloc = nlist_loc.shape[:2]
+    assert mapping is not None
+    nframes, nloc, nnei = nlist.shape
+    nall = extended_coord.view(nframes, -1).shape[1] // 3
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(
       extended_coord, nlist, atype,
@@ -209,11 +212,17 @@ class DescrptSeUni(Descriptor):
     # nb x nloc x nnei x ng2
     g2 = self.act(self.g2_embd(g2))
 
+    # set all padding positions to index of 0
+    # if the a neighbor is real or not is indicated by nlist_mask
+    nlist[nlist == -1] = 0
+    # nb x nall x ng1
+    mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, self.g1_dim)
     for ll in self.layers:
-      g1, g2, h2 = ll.forward(
-        g1, g2, h2,
-        masked_nlist_loc, nlist_mask, sw,
-      )
+      # g1:     nb x nloc x ng1
+      # g1_ext: nb x nall x ng1
+      g1_ext = torch.gather(g1, 1, mapping)
+      g1, g2, h2 = ll.forward(g1_ext, g2, h2, nlist, nlist_mask, sw,)
+
     # uses the last layer.
     # nb x nloc x 3 x ng2
     h2g2 = ll._cal_h2g2(g2, h2, nlist_mask, sw)

@@ -190,7 +190,8 @@ class EnergyModel(BaseModel):
         self, 
         extended_coord, 
         extended_atype, 
-        nlist, mapping: Optional[torch.Tensor] = None,
+        nlist,
+        mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
         nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
@@ -215,9 +216,15 @@ class EnergyModel(BaseModel):
             atype_tebd = None
             nlist_tebd = None
 
-        descriptor, env_mat, diff, rot_mat, sw = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
-                                                             nlist_loc=nlist_loc, atype_tebd=atype_tebd,
-                                                             nlist_tebd=nlist_tebd)
+        descriptor, env_mat, diff, rot_mat, sw = \
+          self.descriptor(
+            extended_coord, nlist, atype, 
+            nlist_type=nlist_type,
+            nlist_loc=nlist_loc,
+            atype_tebd=atype_tebd,
+            nlist_tebd=nlist_tebd,
+            mapping=mapping,
+          )
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
