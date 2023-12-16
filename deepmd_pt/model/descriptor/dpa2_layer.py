@@ -24,10 +24,10 @@ def _make_nei_g1(
         g1_ext: torch.Tensor,
         nlist: torch.Tensor,
 ) -> torch.Tensor:
-    nb, nloc, nnei = nlist.shape
-    ng1 = g1_ext.shape[-1]
     # nlist: nb x nloc x nnei
-    # g1   : nb x nloc x ng1
+    nb, nloc, nnei = nlist.shape
+    # g1_ext: nb x nall x ng1
+    ng1 = g1_ext.shape[-1]
     # index: nb x (nloc x nnei) x ng1
     index = nlist.reshape(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, ng1)
     # gg1  : nb x (nloc x nnei) x ng1
