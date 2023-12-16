@@ -235,6 +235,7 @@ class DescrptSeAtten(Descriptor):
         # nf x nloc x nt -> nf x nloc x nnei x nt
         atype_tebd_nnei = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
         # nb x nall x nt
+        assert mapping is not None
         mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, nt)
         # nf x nall x nt
         atype_tebd_ext = torch.gather(atype_tebd, 1, mapping)
