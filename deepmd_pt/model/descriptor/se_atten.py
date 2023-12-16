@@ -195,6 +195,7 @@ class DescrptSeAtten(Descriptor):
         atype_tebd: Optional[torch.Tensor] = None, 
         nlist_tebd: Optional[torch.Tensor] = None,
         seq_input: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
     ) -> List[Tensor]:
         """Calculate decoded embedding for each atom.
 

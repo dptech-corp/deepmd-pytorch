@@ -7,6 +7,7 @@ from deepmd_pt.utils.preprocess import compute_smooth_weight
 def _make_env_mat_se_a(nlist, coord, rcut: float, ruct_smth: float):
     """Make smooth environment matrix."""
     bsz, natoms, nnei = nlist.shape
+    coord = coord.view(bsz, -1, 3)
     mask = nlist >= 0
     nlist = nlist * mask
     coord_l = coord[:, :natoms].view(bsz, -1, 1, 3)
