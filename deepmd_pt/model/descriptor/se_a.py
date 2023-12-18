@@ -156,6 +156,7 @@ class DescrptSeA(Descriptor):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
+        del nlist_type, nlist_loc, atype_tebd, nlist_tebd
         nloc = nlist.shape[1]
         dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
