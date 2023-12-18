@@ -78,7 +78,7 @@ class TestDPA2(unittest.TestCase):
           sel, 
           distinguish_types=False,
         ))
-      nlist = torch.cat(nlist_list, -1)
+    nlist = torch.cat(nlist_list, -1)
     nlist_loc, nlist_type, nframes, nloc = \
       process_nlist_gathered(
         nlist, 

@@ -209,7 +209,10 @@ class DescrptSeAtten(Descriptor):
         - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
-        nframes, nloc = nlist.shape[:2]
+        del nlist_type, nlist_loc, nlist_tebd
+        nframes, nloc, nnei = nlist.shape
+        nb = nframes
+        nall = extended_coord.view(nb, -1, 3).shape[1]
         dmatrix, diff, sw = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
@@ -217,6 +220,7 @@ class DescrptSeAtten(Descriptor):
         )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         nlist_mask = (nlist != -1)
+        nlist[nlist == -1] = 0
         sw = torch.squeeze(sw, -1)
         # beyond the cutoff sw should be 0.0
         sw = sw.masked_fill(~nlist_mask, float(0.0))
@@ -226,13 +230,28 @@ class DescrptSeAtten(Descriptor):
                 seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
             if atype_tebd is not None:
                 atype_tebd += seq_input
-        if atype_tebd is not None:
-            atype_tebd = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
-        ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd,
-                                    nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
+        assert atype_tebd is not None
+        nt = atype_tebd.shape[-1]
+        # nf x nloc x nt -> nf x nloc x nnei x nt
+        atype_tebd_nnei = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
+        # nb x nall x nt
+        assert mapping is not None
+        mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, nt)
+        # nf x nall x nt
+        atype_tebd_ext = torch.gather(atype_tebd, 1, mapping)
+        # nb x (nloc x nnei) x nt
+        index = nlist.reshape(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, nt)
+        # nb x (nloc x nnei) x nt
+        atype_tebd_nlist = torch.gather(atype_tebd_ext, dim=1, index=index)
+        # nb x nloc x nnei x nt
+        atype_tebd_nlist = atype_tebd_nlist.view(nb, nloc, nnei, nt)
+        ret = self.filter_layers[0](
+          dmatrix,
+          atype_tebd=atype_tebd_nnei,
+          nlist_tebd=atype_tebd_nlist,
+        )  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
-        nei_mask = nlist_type != self.ntypes
-        ret = self.dpa1_attention(ret, nei_mask, input_r=input_r, sw=sw)  # shape is [nframes*nloc, self.neei, out_size]
+        ret = self.dpa1_attention(ret, nlist_mask, input_r=input_r, sw=sw)  # shape is [nframes*nloc, self.neei, out_size]
         inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
         xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
         xyz_scatter = xyz_scatter / self.nnei
