@@ -85,6 +85,7 @@ model_dpa1 = {
     "head_num": 1,
     "normalize": False,
     "temperature": 1.0,
+    "set_davg_zero": True,
     "_comment": " that's all"
   },
   "fitting_net": {

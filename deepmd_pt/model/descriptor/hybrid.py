@@ -122,15 +122,12 @@ class DescrptHybrid(Descriptor):
             descrpt.init_desc_stat(sumr[ii], suma[ii], sumn[ii], sumr2[ii], suma2[ii])
 
     def forward(
-            self,
-            extended_coord: torch.Tensor,
-            nlist: torch.Tensor,
-            atype: torch.Tensor,
-            nlist_type: torch.Tensor,
-            nlist_loc: Optional[torch.Tensor] = None,
-            atype_tebd: Optional[torch.Tensor] = None,
-            nlist_tebd: Optional[torch.Tensor] = None,
-            mapping: Optional[torch.Tensor] = None,
+        self,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
     ):
         """Calculate decoded embedding for each atom.
 
@@ -147,8 +144,7 @@ class DescrptHybrid(Descriptor):
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         nlist_list = list(torch.split(nlist, self.split_sel, -1))
-        nlist_type_list = list(torch.split(nlist_type, self.split_sel, -1))
-        nframes, nloc = atype.shape[:2]
+        nframes, nloc, nnei = nlist.shape
         concat_rot_mat = True
         if self.hybrid_mode == 'concat':
             out_descriptor = []
@@ -156,20 +152,14 @@ class DescrptHybrid(Descriptor):
             out_rot_mat_list = []
             # out_diff = []
             for ii, descrpt in enumerate(self.descriptor_list):
-                if nlist_loc is not None:
-                    input_nlist_loc = torch.split(nlist_loc, self.split_sel, -1)[ii]
-                else:
-                    input_nlist_loc = None
-                if nlist_tebd is not None:
-                    input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
-                else:
-                    input_nlist_tebd = None
                 descriptor, env_mat, diff, rot_mat, sw = \
-                  descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
-                          nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
-                          nlist_tebd=input_nlist_tebd, 
-                          mapping=mapping,
-                          )
+                  descrpt(
+                    nlist_list[ii], 
+                    extended_coord,
+                    extended_atype,
+                    extended_atype_embd,
+                    mapping,
+                  )
                 if descriptor.shape[0] == nframes * nloc:
                     # [nframes * nloc, 1 + nnei, emb_dim]
                     descriptor = descriptor[:, 0, :].reshape(nframes, nloc, -1)
@@ -186,25 +176,28 @@ class DescrptHybrid(Descriptor):
                 out_rot_mat = None
             return out_descriptor, None, None, out_rot_mat, sw
         elif self.hybrid_mode == 'sequential':
-            seq_input = None
+            assert extended_atype_embd is not None
+            assert mapping is not None
+            nframes, nloc, nnei = nlist.shape
+            nall = extended_coord.view(nframes, -1).shape[1] // 3
+            seq_input_ext = extended_atype_embd
+            seq_input = seq_input_ext[:, :nloc, :]
             env_mat, diff, rot_mat, sw = None, None, None, None
             env_mat_list, diff_list = [], []
             for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
-                if nlist_loc is not None:
-                    input_nlist_loc = torch.split(nlist_loc, self.split_sel, -1)[ii]
-                else:
-                    input_nlist_loc = None
-                if nlist_tebd is not None:
-                    input_nlist_tebd = torch.split(nlist_tebd, self.split_sel, -2)[ii]
-                else:
-                    input_nlist_tebd = None
                 seq_output, env_mat, diff, rot_mat, sw = \
-                  descrpt(extended_coord, nlist_list[ii], atype, nlist_type_list[ii],
-                          nlist_loc=input_nlist_loc, atype_tebd=atype_tebd,
-                          nlist_tebd=input_nlist_tebd, seq_input=seq_input,
-                          mapping=mapping,
-                          )
+                  descrpt(
+                    nlist_list[ii], 
+                    extended_coord,
+                    extended_atype,
+                    seq_input_ext,
+                    mapping,
+                  )
                 seq_input = seq_transform(seq_output)
+                mapping_ext = mapping.view(nframes, nall)\
+                                     .unsqueeze(-1)\
+                                     .expand(-1, -1, seq_input.shape[-1])
+                seq_input_ext = torch.gather(seq_input, 1, mapping_ext)
                 env_mat_list.append(env_mat)
                 diff_list.append(diff)
             return seq_input, env_mat_list, diff_list, rot_mat, sw

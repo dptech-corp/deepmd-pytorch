@@ -149,26 +149,23 @@ class DescrptSeUni(Descriptor):
     return self.g2_dim
 
   def forward(
-          self,
-          extended_coord,
-          nlist,
-          atype,
-          nlist_type: Optional[torch.Tensor] = None,
-          nlist_loc: Optional[torch.Tensor] = None,
-          atype_tebd: Optional[torch.Tensor] = None,
-          nlist_tebd: Optional[torch.Tensor] = None,
-          seq_input: Optional[torch.Tensor] = None,
-          mapping: Optional[torch.Tensor] = None,
+        self,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
   ):
 
     """
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
-    del nlist_type, nlist_loc, nlist_tebd
     assert mapping is not None
+    assert extended_atype_embd is not None
     nframes, nloc, nnei = nlist.shape
     nall = extended_coord.view(nframes, -1).shape[1] // 3
+    atype = extended_atype[:,:nloc]
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(
       extended_coord, nlist, atype,
@@ -180,7 +177,8 @@ class DescrptSeUni(Descriptor):
     sw = sw.masked_fill(~nlist_mask, float(0.0))
 
     # [nframes, nloc, tebd_dim]
-    if seq_input is not None:
+    seq_input = extended_atype_embd[:,:nloc,:]
+    if seq_input.shape[-1] == self.g1_dim:
       if seq_input.shape[0] == nframes * nloc:
         seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
       if self.add_type_ebd_to_seq:
@@ -214,7 +212,7 @@ class DescrptSeUni(Descriptor):
     nlist[nlist == -1] = 0
     # nb x nall x ng1
     mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, self.g1_dim)
-    for ll in self.layers:
+    for idx,ll in enumerate(self.layers):
       # g1:     nb x nloc x ng1
       # g1_ext: nb x nall x ng1
       g1_ext = torch.gather(g1, 1, mapping)
