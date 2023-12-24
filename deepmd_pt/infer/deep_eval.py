@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import torch
 import numpy as np
@@ -8,6 +9,7 @@ from deepmd_pt.utils.preprocess import Region3D, normalize_coord, make_env_mat
 from deepmd_pt.utils.dataloader import collate_batch
 from typing import Optional, Union, List
 from deepmd_pt.utils import env
+from copy import deepcopy
 
 
 class DeepEval:
@@ -39,6 +41,36 @@ class DeepEval:
             infer_batch_size: int = 2,
     ):
         raise NotImplementedError
+
+    def change_type_map(
+            self,
+            type_map: List[str],
+            save_path: str = "new_model.pt"
+    ):
+        assert set(type_map).issubset(self.type_map), \
+            f"New type map {type_map} must be a subset of old one {self.type_map}!"
+        idx_mapping = [self.type_map.index(i) for i in type_map]
+        old_state_dict = torch.load(self.model_path, map_location=env.DEVICE)
+        if "model" in old_state_dict:
+            old_state_dict = old_state_dict["model"]
+        new_input_param = deepcopy(self.input_param)
+        new_input_param['type_map'] = type_map
+        new_model = ModelWrapper(get_model(new_input_param, None).to(DEVICE), model_params=new_input_param)
+        new_state_dict = new_model.state_dict()
+        for item_key in new_state_dict.keys():
+            if 'extra' not in item_key:
+                if new_state_dict[item_key].shape == old_state_dict[item_key].shape:
+                    new_state_dict[item_key] = old_state_dict[item_key].clone()
+                else:
+                    if old_state_dict[item_key].shape[0] == len(self.type_map):
+                        new_state_dict[item_key] = old_state_dict[item_key][idx_mapping].clone()
+                    elif old_state_dict[item_key].shape[0] == len(self.type_map) + 1:
+                        new_state_dict[item_key] = old_state_dict[item_key][idx_mapping+[-1]].clone()
+                    else:
+                        RuntimeError(f"Error shape for type related tensor {item_key}!")
+        new_model.load_state_dict(new_state_dict)
+        torch.save(new_model.state_dict(), save_path)
+        print(f"Model with new type map {type_map} saved to {save_path}.")
 
 
 class DeepPot(DeepEval):

@@ -150,6 +150,9 @@ class Tester(object):
         systems = self.systems
         system_results = {}
         global_sum_natoms = 0
+        global_sum_nframes = 0
+        frame_weight = ['rmse_e', 'mae_e', 'mae_e_all', 'rmse_v', 'mae_v']
+        atom_weight = ['rmse_f', 'mae_f']
         for cc, system in enumerate(systems):
             logging.info("# ---------------output of dp test--------------- ")
             logging.info(f"# testing system : {system}")
@@ -171,6 +174,7 @@ class Tester(object):
 
             single_results = {}
             sum_natoms = 0
+            sum_frames = 0
             sys_natoms = None
             for ii in range(self.numb_test):
                 try:
@@ -189,27 +193,32 @@ class Tester(object):
                     sys_natoms = natoms
                 else:
                     assert sys_natoms == natoms, "Frames in one system must be the same!"
+                sum_frames += 1
                 sum_natoms += natoms
                 for k, v in more_loss.items():
+                    k_weight = 1 if k in frame_weight else natoms
                     if "mae" in k:
-                        single_results[k] = single_results.get(k, 0.0) + v * natoms
+                        single_results[k] = single_results.get(k, 0.0) + v * k_weight
                     else:
-                        single_results[k] = single_results.get(k, 0.0) + v ** 2 * natoms
+                        single_results[k] = single_results.get(k, 0.0) + v ** 2 * k_weight
             if self.detail_file is not None:
                 save_detail_file(Path(self.detail_file), system_pred, system_label, sys_natoms, system_name=system, append=(cc != 0))
-            results = {
-                k: v / sum_natoms if "mae" in k else math.sqrt(v / sum_natoms) for k, v in single_results.items()
-            }
+            results = {}
+            for k, v in single_results.items():
+                k_sum_weight = sum_frames if k in frame_weight else sum_natoms
+                results[k] = v / k_sum_weight if "mae" in k else math.sqrt(v / k_sum_weight)
             for item in sorted(list(results.keys())):
                 logging.info(f"{item}: {results[item]:.4f}")
             logging.info("# ----------------------------------------------- ")
             for k, v in single_results.items():
                 system_results[k] = system_results.get(k, 0.0) + v
             global_sum_natoms += sum_natoms
+            global_sum_nframes += sum_frames
 
-        global_results = {
-            k: v / global_sum_natoms if "mae" in k else math.sqrt(v / global_sum_natoms) for k, v in system_results.items()
-        }
+        global_results = {}
+        for k, v in system_results.items():
+            k_global_sum_weight = global_sum_nframes if k in frame_weight else global_sum_natoms
+            global_results[k] = v / k_global_sum_weight if "mae" in k else math.sqrt(v / k_global_sum_weight)
         logging.info("# ----------weighted average of errors----------- ")
         if not self.multi_task:
             logging.info(f"# number of systems : {len(systems)}")
