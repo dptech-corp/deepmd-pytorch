@@ -10,7 +10,8 @@ from deepmd_pt.utils.region import (
 from typing import (
   List,
   Union,
-  Optional
+  Optional,
+  Dict,
 )
 
 
@@ -77,7 +78,7 @@ def build_neighbor_list_lower(
   Returns
   -------
   neighbor_list : torch.Tensor
-        Neighbor list of shape [nloc x nsel], the neighbors
+        Neighbor list of shape [nloc, nsel], the neighbors
         are stored in an ascending order. If the number of 
         neighbors is less than nsel, the positions are masked
         with -1. The neighbor list of an atom looks like
@@ -143,6 +144,7 @@ def build_neighbor_list_lower(
       )
     return torch.concat(ret_nlist, dim=-1)
 
+
 def build_neighbor_list(
     coord1: torch.Tensor,
     atype: torch.Tensor,
@@ -173,7 +175,7 @@ def build_neighbor_list(
   Returns
   -------
   neighbor_list : torch.Tensor
-        Neighbor list of shape [batch_size, nloc x nsel], the neighbors
+        Neighbor list of shape [batch_size, nloc, nsel], the neighbors
         are stored in an ascending order. If the number of 
         neighbors is less than nsel, the positions are masked
         with -1. The neighbor list of an atom looks like
@@ -207,7 +209,7 @@ def build_neighbor_list(
     nlist = nlist[:, :, :nsel]
   else:
     rr = torch.cat([rr, torch.ones([batch_size, nloc, nsel-nnei]).to(rr.device) + rcut], dim=-1)
-    nlist = torch.cat([nlist, torch.ones([batch_size, nloc, nsel-nnei], dtype=torch.long).to(rr.device)], dim=-1)
+    nlist = torch.cat([nlist, torch.ones([batch_size, nloc, nsel-nnei], dtype=torch.long).to(rr.device)], dim=-1)  
   assert (list(nlist.shape) == [batch_size, nloc, nsel])
   nlist = nlist.masked_fill((rr > rcut), -1)
 
@@ -241,11 +243,86 @@ def build_neighbor_list(
       )
     return torch.concat(ret_nlist, dim=-1)
 
+
 # build_neighbor_list = torch.vmap(
 #   build_neighbor_list_lower, 
 #   in_dims=(0,0,None,None,None), 
 #   out_dims=(0),
 # )
+
+
+def build_multiple_neighbor_list(
+    coord: torch.Tensor,
+    nlist: torch.Tensor,
+    rcuts: List[float],
+    nsels: List[int],
+) -> Dict[float, torch.Tensor]:
+  """Input one neighbor list, and produce multiple neighbor lists with
+  different cutoff radius and numbers of selection out of it.  The
+  required rcuts and nsels should be smaller or equal to the input nlist.
+
+  Parameters
+  ----------
+  coord: torch.Tensor
+        exptended coordinates of shape [batch_size, nall x 3]
+  nlist: torch.Tensor
+        Neighbor list of shape [batch_size, nloc, nsel], the neighbors
+        should be stored in an ascending order. 
+  nloc: int
+        number of local atoms.
+  rcuts: List[float]
+        list of cut-off radius in ascending order.
+  nsels: List[int]
+        maximal number of neighbors in ascending order.
+  
+  Returns
+  -------
+  nlist_dict : Dict[torch.Tensor]
+        A dict of nlists, key being the rcut and value being the
+        corresponding nlist.
+
+  """
+  assert len(rcuts) == len(nsels)
+  if len(rcuts) == 0:
+    return {}  
+  nb, nloc, nsel = nlist.shape
+  if nsel < nsels[-1]: 
+    pad = -1 * torch.ones(
+      [nb, nloc, nsels[-1] - nsel], 
+      dtype=nlist.dtype, 
+      device=nlist.device,
+    )
+    # nb x nloc x nsel
+    nlist = torch.cat([nlist, pad], dim=-1)
+    nsel = nsels[-1]
+  # nb x nall x 3
+  coord1 = coord.view(nb, -1, 3)
+  nall = coord1.shape[1]
+  # nb x nloc x 3
+  coord0 = coord1[:, :nloc, :]
+  nlist_mask = (nlist == -1)
+  # nb x (nloc x nsel) x 3
+  index = nlist.masked_fill(nlist_mask, 0)\
+               .view(nb, nloc*nsel)\
+               .unsqueeze(-1)\
+               .expand(-1,-1,3)
+  # nb x nloc x nsel x 3
+  coord2 = torch.gather(coord1, dim=1, index=index).view(nb,nloc,nsel,3)
+  # nb x nloc x nsel x 3
+  diff = coord2 - coord0[:,:,None,:]
+  # nb x nloc x nsel
+  rr = torch.linalg.norm(diff, dim=-1)
+  rr.masked_fill(nlist_mask, float("inf"))
+  nlist0 = nlist
+  ret = {}
+  rcuts.reverse()
+  nsels.reverse()
+  for rc, ns in zip(rcuts, nsels):
+    nlist0 = nlist0[:,:,:ns].masked_fill( rr[:,:,:ns] > rc, int(-1) )
+    ret[rc] = nlist0  
+  return ret
+
+
 def extend_coord_with_ghosts(
     coord : torch.Tensor,
     atype : torch.Tensor,
@@ -318,4 +395,6 @@ def extend_coord_with_ghosts(
     extend_atype.view([nf, nall]).to(env.DEVICE),
     extend_aidx.view([nf, nall]).to(env.DEVICE),
   )
+
+
 
