@@ -294,7 +294,6 @@ class DescrptDPA2Layer(torch.nn.Module):
             attn2_hidden: int = 16,
             attn2_nhead: int = 4,
             attn2_has_gate: bool = False,
-            attn_dotr: bool = True,
             activation: str = "tanh",
             update_style: str = "res_avg",
             set_davg_zero: bool = True,  # TODO

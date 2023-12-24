@@ -5,3 +5,4 @@ from .se_atten import DescrptSeAtten
 from .se_uni import DescrptSeUni
 from .hybrid import DescrptHybrid
 from .gaussian_lcc import DescrptGaussianLcc
+from .dpa2 import DescrptDPA2
