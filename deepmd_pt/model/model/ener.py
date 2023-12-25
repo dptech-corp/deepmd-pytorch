@@ -6,7 +6,7 @@ from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
-
+from deepmd_pt.model.descriptor import make_default_type_embedding
 
 class EnergyModel(BaseModel):
     """Energy model.
@@ -69,10 +69,9 @@ class EnergyModel(BaseModel):
             self.has_type_embedding = True
             self.type_split = False
             if type_embedding is None:
-                self.type_embedding = TypeEmbedNet(ntypes, 8)
-                descriptor['tebd_dim'] = 8
+                self.type_embedding, aux = make_default_type_embedding(ntypes)
+                self.tebd_dim = descriptor['tebd_dim'] = aux['tebd_dim']
                 descriptor['tebd_input_mode'] = 'concat'
-                self.tebd_dim = 8
             else:
                 tebd_dim = type_embedding.get('neuron', [8])[-1]
                 tebd_input_mode = type_embedding.get('tebd_input_mode', 'concat')
@@ -194,41 +193,29 @@ class EnergyModel(BaseModel):
         mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
-        nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
+        nframes, nloc, nnei = nlist.shape
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
         if self.type_embedding is not None:
-            atype_tebd = self.type_embedding(atype)
-            if not self.split_nlist:
-                assert nlist_type is not None
-                nlist_type[nlist_type == -1] = self.ntypes
-                nlist_tebd = self.type_embedding(nlist_type)
-            else:
-                nlist_tebd_list = []
-                nlist_type_list = list(torch.split(nlist_type, self.descriptor.split_sel, -1))
-                for nlist_type_item in nlist_type_list:
-                    nlist_mask = nlist_type_item != -1
-                    input_nlist_type = nlist_type_item * nlist_mask + ~nlist_mask * self.ntypes
-                    nlist_tebd_list.append(self.type_embedding(input_nlist_type))
-                nlist_tebd = torch.cat(nlist_tebd_list, -2)
+            extended_atype_embd = self.type_embedding(extended_atype)
+            atype_embd = extended_atype_embd[:, :nloc, :]
         else:
-            atype_tebd = None
-            nlist_tebd = None
-
+            extended_atype_embd = None
+            atype_embd = None
         descriptor, env_mat, diff, rot_mat, sw = \
           self.descriptor(
-            extended_coord, nlist, atype, 
-            nlist_type=nlist_type,
-            nlist_loc=nlist_loc,
-            atype_tebd=atype_tebd,
-            nlist_tebd=nlist_tebd,
+            nlist,
+            extended_coord,
+            extended_atype,
+            extended_atype_embd,
             mapping=mapping,
           )
+
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
-            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_embd, rot_mat=rot_mat)
             energy = atom_energy.sum(dim=1)
             model_predict = {'energy': energy,
                             'atom_energy': atom_energy,

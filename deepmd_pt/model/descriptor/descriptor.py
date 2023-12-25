@@ -1,9 +1,11 @@
 import numpy as np
 import torch
+from abc import ABC, abstractmethod
+from typing import Callable, Optional
 
 from deepmd_pt.utils import env
 from deepmd_pt.utils.plugin import Plugin, PluginVariant
-from typing import Callable
+from deepmd_pt.model.network import TypeEmbedNet
 
 try:
     from typing import Final
@@ -11,7 +13,15 @@ except:
     from torch.jit import Final
 
 
-class Descriptor(torch.nn.Module):
+def make_default_type_embedding(
+    ntypes,
+):
+  aux = {}
+  aux['tebd_dim'] = 8
+  return TypeEmbedNet(ntypes, aux['tebd_dim']), aux
+
+
+class Descriptor(torch.nn.Module, ABC):
 
     __plugins = Plugin()
     local_cluster = False
@@ -88,7 +98,15 @@ class Descriptor(torch.nn.Module):
         else:
             raise NotImplementedError
 
-    def forward(self, **kwargs):
+    @abstractmethod
+    def forward(
+        self,
+        nlist,
+        extended_coord,
+        extended_atype,
+        extended_atype_embd = None,
+        mapping: Optional[torch.Tensor] = None,
+    ):
         """Calculate descriptor.
         """
         raise NotImplementedError

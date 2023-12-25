@@ -136,13 +136,10 @@ class DescrptSeA(Descriptor):
 
     def forward(
         self, 
-        extended_coord, 
-        nlist, 
-        atype, 
-        nlist_type: Optional[torch.Tensor] = None,
-        nlist_loc: Optional[torch.Tensor] = None, 
-        atype_tebd: Optional[torch.Tensor] = None,
-        nlist_tebd: Optional[torch.Tensor] = None,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
     ):
         """Calculate decoded embedding for each atom.
@@ -156,7 +153,9 @@ class DescrptSeA(Descriptor):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
+        del extended_atype_embd, mapping
         nloc = nlist.shape[1]
+        atype = extended_atype[:, :nloc]
         dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,

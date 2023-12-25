@@ -79,32 +79,19 @@ class TestDPA2(unittest.TestCase):
           distinguish_types=False,
         ))
     nlist = torch.cat(nlist_list, -1)
-    nlist_loc, nlist_type, nframes, nloc = \
-      process_nlist_gathered(
-        nlist, 
-        extended_atype, 
-        des.split_sel,
-        mapping=mapping,
-      )
     # handel type_embedding
     type_embedding = TypeEmbedNet(ntypes, 8)
     type_embedding.load_state_dict(torch.load(self.file_type_embed))
-    atype_tebd = type_embedding(atype)
-    nlist_type[nlist_type == -1] = ntypes
-    nlist_tebd = type_embedding(nlist_type)
 
     ## to save model parameters
     # torch.save(des.state_dict(), 'model_weights.pth')
     # torch.save(type_embedding.state_dict(), 'model_weights.pth')
     descriptor, env_mat, diff, rot_mat, sw = \
       des(
-        extended_coord, 
         nlist, 
-        atype, 
-        nlist_type=nlist_type,
-        nlist_loc=nlist_loc, 
-        atype_tebd=atype_tebd,
-        nlist_tebd=nlist_tebd,
+        extended_coord,
+        extended_atype,
+        type_embedding(extended_atype),
         mapping=mapping,
       )
     torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)

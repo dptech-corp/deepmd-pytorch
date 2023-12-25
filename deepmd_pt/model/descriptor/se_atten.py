@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from torch import Tensor
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
@@ -187,16 +186,12 @@ class DescrptSeAtten(Descriptor):
 
     def forward(
         self, 
-        extended_coord, 
-        nlist, 
-        atype, 
-        nlist_type, 
-        nlist_loc: Optional[torch.Tensor] = None,
-        atype_tebd: Optional[torch.Tensor] = None, 
-        nlist_tebd: Optional[torch.Tensor] = None,
-        seq_input: Optional[torch.Tensor] = None,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
-    ) -> List[Tensor]:
+    ) -> List[torch.Tensor]:
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -209,8 +204,10 @@ class DescrptSeAtten(Descriptor):
         - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
-        del nlist_type, nlist_loc, nlist_tebd
+        del mapping
+        assert extended_atype_embd is not None
         nframes, nloc, nnei = nlist.shape
+        atype = extended_atype[:,:nloc]
         nb = nframes
         nall = extended_coord.view(nb, -1, 3).shape[1]
         dmatrix, diff, sw = prod_env_mat_se_a(
@@ -224,21 +221,12 @@ class DescrptSeAtten(Descriptor):
         sw = torch.squeeze(sw, -1)
         # beyond the cutoff sw should be 0.0
         sw = sw.masked_fill(~nlist_mask, float(0.0))
-        # [nframes, nloc, tebd_dim]
-        if seq_input is not None:
-            if seq_input.shape[0] == nframes * nloc:
-                seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-            if atype_tebd is not None:
-                atype_tebd += seq_input
-        assert atype_tebd is not None
-        nt = atype_tebd.shape[-1]
         # nf x nloc x nt -> nf x nloc x nnei x nt
+        atype_tebd = extended_atype_embd[:,:nloc,:]
         atype_tebd_nnei = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
-        # nb x nall x nt
-        assert mapping is not None
-        mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, nt)
         # nf x nall x nt
-        atype_tebd_ext = torch.gather(atype_tebd, 1, mapping)
+        nt = extended_atype_embd.shape[-1]
+        atype_tebd_ext = extended_atype_embd
         # nb x (nloc x nnei) x nt
         index = nlist.reshape(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, nt)
         # nb x (nloc x nnei) x nt
