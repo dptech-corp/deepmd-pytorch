@@ -181,7 +181,7 @@ class DescrptHybrid(Descriptor):
             nframes, nloc, nnei = nlist.shape
             nall = extended_coord.view(nframes, -1).shape[1] // 3
             seq_input_ext = extended_atype_embd
-            seq_input = seq_input_ext[:, :nloc, :]
+            seq_input = seq_input_ext[:, :nloc, :] if len(self.descriptor_list) == 0 else None
             env_mat, diff, rot_mat, sw = None, None, None, None
             env_mat_list, diff_list = [], []
             for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
