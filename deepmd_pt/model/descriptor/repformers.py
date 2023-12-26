@@ -10,12 +10,12 @@ from typing import (
 )
 from deepmd_pt.utils import env
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
 from deepmd_pt.model.network import (
   TypeEmbedNet, SimpleLinear
 )
 from .se_atten import analyze_descrpt
-from .dpa2_layer import DescrptDPA2Layer
+from .repformer_layer import RepformerLayer
 
 mydtype = env.GLOBAL_PT_FLOAT_PRECISION
 mydev = env.DEVICE
@@ -26,8 +26,9 @@ simple_linear  = SimpleLinear
 mylinear = simple_linear
 
 
-@Descriptor.register("se_uni")
-class DescrptSeUni(Descriptor):
+@DescriptorBlock.register("se_repformer")
+@DescriptorBlock.register("se_uni")
+class DescrptBlockRepformers(DescriptorBlock):
   def __init__(
       self,
       rcut,
@@ -60,7 +61,7 @@ class DescrptSeUni(Descriptor):
       set_davg_zero: bool = True, # TODO
       smooth: bool = True,
       add_type_ebd_to_seq: bool = False,
-      **kwargs,
+      type: str = None,
   ):
     """
     smooth: 
@@ -70,7 +71,8 @@ class DescrptSeUni(Descriptor):
         whether or not add an type embedding to seq_input. 
         If no seq_input is given, it has no effect. 
     """
-    super(DescrptSeUni, self).__init__()
+    super(DescrptBlockRepformers, self).__init__()
+    del type
     self.epsilon = 1e-4 # protection of 1./nnei
     self.rcut = rcut
     self.rcut_smth = rcut_smth
@@ -95,7 +97,7 @@ class DescrptSeUni(Descriptor):
     layers = []
     for ii in range(nlayers):
       layers.append(
-        DescrptDPA2Layer(
+        RepformerLayer(
           rcut, rcut_smth, sel, ntypes, self.g1_dim, self.g2_dim,
           axis_dim=self.axis_dim,
           combine_grrg=combine_grrg,
@@ -126,6 +128,36 @@ class DescrptSeUni(Descriptor):
     stddev = torch.ones(sshape, dtype=mydtype, device=mydev)
     self.register_buffer('mean', mean)
     self.register_buffer('stddev', stddev)
+
+  def get_rcut(self)->float:
+    """
+    Returns the cut-off radius
+    """
+    return self.rcut
+
+  def get_nsel(self)->int:
+    """
+    Returns the number of selected atoms in the cut-off radius
+    """
+    return sum(self.sel)
+
+  def get_ntype(self)->int:
+    """
+    Returns the number of element types
+    """
+    return self.ntypes
+
+  def get_dim_out(self)->int:
+    """
+    Returns the output dimension
+    """
+    return self.dim_out
+
+  def get_dim_in(self)->int:
+    """
+    Returns the input dimension
+    """
+    return self.dim_in
 
   @property
   def dim_out(self):

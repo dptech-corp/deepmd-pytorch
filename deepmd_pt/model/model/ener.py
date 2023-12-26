@@ -1,6 +1,6 @@
 import torch
 from typing import Optional, List, Union, Dict
-from deepmd_pt.model.descriptor import Descriptor
+from deepmd_pt.model.descriptor import DescriptorBlock
 from deepmd_pt.model.task import Fitting, DenoiseNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
@@ -70,19 +70,22 @@ class EnergyModel(BaseModel):
             self.type_split = False
             if type_embedding is None:
                 self.type_embedding, aux = make_default_type_embedding(ntypes)
-                self.tebd_dim = descriptor['tebd_dim'] = aux['tebd_dim']
-                descriptor['tebd_input_mode'] = 'concat'
+                self.tebd_dim = aux['tebd_dim']
+                if self.descriptor_type == "se_atten":
+                  descriptor['tebd_dim'] = aux['tebd_dim']
+                  descriptor['tebd_input_mode'] = 'concat'
             else:
                 tebd_dim = type_embedding.get('neuron', [8])[-1]
                 tebd_input_mode = type_embedding.get('tebd_input_mode', 'concat')
                 self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
-                descriptor['tebd_dim'] = tebd_dim
-                descriptor['tebd_input_mode'] = tebd_input_mode
                 self.tebd_dim = tebd_dim
+                if self.descriptor_type == "se_atten":
+                  descriptor['tebd_dim'] = tebd_dim
+                  descriptor['tebd_input_mode'] = tebd_input_mode
         else:
             self.type_embedding = None
 
-        self.descriptor = Descriptor(**descriptor)
+        self.descriptor = DescriptorBlock(**descriptor)
         self.rcut = self.descriptor.rcut
         self.sel = self.descriptor.sel
         self.split_nlist = descriptor['type'] in ['hybrid']
