@@ -12,8 +12,8 @@ except:
 
 from deepmd_pt.model.network import TypeFilter
 
-@DescriptorBlock.register("se_e2_a")
-class DescrptBlockSeA(DescriptorBlock):
+@Descriptor.register("se_e2_a")
+class DescrptSeA(Descriptor):
     def __init__(
         self,
         rcut,
@@ -24,8 +24,8 @@ class DescrptBlockSeA(DescriptorBlock):
         set_davg_zero: bool = False,
         **kwargs,
     ):
-      super(DescrptBlockSeA, self).__init__()
-      self.sea = DescrptSeA(
+      super(DescrptSeA, self).__init__()
+      self.sea = DescrptBlockSeA(
         rcut, rcut_smth, sel, neuron, axis_neuron, set_davg_zero,
         **kwargs,
       )      
@@ -60,25 +60,12 @@ class DescrptBlockSeA(DescriptorBlock):
       """
       return self.sea.get_dim_out()
 
-    def get_dim_in(self)->int:
-      """
-      Returns the input dimension
-      """
-      return self.dim_in
-
     @property
     def dim_out(self):
         """
         Returns the output dimension of this descriptor
         """
         return self.sea.dim_out
-
-    @property
-    def dim_in(self):
-        """
-        Returns the atomic input dimension of this descriptor
-        """
-        return 0
 
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
@@ -93,15 +80,14 @@ class DescrptBlockSeA(DescriptorBlock):
         nlist: torch.Tensor,
         extended_coord: torch.Tensor,
         extended_atype: torch.Tensor,
-        extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
     ):
-      del extended_atype_embd
-      return self.sea.forward(nlist, extended_coord, extended_atype, mapping)
+      return self.sea.forward(
+        nlist, extended_coord, extended_atype, None, mapping)
 
 
-@Descriptor.register("se_e2_a")
-class DescrptSeA(Descriptor):
+@DescriptorBlock.register("se_e2_a")
+class DescrptBlockSeA(DescriptorBlock):
     ndescrpt: Final[int]
     __constants__ = ['ndescrpt']
 
@@ -122,7 +108,7 @@ class DescrptSeA(Descriptor):
         - filter_neuron: Number of neurons in each hidden layers of the embedding net.
         - axis_neuron: Number of columns of the sub-matrix of the embedding matrix.
         """
-        super(DescrptSeA, self).__init__()
+        super(DescrptBlockSeA, self).__init__()
         self.rcut = rcut
         self.rcut_smth = rcut_smth
         self.filter_neuron = neuron
@@ -179,6 +165,12 @@ class DescrptSeA(Descriptor):
       Returns the output dimension
       """
       return self.dim_out
+
+    def get_dim_in(self)->int:
+      """
+      Returns the input dimension
+      """
+      return self.dim_in
 
     @property
     def dim_out(self):
