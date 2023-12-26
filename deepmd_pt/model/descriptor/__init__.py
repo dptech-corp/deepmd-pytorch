@@ -4,6 +4,7 @@ from .se_a import DescrptSeA
 from .dpa1 import DescrptDPA1
 from .dpa2 import DescrptDPA2
 from .hybrid import DescrptBlockHybrid
+from .se_a import DescrptBlockSeA
 from .se_atten import DescrptBlockSeAtten
 from .repformers import DescrptBlockRepformers
 from .gaussian_lcc import DescrptGaussianLcc

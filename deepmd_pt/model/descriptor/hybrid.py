@@ -73,7 +73,13 @@ class DescrptBlockHybrid(DescriptorBlock):
       """
       Returns the number of selected atoms in the cut-off radius
       """
-      return [sum(ii) for ii in sel.sel]
+      return [sum(ii) for ii in self.get_sel()]
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sel
 
     def get_ntype(self)->int:
       """

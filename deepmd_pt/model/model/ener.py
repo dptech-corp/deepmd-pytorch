@@ -86,8 +86,8 @@ class EnergyModel(BaseModel):
             self.type_embedding = None
 
         self.descriptor = DescriptorBlock(**descriptor)
-        self.rcut = self.descriptor.rcut
-        self.sel = self.descriptor.sel
+        self.rcut = self.descriptor.get_rcut()
+        self.sel = self.descriptor.get_sel()
         self.split_nlist = descriptor['type'] in ['hybrid']
 
         # Statistics
@@ -105,7 +105,7 @@ class EnergyModel(BaseModel):
                 fitting_net['ntypes'] = 1
                 fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
             else:
-                fitting_net['ntypes'] = self.descriptor.ntypes
+                fitting_net['ntypes'] = self.descriptor.get_ntype()
                 fitting_net['use_tebd'] = False
                 fitting_net['embedding_width'] = self.descriptor.dim_out
 

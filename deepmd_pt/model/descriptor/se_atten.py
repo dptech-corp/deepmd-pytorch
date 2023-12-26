@@ -114,6 +114,12 @@ class DescrptBlockSeAtten(DescriptorBlock):
         """
         return sum(self.sel)
 
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type.
+        """
+        return self.sel
+
     def get_ntype(self)->int:
         """
         Returns the number of element types

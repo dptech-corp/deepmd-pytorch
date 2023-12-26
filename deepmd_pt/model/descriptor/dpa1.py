@@ -87,6 +87,12 @@ class DescrptDPA1(Descriptor):
     """
     return self.se_atten.get_nsel()
 
+  def get_sel(self)->List[int]:
+    """
+    Returns the number of selected atoms for each type.
+    """
+    return self.se_atten.get_sel()
+
   def get_ntype(self)->int:
     """
     Returns the number of element types

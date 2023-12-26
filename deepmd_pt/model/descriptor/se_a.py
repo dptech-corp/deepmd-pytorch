@@ -3,7 +3,7 @@ import torch
 
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, DescriptorBlock, compute_std
 
 try:
     from typing import Final
@@ -11,6 +11,93 @@ except:
     from torch.jit import Final
 
 from deepmd_pt.model.network import TypeFilter
+
+@DescriptorBlock.register("se_e2_a")
+class DescrptBlockSeA(DescriptorBlock):
+    def __init__(
+        self,
+        rcut,
+        rcut_smth,
+        sel,
+        neuron=[25, 50, 100],
+        axis_neuron=16,
+        set_davg_zero: bool = False,
+        **kwargs,
+    ):
+      super(DescrptBlockSeA, self).__init__()
+      self.sea = DescrptSeA(
+        rcut, rcut_smth, sel, neuron, axis_neuron, set_davg_zero,
+        **kwargs,
+      )      
+      
+    def get_rcut(self)->float:
+      """
+      Returns the cut-off radius
+      """
+      return self.sea.get_rcut()
+
+    def get_nsel(self)->int:
+      """
+      Returns the number of selected atoms in the cut-off radius
+      """
+      return self.sea.get_nsel()
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sea.get_sel()
+
+    def get_ntype(self)->int:
+      """
+      Returns the number of element types
+      """
+      return self.sea.get_ntype()
+
+    def get_dim_out(self)->int:
+      """
+      Returns the output dimension
+      """
+      return self.sea.get_dim_out()
+
+    def get_dim_in(self)->int:
+      """
+      Returns the input dimension
+      """
+      return self.dim_in
+
+    @property
+    def dim_out(self):
+        """
+        Returns the output dimension of this descriptor
+        """
+        return self.sea.dim_out
+
+    @property
+    def dim_in(self):
+        """
+        Returns the atomic input dimension of this descriptor
+        """
+        return 0
+
+    def compute_input_stats(self, merged):
+        """Update mean and stddev for descriptor elements.
+        """
+        return self.sea.compute_input_stats(merged)
+
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
+        self.sea.init_desc_stat( sumr, suma, sumn, sumr2, suma2)
+
+    def forward(
+        self,
+        nlist,
+        extended_coord,
+        extended_atype,
+        extended_atype_embd = None,
+        mapping: Optional[torch.Tensor] = None,
+    ):
+      del extended_atype_embd
+      return self.sea.forward(nlist, extended_coord, extended_atype, mapping)
 
 
 @Descriptor.register("se_e2_a")
@@ -74,6 +161,12 @@ class DescrptSeA(Descriptor):
       Returns the number of selected atoms in the cut-off radius
       """
       return sum(self.sel)
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sel
 
     def get_ntype(self)->int:
       """

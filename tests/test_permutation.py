@@ -99,7 +99,6 @@ model_dpa2 = {
     "rcut_smth": 0.5,
     "rcut": 6.0,
     "neuron": [25, 50, 100],
-    "resnet_dt": False,
     "axis_neuron": 6,
     "seed": 1,
     "attn": 128,
@@ -155,9 +154,7 @@ model_hybrid = {
           50,
           100
         ],
-        "resnet_dt": False,
         "axis_neuron": 16,
-        "seed": 1,
         "attn": 128,
         "attn_layer": 0,
         "attn_dotr": True,
@@ -301,7 +298,7 @@ class TestEnergyModelDPAUni3(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "direct_force_ener"
-    model_params["descriptor"]["gather_g1"] = True
+    # model_params["descriptor"]["gather_g1"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False

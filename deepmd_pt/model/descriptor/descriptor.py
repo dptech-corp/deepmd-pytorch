@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from deepmd_pt.utils import env
 from deepmd_pt.utils.plugin import Plugin, PluginVariant
@@ -33,6 +33,13 @@ class Descriptor(torch.nn.Module, ABC):
     def get_nsel(self)->int:
         """
         Returns the number of selected atoms in the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type.
         """
         raise NotImplementedError
 
@@ -175,6 +182,13 @@ class DescriptorBlock(torch.nn.Module, ABC):
     def get_nsel(self)->int:
         """
         Returns the number of selected atoms in the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type
         """
         raise NotImplementedError
 
