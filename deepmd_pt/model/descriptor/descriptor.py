@@ -247,10 +247,10 @@ class DescriptorBlock(torch.nn.Module, ABC):
     @abstractmethod
     def forward(
         self,
-        nlist,
-        extended_coord,
-        extended_atype,
-        extended_atype_embd = None,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
     ):
         """Calculate DescriptorBlock.
