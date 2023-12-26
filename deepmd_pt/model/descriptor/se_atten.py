@@ -237,8 +237,6 @@ class DescrptBlockSeAtten(DescriptorBlock):
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         del mapping
-        assert extended_coord is not None
-        assert extended_atype is not None
         assert extended_atype_embd is not None
         nframes, nloc, nnei = nlist.shape
         atype = extended_atype[:,:nloc]
