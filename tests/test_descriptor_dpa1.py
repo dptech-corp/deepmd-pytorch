@@ -6,7 +6,7 @@ import json
 from typing import Optional
 from pathlib import Path
 
-from deepmd_pt.model.descriptor import DescrptSeAtten
+from deepmd_pt.model.descriptor import DescrptBlockSeAtten, DescrptDPA1
 from deepmd_pt.utils import env
 from deepmd_pt.utils.region import normalize_coord
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
@@ -40,14 +40,14 @@ class TestDPA1(unittest.TestCase):
     self.file_model_param = Path(CUR_DIR)/"models"/"dpa1.pth"
     self.file_type_embed = Path(CUR_DIR)/"models"/"dpa2_tebd.pth"
 
-  def test_consistency(self):
+  def test_descriptor_block(self):
     # torch.manual_seed(0)
     model_dpa1 = self.model_json
     dparams = model_dpa1["descriptor"]
     ntypes = len(model_dpa1["type_map"])
     assert "se_atten" == dparams.pop("type")
     dparams["ntypes"] = ntypes
-    des = DescrptSeAtten(
+    des = DescrptBlockSeAtten(
       **dparams,
     )
     des.load_state_dict(torch.load(self.file_model_param))
@@ -81,4 +81,89 @@ class TestDPA1(unittest.TestCase):
         mapping=None,
       )
     # np.savetxt('tmp.out', descriptor.detach().numpy().reshape(1,-1), delimiter=",")
+    self.assertEqual(descriptor.shape[-1], des.get_dim_out())
+    self.assertAlmostEqual(6., des.get_rcut())
+    self.assertEqual(30, des.get_nsel())
+    self.assertEqual(2, des.get_ntype())
     torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)
+
+
+  def test_descriptor(self):
+    with open(Path(CUR_DIR)/"models"/"dpa1.json") as fp:
+      self.model_json = json.load(fp)
+    model_dpa2 = self.model_json
+    ntypes = len(model_dpa2["type_map"])
+    dparams = model_dpa2["descriptor"]
+    dparams["ntypes"] = ntypes
+    assert dparams.pop("type") == "se_atten"
+    dparams["concat_output_tebd"] = False
+    des = DescrptDPA1(
+      **dparams,
+    )
+    target_dict = des.state_dict()
+    source_dict = torch.load(self.file_model_param)
+    type_embd_dict = torch.load(self.file_type_embed)
+    target_dict = translate_se_atten_and_type_embd_dicts_to_dpa1(
+      target_dict,
+      source_dict,
+      type_embd_dict,
+    )
+    des.load_state_dict(target_dict)
+
+    coord = self.coord
+    atype = self.atype
+    box = self.cell
+    nf, nloc = coord.shape[:2]
+    coord_normalized = normalize_coord(
+      coord, box.reshape(-1, 3, 3))
+    extended_coord, extended_atype, mapping = extend_coord_with_ghosts(
+      coord_normalized, atype, box, des.get_rcut())
+    nlist = build_neighbor_list(
+      extended_coord, extended_atype, nloc,
+      des.get_rcut(), des.get_nsel(), distinguish_types=False,
+    )
+    descriptor, env_mat, diff, rot_mat, sw = \
+      des(
+        nlist,
+        extended_coord,
+        extended_atype,
+        mapping=mapping,
+      )
+    self.assertEqual(descriptor.shape[-1], des.get_dim_out())
+    self.assertAlmostEqual(6., des.get_rcut())
+    self.assertEqual(30, des.get_nsel())
+    self.assertEqual(2, des.get_ntype())
+    torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)
+
+    dparams["concat_output_tebd"] = True
+    des = DescrptDPA1(
+      **dparams,
+    )
+    descriptor, env_mat, diff, rot_mat, sw = \
+      des(
+        nlist,
+        extended_coord,
+        extended_atype,
+        mapping=mapping,
+      )
+    self.assertEqual(descriptor.shape[-1], des.get_dim_out())
+
+
+def translate_se_atten_and_type_embd_dicts_to_dpa1(
+    target_dict,
+    source_dict,
+    type_embd_dict,
+):
+  all_keys = list(target_dict.keys())
+  record = [False for ii in all_keys]
+  for kk, vv in source_dict.items():
+    tk = "se_atten." + kk
+    record[all_keys.index(tk)] = True
+    target_dict[tk] = vv
+  assert len(type_embd_dict.keys()) == 1
+  kk = [ii for ii in type_embd_dict.keys()][0]
+  tk = "type_embedding." + kk
+  record[all_keys.index(tk)] = True
+  target_dict[tk] = type_embd_dict[kk]
+  assert(all(record))
+  return target_dict

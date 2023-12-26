@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
 
 try:
     from typing import Final
@@ -13,34 +13,35 @@ from typing import Any, Union, Tuple, List
 from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
 
-@Descriptor.register("se_atten")
-class DescrptSeAtten(Descriptor):
-
-    def __init__(self,
-                 rcut,
-                 rcut_smth,
-                 sel,
-                 ntypes: int,
-                 neuron: list = [25, 50, 100],
-                 axis_neuron: int = 16,
-                 tebd_dim: int = 8,
-                 tebd_input_mode: str = 'concat',
-                 # set_davg_zero: bool = False,
-                 set_davg_zero: bool = True,  # TODO
-                 attn: int = 128,
-                 attn_layer: int = 2,
-                 attn_dotr: bool = True,
-                 attn_mask: bool = False,
-                 post_ln=True,
-                 ffn=False,
-                 ffn_embed_dim=1024,
-                 activation="tanh",
-                 scaling_factor=1.0,
-                 head_num=1,
-                 normalize=True,
-                 temperature=None,
-                 return_rot=False,
-                 **kwargs):
+@DescriptorBlock.register("se_atten")
+class DescrptBlockSeAtten(DescriptorBlock):
+    def __init__(
+        self,
+        rcut,
+        rcut_smth,
+        sel,
+        ntypes: int,
+        neuron: list = [25, 50, 100],
+        axis_neuron: int = 16,
+        tebd_dim: int = 8,
+        tebd_input_mode: str = 'concat',
+        # set_davg_zero: bool = False,
+        set_davg_zero: bool = True,  # TODO
+        attn: int = 128,
+        attn_layer: int = 2,
+        attn_dotr: bool = True,
+        attn_mask: bool = False,
+        post_ln=True,
+        ffn=False,
+        ffn_embed_dim=1024,
+        activation="tanh",
+        scaling_factor=1.0,
+        head_num=1,
+        normalize=True,
+        temperature=None,
+        return_rot=False,
+        type: str = None,
+    ):
         """Construct an embedding net of type `se_atten`.
 
         Args:
@@ -50,7 +51,8 @@ class DescrptSeAtten(Descriptor):
         - filter_neuron: Number of neurons in each hidden layers of the embedding net.
         - axis_neuron: Number of columns of the sub-matrix of the embedding matrix.
         """
-        super(DescrptSeAtten, self).__init__()
+        super(DescrptBlockSeAtten, self).__init__()
+        del type
         self.rcut = rcut
         self.rcut_smth = rcut_smth
         self.filter_neuron = neuron
@@ -99,6 +101,36 @@ class DescrptSeAtten(Descriptor):
                          tebd_mode=self.tebd_input_mode)
         filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
+
+    def get_rcut(self)->float:
+        """
+        Returns the cut-off radius
+        """
+        return self.rcut
+
+    def get_nsel(self)->int:
+        """
+        Returns the number of selected atoms in the cut-off radius
+        """
+        return sum(self.sel)
+
+    def get_ntype(self)->int:
+        """
+        Returns the number of element types
+        """
+        return self.ntypes
+
+    def get_dim_in(self)->int:
+        """
+        Returns the output dimension
+        """
+        return self.dim_in
+
+    def get_dim_out(self)->int:
+        """
+        Returns the output dimension
+        """
+        return self.dim_out
 
     @property
     def dim_out(self):
