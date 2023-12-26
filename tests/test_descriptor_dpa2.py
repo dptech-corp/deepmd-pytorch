@@ -6,7 +6,7 @@ import json
 from typing import Optional
 from pathlib import Path
 
-from deepmd_pt.model.descriptor import DescrptHybrid, DescrptDPA2
+from deepmd_pt.model.descriptor import DescrptBlockHybrid, DescrptDPA2
 from deepmd_pt.utils import env
 from deepmd_pt.utils.region import normalize_coord
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
@@ -46,7 +46,7 @@ class TestDPA2(unittest.TestCase):
     dparams = model_hybrid_dpa2["descriptor"]
     ntypes = len(model_hybrid_dpa2["type_map"])
     dlist = dparams.pop("list")
-    des = DescrptHybrid(
+    des = DescrptBlockHybrid(
       dlist,
       ntypes,
       hybrid_mode=dparams["hybrid_mode"],
@@ -97,8 +97,6 @@ class TestDPA2(unittest.TestCase):
     torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)
 
 
-
-
   def test_descriptor(self):
     with open(Path(CUR_DIR)/"models"/"dpa2.json") as fp:
       self.model_json = json.load(fp)
@@ -107,6 +105,7 @@ class TestDPA2(unittest.TestCase):
     dparams = model_dpa2["descriptor"]
     dparams["ntypes"] = ntypes
     assert dparams.pop("type") == "dpa2"
+    dparams["concat_output_tebd"] = False
     des = DescrptDPA2(
       **dparams,
     )
@@ -119,7 +118,6 @@ class TestDPA2(unittest.TestCase):
       type_embd_dict,
     )
     des.load_state_dict(target_dict)
-    torch.save(des.state_dict(), 'model_weights.pth')    
     
     coord = self.coord
     atype = self.atype
@@ -129,7 +127,6 @@ class TestDPA2(unittest.TestCase):
       coord, box.reshape(-1, 3, 3))
     extended_coord, extended_atype, mapping = extend_coord_with_ghosts(
       coord_normalized, atype, box, des.repinit.rcut)
-
     nlist = build_neighbor_list(
       extended_coord, extended_atype, nloc,
       des.repinit.rcut, des.repinit.sel, distinguish_types=False)
@@ -138,10 +135,26 @@ class TestDPA2(unittest.TestCase):
         nlist, 
         extended_coord,
         extended_atype,
-        None,
         mapping=mapping,
       )
+    self.assertEqual(descriptor.shape[-1], des.get_dim_out())
+    self.assertAlmostEqual(6., des.get_rcut())
+    self.assertEqual(30, des.get_nsel())
+    self.assertEqual(2, des.get_ntype())
     torch.testing.assert_close(descriptor.view(-1), self.ref_d, atol=1e-10, rtol=1e-10)
+
+    dparams["concat_output_tebd"] = True
+    des = DescrptDPA2(
+      **dparams,
+    )
+    descriptor, env_mat, diff, rot_mat, sw = \
+      des(
+        nlist,
+        extended_coord,
+        extended_atype,
+        mapping=mapping,
+      )
+    self.assertEqual(descriptor.shape[-1], des.get_dim_out())
 
 
 def translate_hybrid_and_type_embd_dicts_to_dpa2(
@@ -152,7 +165,7 @@ def translate_hybrid_and_type_embd_dicts_to_dpa2(
   all_keys = list(target_dict.keys())
   record = [False for ii in all_keys]
   for kk, vv in source_dict.items():
-    tk = kk.replace("descriptor_list.1", "repformer")
+    tk = kk.replace("descriptor_list.1", "repformers")
     tk = tk.replace("descriptor_list.0", "repinit")
     tk = tk.replace("sequential_transform.0", "g1_shape_tranform")
     record[all_keys.index(tk)] = True
@@ -164,4 +177,3 @@ def translate_hybrid_and_type_embd_dicts_to_dpa2(
   target_dict[tk] = type_embd_dict[kk]
   assert(all(record))
   return target_dict
-  

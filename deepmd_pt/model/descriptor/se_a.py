@@ -63,6 +63,30 @@ class DescrptSeA(Descriptor):
             start_index += sel[type_i]
         self.filter_layers = torch.nn.ModuleList(filter_layers)
 
+    def get_rcut(self)->float:
+      """
+      Returns the cut-off radius
+      """
+      return self.rcut
+
+    def get_nsel(self)->int:
+      """
+      Returns the number of selected atoms in the cut-off radius
+      """
+      return sum(self.sel)
+
+    def get_ntype(self)->int:
+      """
+      Returns the number of element types
+      """
+      return self.ntypes
+
+    def get_dim_out(self)->int:
+      """
+      Returns the output dimension
+      """
+      return self.dim_out
+
     @property
     def dim_out(self):
         """

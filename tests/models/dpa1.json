@@ -9,9 +9,7 @@
      "rcut_smth": 2.0,
      "rcut": 6.0,
      "neuron": [2, 4, 8 ],
-     "resnet_dt": false,
      "axis_neuron": 4,
-     "seed": 1,
      "attn": 5,
      "attn_layer": 2,
      "attn_dotr": true,
@@ -23,10 +21,7 @@
      "scaling_factor": 1.0,
      "head_num": 1,
      "normalize": true,
-     "temperature": 1.0,
-     "add": "concat",
-     "pre_add": true,
-     "_comment": " that's all"
+     "temperature": 1.0
   },
   "fitting_net": {
    "neuron": [

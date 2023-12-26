@@ -52,8 +52,7 @@ model_dpau = {
     "update_g2_has_attn": True,
     "attn2_has_gate": True,
     "smooth": True,
-    "do_bn_mode": "uniform",
-    "_comment": " that's all"
+    "do_bn_mode": "uniform"
   },
   "fitting_net": {
     "neuron": [24, 24],
@@ -70,9 +69,7 @@ model_dpa1 = {
     "rcut_smth": 0.5,
     "rcut": 4.0,
     "neuron": [25, 50, 100],
-    "resnet_dt": False,
     "axis_neuron": 16,
-    "seed": 1,
     "attn": 64,
     "attn_layer": 2,
     "attn_dotr": True,
@@ -85,8 +82,7 @@ model_dpa1 = {
     "head_num": 1,
     "normalize": False,
     "temperature": 1.0,
-    "set_davg_zero": True,
-    "_comment": " that's all"
+    "set_davg_zero": True
   },
   "fitting_net": {
     "neuron": [24, 24, 24],
@@ -117,8 +113,7 @@ model_dpa2 = {
     "scaling_factor": 1.0,
     "head_num": 1,
     "normalize": True,
-    "temperature": 1.0,
-    "_comment": " that's all"
+    "temperature": 1.0
   },
   "backbone": {
     "type": "evo-2b",
@@ -137,8 +132,7 @@ model_dpa2 = {
   "fitting_net": {
     "neuron": [24, 24, 24],
     "resnet_dt": True,
-    "seed": 1,
-    "_comment": " that's all"
+    "seed": 1
   },
 }
 
@@ -175,8 +169,7 @@ model_hybrid = {
         "scaling_factor": 1.0,
         "head_num": 1,
         "normalize": True,
-        "temperature": 1.0,
-        "_comment": " that's all"
+        "temperature": 1.0
       },
       {
         "type": "se_uni",
@@ -201,8 +194,7 @@ model_hybrid = {
         "attn2_has_gate": True,
         "add_type_ebd_to_seq": False,
         "smooth": True,
-        "do_bn_mode": "uniform",
-        "_comment": " that's all"
+        "do_bn_mode": "uniform"
       },
     ]
   },
