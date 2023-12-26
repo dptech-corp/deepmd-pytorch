@@ -298,7 +298,6 @@ class RepformerLayer(torch.nn.Module):
             update_style: str = "res_avg",
             set_davg_zero: bool = True,  # TODO
             smooth: bool = True,
-            **kwargs,
     ):
         super(RepformerLayer, self).__init__()
         self.epsilon = 1e-4  # protection of 1./nnei
