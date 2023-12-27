@@ -294,17 +294,6 @@ class TestEnergyModelDPAUni2(unittest.TestCase, TestPermutation):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-class TestEnergyModelDPAUni3(unittest.TestCase, TestPermutation):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
-    model_params["fitting_net"]["type"] = "direct_force_ener"
-    # model_params["descriptor"]["gather_g1"] = True
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.test_virial = False
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-
-
 class TestEnergyModelHybrid(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid)

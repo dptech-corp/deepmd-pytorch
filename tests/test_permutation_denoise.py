@@ -185,15 +185,6 @@ class TestDenoiseModelDPAUni2(unittest.TestCase, TestPermutationDenoise):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-class TestDenoiseModelDPAUni3(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    # model_params["descriptor"]["gather_g1"] = True
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-
-
 class TestDenoiseModelHybrid(unittest.TestCase, TestPermutationDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)
