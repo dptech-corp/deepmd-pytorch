@@ -121,6 +121,7 @@ class DescrptDPA1(Descriptor):
         extended_atype: torch.Tensor,
         mapping: Optional[torch.Tensor] = None,
   ):
+    del mapping
     nframes, nloc, nnei = nlist.shape
     nall = extended_coord.view(nframes, -1).shape[1] // 3
     g1_ext = self.type_embedding(extended_atype)
@@ -130,7 +131,7 @@ class DescrptDPA1(Descriptor):
       nlist,
       extended_coord,
       extended_atype,
-      g1_ext, mapping,
+      g1_ext, mapping=None,
     )
     if self.concat_output_tebd:
       g1 = torch.cat([g1, g1_inp], dim=-1)
