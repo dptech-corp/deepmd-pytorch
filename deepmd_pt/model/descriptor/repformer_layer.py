@@ -268,7 +268,7 @@ class LocalAtten(torch.nn.Module):
         return ret
 
 
-class DescrptDPA2Layer(torch.nn.Module):
+class RepformerLayer(torch.nn.Module):
     def __init__(
             self,
             rcut,
@@ -294,14 +294,12 @@ class DescrptDPA2Layer(torch.nn.Module):
             attn2_hidden: int = 16,
             attn2_nhead: int = 4,
             attn2_has_gate: bool = False,
-            attn_dotr: bool = True,
             activation: str = "tanh",
             update_style: str = "res_avg",
             set_davg_zero: bool = True,  # TODO
             smooth: bool = True,
-            **kwargs,
     ):
-        super(DescrptDPA2Layer, self).__init__()
+        super(RepformerLayer, self).__init__()
         self.epsilon = 1e-4  # protection of 1./nnei
         self.rcut = rcut
         self.rcut_smth = rcut_smth

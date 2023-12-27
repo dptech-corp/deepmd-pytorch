@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
 from deepmd_pt.model.network import Identity, Linear
 from typing import Optional, List
 
@@ -12,8 +12,8 @@ except:
     from torch.jit import Final
 
 
-@Descriptor.register("hybrid")
-class DescrptHybrid(Descriptor):
+@DescriptorBlock.register("hybrid")
+class DescrptBlockHybrid(DescriptorBlock):
 
     def __init__(self,
                  list,
@@ -28,7 +28,7 @@ class DescrptHybrid(Descriptor):
         - descriptor_list: list of descriptors.
         - descriptor_param: descriptor configs.
         """
-        super(DescrptHybrid, self).__init__()
+        super(DescrptBlockHybrid, self).__init__()
         supported_descrpt = ['se_atten', 'se_uni']
         descriptor_list = []
         for descriptor_param_item in list:
@@ -36,9 +36,10 @@ class DescrptHybrid(Descriptor):
             assert descriptor_type_tmp in supported_descrpt, \
                 f'Only descriptors in {supported_descrpt} are supported for `hybrid` descriptor!'
             descriptor_param_item['ntypes'] = ntypes
-            descriptor_param_item['tebd_dim'] = tebd_dim
-            descriptor_param_item['tebd_input_mode'] = tebd_input_mode
-            descriptor_list.append(Descriptor(**descriptor_param_item))
+            if descriptor_type_tmp == "se_atten":
+              descriptor_param_item['tebd_dim'] = tebd_dim
+              descriptor_param_item['tebd_input_mode'] = tebd_input_mode
+            descriptor_list.append(DescriptorBlock(**descriptor_param_item))
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
         self.descriptor_param = list
         self.rcut = [descrpt.rcut for descrpt in self.descriptor_list]
@@ -60,6 +61,43 @@ class DescrptHybrid(Descriptor):
                                                        bias=False, init="glorot"))
             sequential_transform.append(Identity())
         self.sequential_transform = torch.nn.ModuleList(sequential_transform)
+        self.ntypes = ntypes
+
+    def get_rcut(self)->float:
+      """
+      Returns the cut-off radius
+      """
+      return self.rcut
+
+    def get_nsel(self)->int:
+      """
+      Returns the number of selected atoms in the cut-off radius
+      """
+      return [sum(ii) for ii in self.get_sel()]
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sel
+
+    def get_ntype(self)->int:
+      """
+      Returns the number of element types
+      """
+      return self.ntypes
+
+    def get_dim_out(self)->int:
+      """
+      Returns the output dimension
+      """
+      return self.dim_out
+
+    def get_dim_in(self)->int:
+      """
+      Returns the input dimension
+      """
+      return self.dim_in
 
     @property
     def dim_out(self):

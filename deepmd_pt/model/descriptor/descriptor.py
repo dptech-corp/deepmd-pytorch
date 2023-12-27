@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from deepmd_pt.utils import env
 from deepmd_pt.utils.plugin import Plugin, PluginVariant
@@ -13,18 +13,85 @@ except:
     from torch.jit import Final
 
 
-def make_default_type_embedding(
-    ntypes,
-):
-  aux = {}
-  aux['tebd_dim'] = 8
-  return TypeEmbedNet(ntypes, aux['tebd_dim']), aux
-
-
 class Descriptor(torch.nn.Module, ABC):
+    """The descriptor.
+    Given the atomic coordinates, atomic types and neighbor list, 
+    calculate the descriptor.
+    """
 
     __plugins = Plugin()
     local_cluster = False
+
+    @abstractmethod
+    def get_rcut(self)->float:
+        """
+        Returns the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_nsel(self)->int:
+        """
+        Returns the number of selected atoms in the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_ntype(self)->int:
+        """
+        Returns the number of element types
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_dim_out(self)->int:
+        """
+        Returns the output dimension
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def compute_input_stats(self, merged):
+        """Update mean and stddev for descriptor elements.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
+        """Initialize the model bias by the statistics
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def compute_input_stats(self, merged):
+        """Update mean and stddev for descriptor elements.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
+        """Initialize the model bias by the statistics
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def forward(
+        self,
+        nlist,
+        extended_coord,
+        extended_atype,
+        mapping: Optional[torch.Tensor] = None,
+    ):
+        """Calculate descriptor.
+        """
+        raise NotImplementedError
 
     @staticmethod
     def register(key: str) -> Callable:
@@ -60,22 +127,101 @@ class Descriptor(torch.nn.Module, ABC):
                 raise RuntimeError("Unknown descriptor type: " + descrpt_type)
         return super().__new__(cls)
 
-    @property
-    def dim_out(self):
-        """
-        Returns the output dimension of this descriptor
-        """
-        return self.filter_neuron[-1] * self.axis_neuron
 
-    @property
-    def dim_in(self):
-        """
-        Returns the atomic input dimension of this descriptor
-        """
-        return self.tebd_dim
+class DescriptorBlock(torch.nn.Module, ABC):
+    """The building block of descriptor.
+    Given the input descriptor, provide with the atomic coordinates, 
+    atomic types and neighbor list, calculate the new descriptor.
+    """
 
+    __plugins = Plugin()
+    local_cluster = False
+
+    @staticmethod
+    def register(key: str) -> Callable:
+        """Register a DescriptorBlock plugin.
+
+        Parameters
+        ----------
+        key : str
+            the key of a DescriptorBlock
+
+        Returns
+        -------
+        DescriptorBlock
+            the registered DescriptorBlock
+
+        Examples
+        --------
+        >>> @DescriptorBlock.register("some_descrpt")
+            class SomeDescript(DescriptorBlock):
+                pass
+        """
+        return DescriptorBlock.__plugins.register(key)
+
+    def __new__(cls, *args, **kwargs):
+        if cls is DescriptorBlock:
+            try:
+                descrpt_type = kwargs["type"]
+            except KeyError:
+                raise KeyError("the type of DescriptorBlock should be set by `type`")
+            if descrpt_type in DescriptorBlock.__plugins.plugins:
+                cls = DescriptorBlock.__plugins.plugins[descrpt_type]
+            else:
+                raise RuntimeError("Unknown DescriptorBlock type: " + descrpt_type)
+        return super().__new__(cls)
+
+    @abstractmethod
+    def get_rcut(self)->float:
+        """
+        Returns the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_nsel(self)->int:
+        """
+        Returns the number of selected atoms in the cut-off radius
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_ntype(self)->int:
+        """
+        Returns the number of element types
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_dim_out(self)->int:
+        """
+        Returns the output dimension
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_dim_in(self)->int:
+        """
+        Returns the output dimension
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def compute_input_stats(self, merged):
-        """Update mean and stddev for descriptor elements.
+        """Update mean and stddev for DescriptorBlock elements.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
+        """Initialize the model bias by the statistics
         """
         raise NotImplementedError
 
@@ -101,13 +247,13 @@ class Descriptor(torch.nn.Module, ABC):
     @abstractmethod
     def forward(
         self,
-        nlist,
-        extended_coord,
-        extended_atype,
-        extended_atype_embd = None,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
     ):
-        """Calculate descriptor.
+        """Calculate DescriptorBlock.
         """
         raise NotImplementedError
 
@@ -120,3 +266,12 @@ def compute_std(sumv2, sumv, sumn, rcut_r):
     if np.abs(val) < 1e-2:
         val = 1e-2
     return val
+
+
+def make_default_type_embedding(
+    ntypes,
+):
+  aux = {}
+  aux['tebd_dim'] = 8
+  return TypeEmbedNet(ntypes, aux['tebd_dim']), aux
+

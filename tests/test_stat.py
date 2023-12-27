@@ -122,6 +122,7 @@ class TestDataset(unittest.TestCase):
         self.dp_d.compute_input_stats(coord, box, atype, natoms, self.dp_mesh, {})
 
         my_en = DescrptSeA(self.rcut, self.rcut_smth, self.sel, self.filter_neuron, self.axis_neuron)
+        my_en = my_en.sea # get the block who has stat as private vars
         sampled = self.my_sampled
         for sys in sampled:
             for key in ['coord', 'force', 'energy', 'atype', 'natoms', 'extended_coord', 'nlist', 'shift',
