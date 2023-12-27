@@ -278,7 +278,6 @@ class RepformerLayer(torch.nn.Module):
             g1_dim=128,
             g2_dim=16,
             axis_dim: int = 4,
-            combine_grrg: bool = False,
             update_chnnl_2: bool = True,
             do_bn_mode: str = 'no',
             bn_momentum: float = 0.1,
@@ -311,8 +310,6 @@ class RepformerLayer(torch.nn.Module):
         self.sec = self.sel
         self.axis_dim = axis_dim
         self.set_davg_zero = set_davg_zero
-        self.combine_grrg = combine_grrg
-        self.update_last_g2 = self.combine_grrg
         self.do_bn_mode = do_bn_mode
         self.bn_momentum = bn_momentum
         self.act = get_activation_fn(activation)

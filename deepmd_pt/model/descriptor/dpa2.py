@@ -25,17 +25,17 @@ from .repformers import DescrptBlockRepformers
 class DescrptDPA2(Descriptor):
   def __init__(
       self,
-      ntypes,
-      repinit_rcut,
-      repinit_rcut_smth,
-      repinit_nsel,
-      repformer_rcut,
-      repformer_rcut_smth,
-      repformer_nsel,
+      ntypes: int,
+      repinit_rcut: float,
+      repinit_rcut_smth: float,
+      repinit_nsel: int,
+      repformer_rcut: float,
+      repformer_rcut_smth: float,
+      repformer_nsel: int,
       # kwargs
       tebd_dim: int = 8,
       concat_output_tebd: bool = True,
-      repinit_neuron: list = [25, 50, 100],
+      repinit_neuron: List[int] = [25, 50, 100],
       repinit_axis_neuron: int = 16,
       repinit_set_davg_zero: bool = True,  # TODO
       repinit_activation="tanh",
@@ -45,7 +45,6 @@ class DescrptDPA2(Descriptor):
       repformer_g1_dim: int = 128,
       repformer_g2_dim: int = 16,
       repformer_axis_dim: int = 4,
-      repformer_combine_grrg: bool = False,
       repformer_do_bn_mode: str = 'no',
       repformer_bn_momentum: float = 0.1,
       repformer_update_g1_has_conv: bool = True,
@@ -65,6 +64,103 @@ class DescrptDPA2(Descriptor):
       repformer_set_davg_zero: bool = True, # TODO
       repformer_add_type_ebd_to_seq: bool = False,
   ):
+    """ The DPA-2 descriptor. see https://arxiv.org/abs/2312.15492
+    
+    Parameters
+    ----------
+    ntypes :            int
+        Number of atom types
+    repinit_rcut :      float
+        The cut-off radius of the repinit block
+    repinit_rcut_smth : float
+        From this position the inverse distance smoothly decays
+        to 0 at the cut-off. Use in the repinit block.
+    repinit_nsel:       int
+        Maximally possible number of neighbors for repinit block.
+    repformer_rcut :    float
+        The cut-off radius of the repformer block
+    repformer_rcut_smth : float
+        From this position the inverse distance smoothly decays
+        to 0 at the cut-off. Use in the repformer block.
+    repformer_nsel:     int
+        Maximally possible number of neighbors for repformer block.
+    tebd_dim:           int
+        The dimension of atom type embedding
+    concat_output_tebd: bool
+        Whether to concat type embedding at the output of the descriptor.
+    repinit_neuron:     List[int]
+        repinit block: the number of neurons in the embedding net.
+    repinit_axis_neuron: int
+        repinit block: the number of dimension of split  in the
+        symmetrization op.
+    repinit_activation: str
+        repinit block: the activation function in the embedding net
+    repformer_nlayers:  int
+        repformers block: the number of repformer layers
+    repformer_g1_dim:   int
+        repformers block: the dimension of single-atom rep
+    repformer_g2_dim:   int
+        repformers block: the dimension of invariant pair-atom rep
+    repformer_axis_dim: int
+        repformers block: the number of dimension of split  in the
+        symmetrization ops.
+    repformer_do_bn_mode: bool
+        repformers block: do batch norm in the repformer layers
+    repformer_bn_momentum: float
+        repformers block: moment in the batch normalization
+    repformer_update_g1_has_conv: bool
+        repformers block: update the g1 rep with convolution term
+    repformer_update_g1_has_drrd: bool
+        repformers block: update the g1 rep with the drrd term 
+    repformer_update_g1_has_grrg: bool
+        repformers block: update the g1 rep with the grrg term
+    repformer_update_g1_has_attn: bool
+        repformers block: update the g1 rep with the localized 
+        self-attention
+    repformer_update_g2_has_g1g1: bool
+        repformers block: update the g2 rep with the g1xg1 term
+    repformer_update_g2_has_attn: bool
+        repformers block: update the g2 rep with the gated self-attention
+    repformer_update_h2:        bool
+        repformers block: update the h2 rep
+    repformer_attn1_hidden:     int
+        repformers block: the hidden dimension of localized self-attention
+    repformer_attn1_nhead:      int
+        repformers block: the number of heads in localized self-attention
+    repformer_attn2_hidden:     int
+        repformers block: the hidden dimension of gated self-attention
+    repformer_attn2_nhead:      int
+        repformers block: the number of heads in gated self-attention
+    repformer_attn2_has_gate:   bool
+        repformers block: has gate in the gated self-attention
+    repformer_activation:       str
+        repformers block: the activation function in the MLPs.
+    repformer_update_style:     str
+        repformers block: style of update a rep.
+        can be res_avg or res_incr.
+        res_avg updates a rep `u` with: 
+                u = 1/\sqrt{n+1} (u + u_1 + u_2 + ... + u_n)
+        res_incr updates a rep `u` with: 
+                u = u + 1/\sqrt{n} (u_1 + u_2 + ... + u_n)
+    repformer_set_davg_zero:    bool
+        repformers block: set the avg to zero in statistics
+    repformer_add_type_ebd_to_seq: bool    
+        repformers block: concatenate the type embedding at the output.
+
+    Returns
+    -------
+    descriptor:         torch.Tensor
+        the descriptor of shape nb x nloc x g1_dim
+    env_mat:            torch.Tensor
+        the environment matrix
+    diff:               torch.Tensor
+        relative distance between atoms and neighbors
+    rot_mat:            torch.Tensor
+        rotation matrix
+    sw:                 torch.Tensor
+        The switch function for decaying inverse distance.
+
+    """
     super(DescrptDPA2, self).__init__()
     self.repinit = DescrptBlockSeAtten(
       repinit_rcut,
@@ -89,7 +185,6 @@ class DescrptDPA2(Descriptor):
       g1_dim=repformer_g1_dim,
       g2_dim=repformer_g2_dim,
       axis_dim=repformer_axis_dim,
-      combine_grrg=repformer_combine_grrg,
       direct_dist=False,
       do_bn_mode=repformer_do_bn_mode,
       bn_momentum=repformer_bn_momentum,

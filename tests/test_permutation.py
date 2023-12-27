@@ -287,7 +287,7 @@ class TestEnergyModelDPAUni2(unittest.TestCase, TestPermutation):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "direct_force_ener"
-    model_params["descriptor"]["combine_grrg"] = True
+    # model_params["descriptor"]["combine_grrg"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
