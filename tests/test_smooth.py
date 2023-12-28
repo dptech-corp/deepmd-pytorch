@@ -89,7 +89,7 @@ class TestEnergyModelDPA1(unittest.TestCase, TestSmooth):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     # less degree of smoothness,
     # error can be systematically removed by reducing epsilon
-    self.epsilon = 1e-10
+    self.epsilon = 1e-5
     self.aprec = 1e-5
 
 class TestEnergyModelDPA2(unittest.TestCase, TestSmooth):
