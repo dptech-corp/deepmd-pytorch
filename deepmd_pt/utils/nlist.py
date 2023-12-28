@@ -322,9 +322,7 @@ def build_multiple_neighbor_list(
   rr.masked_fill(nlist_mask, float("inf"))
   nlist0 = nlist
   ret = {}
-  rcuts.reverse()
-  nsels.reverse()
-  for rc, ns in zip(rcuts, nsels):
+  for rc, ns in zip(rcuts[::-1], nsels[::-1]):
     nlist0 = nlist0[:,:,:ns].masked_fill( rr[:,:,:ns] > rc, int(-1) )
     ret[get_multiple_nlist_key(rc, ns)] = nlist0  
   return ret
