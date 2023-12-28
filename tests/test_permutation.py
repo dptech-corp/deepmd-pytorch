@@ -248,7 +248,6 @@ class TestForceModelDPA2(unittest.TestCase, TestPermutation):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-
 @unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid(unittest.TestCase, TestPermutation):
   def setUp(self):
