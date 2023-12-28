@@ -51,7 +51,10 @@ class TestDPA2(unittest.TestCase):
       ntypes,
       hybrid_mode=dparams["hybrid_mode"],
     )
-    des.load_state_dict(torch.load(self.file_model_param))
+    model_dict = torch.load(self.file_model_param)
+    # type_embd of repformer is removed
+    model_dict.pop("descriptor_list.1.type_embd.embedding.weight")
+    des.load_state_dict(model_dict)
     all_rcut = [ii["rcut"] for ii in dlist]
     all_nsel = [ii["sel"]  for ii in dlist]
     rcut_max = max(all_rcut)
@@ -111,6 +114,8 @@ class TestDPA2(unittest.TestCase):
     )
     target_dict = des.state_dict()
     source_dict = torch.load(self.file_model_param)
+    # type_embd of repformer is removed
+    source_dict.pop("descriptor_list.1.type_embd.embedding.weight")
     type_embd_dict = torch.load(self.file_type_embed)
     target_dict = translate_hybrid_and_type_embd_dicts_to_dpa2(
       target_dict,
