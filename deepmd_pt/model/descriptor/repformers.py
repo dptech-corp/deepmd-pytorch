@@ -91,7 +91,6 @@ class DescrptBlockRepformers(DescriptorBlock):
     self.direct_dist = direct_dist
     self.add_type_ebd_to_seq = add_type_ebd_to_seq
 
-    self.type_embd = TypeEmbedNet(self.ntypes, self.g1_dim)
     self.g2_embd = mylinear(1, self.g2_dim)
     layers = []
     for ii in range(nlayers):
@@ -212,26 +211,10 @@ class DescrptBlockRepformers(DescriptorBlock):
     sw = sw.masked_fill(~nlist_mask, float(0.0))
 
     # [nframes, nloc, tebd_dim]
-    seq_input = extended_atype_embd[:,:nloc,:]
-    if seq_input.shape[-1] == self.g1_dim:
-      if seq_input.shape[0] == nframes * nloc:
-        seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-      if self.add_type_ebd_to_seq:
-        # nb x nloc x ng1
-        atype_tebd = self.type_embd(atype) + seq_input
-      else:
-        # nb x nloc x ng1        
-        atype_tebd = seq_input
-        # wasted evalueation of type_embd, 
-        # since whether seq_input is None or not can only be 
-        # known at runtime, we cannot decide whether create the
-        # type embedding net or not at `__init__`
-        foo = self.type_embd(atype)
-    else:
-      # nb x nloc x ng1
-      atype_tebd = self.type_embd(atype)
+    atype_embd = extended_atype_embd[:,:nloc,:]
+    assert list(atype_embd.shape) == [nframes, nloc, self.g1_dim]
 
-    g1 = self.act(atype_tebd)
+    g1 = self.act(atype_embd)
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
     if not self.direct_dist:
       g2, h2 = torch.split(dmatrix, [1, 3], dim=-1)

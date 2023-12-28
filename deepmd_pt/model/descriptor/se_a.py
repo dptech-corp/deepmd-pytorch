@@ -85,6 +85,15 @@ class DescrptSeA(Descriptor):
       return self.sea.forward(
         nlist, extended_coord, extended_atype, None, mapping)
 
+    def set_stat_mean_and_stddev(
+        self,
+        mean: torch.Tensor,
+        stddev: torch.Tensor,
+    )->None:
+      self.sea.mean = mean
+      self.sea.stddev = stddev
+
+
 
 @DescriptorBlock.register("se_e2_a")
 class DescrptBlockSeA(DescriptorBlock):

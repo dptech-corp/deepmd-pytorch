@@ -62,7 +62,7 @@ class DpTrainer(object):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
-        self.data_stat_nbatch = 1
+        self.data_stat_nbatch = 3
         self.start_lr = 0.001
         self.stop_lr = 3.51e-8
         self.decay_steps = 500
@@ -272,14 +272,16 @@ class TestEnergy(unittest.TestCase):
         # Keep statistics consistency between 2 implentations
         my_em = my_model.descriptor
         mean = stat_dict['descriptor.mean'].reshape([self.ntypes, my_em.get_nsel(), 4])
-        my_em.mean = torch.tensor(mean, device=DEVICE)
         stddev = stat_dict['descriptor.stddev'].reshape([self.ntypes, my_em.get_nsel(), 4])
-        my_em.stddev = torch.tensor(stddev, device=DEVICE)
+        my_em.set_stat_mean_and_stddev(
+          torch.tensor(mean, device=DEVICE),
+          torch.tensor(stddev, device=DEVICE),
+        )
         my_model.fitting_net.bias_atom_e = torch.tensor(stat_dict['fitting_net.bias_atom_e'], device=DEVICE)
 
         # Keep parameter value consistency between 2 implentations
         for name, param in my_model.named_parameters():
-            name = "sea." + name
+            name = name.replace('sea.', '')
             var_name = torch2tf(name)
             var = vs_dict[var_name].value
             with torch.no_grad():
@@ -303,15 +305,13 @@ class TestEnergy(unittest.TestCase):
                  'force': batch['force'],
                  }
         loss, _ = my_loss(model_pred, label, int(batch['natoms'][0, 0]), cur_lr)
-        self.assertTrue(np.allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy()))
-        self.assertTrue(np.allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy()))
+        np.testing.assert_allclose(head_dict['energy'], p_energy.view(-1).cpu().detach().numpy())
+        np.testing.assert_allclose(head_dict['force'], p_force.view(*head_dict['force'].shape).cpu().detach().numpy())
         rtol = 1e-5
         atol = 1e-8
-        self.assertTrue(np.allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol))
-        self.assertTrue(
-            np.allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy()))
-        self.assertTrue(
-            np.allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy()))
+        np.testing.assert_allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol)
+        np.testing.assert_allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy())
+        np.testing.assert_allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy())
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()
 
@@ -323,7 +323,7 @@ class TestEnergy(unittest.TestCase):
         loss.backward()
 
         for name, param in my_model.named_parameters():
-            name = "sea." + name
+            name = name.replace('sea.', '')
             var_name = torch2tf(name)
             var_grad = vs_dict[var_name].gradient
             param_grad = param.grad.cpu()

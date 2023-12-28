@@ -14,7 +14,9 @@ from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_st
 from deepmd_pt.model.network import (
   TypeEmbedNet, SimpleLinear, Identity, Linear
 )
-from deepmd_pt.utils.nlist import build_multiple_neighbor_list
+from deepmd_pt.utils.nlist import (
+  get_multiple_nlist_key, build_multiple_neighbor_list
+)
 
 from .se_atten import analyze_descrpt
 from .se_atten import DescrptBlockSeAtten
@@ -217,7 +219,8 @@ class DescrptDPA2(Descriptor):
     g1_ext = self.type_embedding(extended_atype)
     g1_inp = g1_ext[:,:nloc,:]
     g1, env_mat, diff, rot_mat, sw = self.repinit(
-      nlist_dict[self.repinit.get_rcut()],
+      nlist_dict[get_multiple_nlist_key(
+        self.repinit.get_rcut(), self.repinit.get_nsel())],
       extended_coord,
       extended_atype,
       g1_ext, mapping,
@@ -225,13 +228,15 @@ class DescrptDPA2(Descriptor):
     # linear to change shape
     g1 = self.g1_shape_tranform(g1)
     # mapping g1
+    assert mapping is not None
     mapping_ext = mapping.view(nframes, nall)\
                          .unsqueeze(-1)\
                          .expand(-1, -1, g1.shape[-1])
     g1_ext = torch.gather(g1, 1, mapping_ext)
     # repformer
     g1, env_mat, diff, rot_mat, sw = self.repformers(
-      nlist_dict[self.repformers.get_rcut()],
+      nlist_dict[get_multiple_nlist_key(
+        self.repformers.get_rcut(), self.repformers.get_nsel())],
       extended_coord,
       extended_atype,
       g1_ext, mapping,

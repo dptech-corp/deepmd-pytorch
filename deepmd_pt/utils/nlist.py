@@ -251,13 +251,19 @@ def build_neighbor_list(
 #   out_dims=(0),
 # )
 
+def get_multiple_nlist_key(
+    rcut: float,
+    nsel: int,
+)->str:
+  return str(rcut) + "_" + str(nsel)
+
 
 def build_multiple_neighbor_list(
     coord: torch.Tensor,
     nlist: torch.Tensor,
     rcuts: List[float],
     nsels: List[int],
-) -> Dict[float, torch.Tensor]:
+) -> Dict[str, torch.Tensor]:
   """Input one neighbor list, and produce multiple neighbor lists with
   different cutoff radius and numbers of selection out of it.  The
   required rcuts and nsels should be smaller or equal to the input nlist.
@@ -278,9 +284,9 @@ def build_multiple_neighbor_list(
   
   Returns
   -------
-  nlist_dict : Dict[torch.Tensor]
-        A dict of nlists, key being the rcut and value being the
-        corresponding nlist.
+  nlist_dict : Dict[str, torch.Tensor]
+        A dict of nlists, key given by get_multiple_nlist_key(rc, nsel)
+        value being the corresponding nlist.
 
   """
   assert len(rcuts) == len(nsels)
@@ -320,7 +326,7 @@ def build_multiple_neighbor_list(
   nsels.reverse()
   for rc, ns in zip(rcuts, nsels):
     nlist0 = nlist0[:,:,:ns].masked_fill( rr[:,:,:ns] > rc, int(-1) )
-    ret[rc] = nlist0  
+    ret[get_multiple_nlist_key(rc, ns)] = nlist0  
   return ret
 
 
