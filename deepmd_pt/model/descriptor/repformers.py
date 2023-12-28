@@ -39,7 +39,6 @@ class DescrptBlockRepformers(DescriptorBlock):
       g1_dim = 128,
       g2_dim = 16,
       axis_dim: int = 4,
-      combine_grrg: bool = False,
       direct_dist: bool = False,
       do_bn_mode: str = 'no',
       bn_momentum: float = 0.1,
@@ -99,7 +98,6 @@ class DescrptBlockRepformers(DescriptorBlock):
         RepformerLayer(
           rcut, rcut_smth, sel, ntypes, self.g1_dim, self.g2_dim,
           axis_dim=self.axis_dim,
-          combine_grrg=combine_grrg,
           update_chnnl_2=(ii != nlayers - 1),
           do_bn_mode=do_bn_mode,
           bn_momentum=bn_momentum,

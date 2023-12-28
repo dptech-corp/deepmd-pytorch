@@ -79,7 +79,7 @@ class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
 class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["combine_grrg"] = True
+    # model_params["descriptor"]["combine_grrg"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
