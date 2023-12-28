@@ -45,7 +45,6 @@ class DescrptDPA2(Descriptor):
       repformer_g1_dim: int = 128,
       repformer_g2_dim: int = 16,
       repformer_axis_dim: int = 4,
-      repformer_combine_grrg: bool = False,
       repformer_do_bn_mode: str = 'no',
       repformer_bn_momentum: float = 0.1,
       repformer_update_g1_has_conv: bool = True,
@@ -64,8 +63,13 @@ class DescrptDPA2(Descriptor):
       repformer_update_style: str = "res_avg",
       repformer_set_davg_zero: bool = True, # TODO
       repformer_add_type_ebd_to_seq: bool = False,
+      type: Optional[str] = None,       # work around the bad design in get_trainer and DpLoaderSet!
+      rcut: Optional[float] = None,     # work around the bad design in get_trainer and DpLoaderSet!
+      rcut_smth: Optional[float] = None,# work around the bad design in get_trainer and DpLoaderSet!
+      sel: Optional[int] = None,        # work around the bad design in get_trainer and DpLoaderSet!
   ):
     super(DescrptDPA2, self).__init__()
+    del type, rcut, rcut_smth, sel
     self.repinit = DescrptBlockSeAtten(
       repinit_rcut,
       repinit_rcut_smth,
@@ -89,7 +93,6 @@ class DescrptDPA2(Descriptor):
       g1_dim=repformer_g1_dim,
       g2_dim=repformer_g2_dim,
       axis_dim=repformer_axis_dim,
-      combine_grrg=repformer_combine_grrg,
       direct_dist=False,
       do_bn_mode=repformer_do_bn_mode,
       bn_momentum=repformer_bn_momentum,
@@ -157,21 +160,21 @@ class DescrptDPA2(Descriptor):
     """
     Returns the output dimension of this descriptor
     """
-    ret = self.dim_out
+    ret = self.repformers.dim_out
     if self.concat_output_tebd:
       ret += self.tebd_dim
     return ret
 
   @property
   def dim_out(self):
-    return self.repformers.get_dim_out()
+    return self.get_dim_out()
 
   @property
   def dim_emb(self):
     """
     Returns the embedding dimension g2
     """
-    return self.g2_dim
+    return self.repformers.dim_emb
 
   def compute_input_stats(self, merged):
       sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
@@ -191,7 +194,7 @@ class DescrptDPA2(Descriptor):
     
 
   def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
-      for ii, descrpt in enumerate(self.descriptor_list):
+      for ii, descrpt in enumerate([self.repinit, self.repformers]):
           descrpt.init_desc_stat(sumr[ii], suma[ii], sumn[ii], sumr2[ii], suma2[ii])
 
   def forward(
@@ -212,8 +215,7 @@ class DescrptDPA2(Descriptor):
     )
     # repinit
     g1_ext = self.type_embedding(extended_atype)
-    if self.concat_output_tebd:
-      g1_inp = g1_ext[:,:nloc,:]
+    g1_inp = g1_ext[:,:nloc,:]
     g1, env_mat, diff, rot_mat, sw = self.repinit(
       nlist_dict[self.repinit.get_rcut()],
       extended_coord,

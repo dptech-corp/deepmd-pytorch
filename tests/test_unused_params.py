@@ -9,20 +9,20 @@ from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation import (
     make_sample,
-    model_dpau,
+    model_dpa2,
 )
 from deepmd_pt.infer.deep_eval import eval_model
 
 dtype = torch.float64
 
 
-class TestUnusedParamsDPAUni(unittest.TestCase):
+class TestUnusedParamsDPA2(unittest.TestCase):
   def test_unused(self):    
     import itertools
-    for cmbg2, conv, drrd, grrg, attn1, g1g1, attn2, h2 in \
+    for conv, drrd, grrg, attn1, g1g1, attn2, h2 in \
         itertools.product(
           [True,False], [True,False], [True,False], [True,False], 
-          [True,False], [True,False], [True,False], [True,False],
+          [True,False], [True,False], [True,False],
         ):
       if (not drrd) and (not grrg) and h2:
         # skip the case h2 is not envolved
@@ -30,22 +30,24 @@ class TestUnusedParamsDPAUni(unittest.TestCase):
       if (not grrg) and (not conv):
         # skip the case g2 is not envolved
         continue
-      model = copy.deepcopy(model_dpau)
-      model["descriptor"]["combine_grrg"] = cmbg2
-      model["descriptor"]["update_g1_has_conv"] = conv
-      model["descriptor"]["update_g1_has_drrd"] = drrd
-      model["descriptor"]["update_g1_has_grrg"] = grrg
-      model["descriptor"]["update_g1_has_attn"] = attn1
-      model["descriptor"]["update_g2_has_g1g1"] = g1g1
-      model["descriptor"]["update_g2_has_attn"] = attn2
-      model["descriptor"]["update_h2"] = h2
+      model = copy.deepcopy(model_dpa2)
+      model["descriptor"]["rcut"] = model["descriptor"]["repinit_rcut"]
+      model["descriptor"]["sel"] = model["descriptor"]["repinit_nsel"]
+      model["descriptor"]["repformer_nlayers"] = 2
+      # model["descriptor"]["combine_grrg"] = cmbg2
+      model["descriptor"]["repformer_update_g1_has_conv"] = conv
+      model["descriptor"]["repformer_update_g1_has_drrd"] = drrd
+      model["descriptor"]["repformer_update_g1_has_grrg"] = grrg
+      model["descriptor"]["repformer_update_g1_has_attn"] = attn1
+      model["descriptor"]["repformer_update_g2_has_g1g1"] = g1g1
+      model["descriptor"]["repformer_update_g2_has_attn"] = attn2
+      model["descriptor"]["repformer_update_h2"] = h2
       model["fitting_net"]["neuron"] = [12, 12, 12]
       self._test_unused(model)
 
   def _test_unused(self, model_params):
     sampled = make_sample(model_params)
     self.model = get_model(model_params, sampled).to(env.DEVICE)
-
     natoms = 5
     cell = torch.rand([3, 3], dtype=dtype).to(env.DEVICE)
     cell = (cell + cell.T) + 5. * torch.eye(3).to(env.DEVICE)

@@ -187,6 +187,7 @@ def build_neighbor_list(
 
   """
   batch_size = coord1.shape[0]
+  coord1 = coord1.view(batch_size, -1)
   nall = coord1.shape[1]//3
   if isinstance(sel, int):
     sel = [sel]

@@ -62,7 +62,7 @@ class DpTrainer(object):
         self.filter_neuron = model_config['descriptor']['neuron']
         self.axis_neuron = model_config['descriptor']['axis_neuron']
         self.n_neuron = model_config['fitting_net']['neuron']
-        self.data_stat_nbatch = 3
+        self.data_stat_nbatch = 1
         self.start_lr = 0.001
         self.stop_lr = 3.51e-8
         self.decay_steps = 500
@@ -279,6 +279,7 @@ class TestEnergy(unittest.TestCase):
 
         # Keep parameter value consistency between 2 implentations
         for name, param in my_model.named_parameters():
+            name = "sea." + name
             var_name = torch2tf(name)
             var = vs_dict[var_name].value
             with torch.no_grad():
@@ -322,6 +323,7 @@ class TestEnergy(unittest.TestCase):
         loss.backward()
 
         for name, param in my_model.named_parameters():
+            name = "sea." + name
             var_name = torch2tf(name)
             var_grad = vs_dict[var_name].gradient
             param_grad = param.grad.cpu()

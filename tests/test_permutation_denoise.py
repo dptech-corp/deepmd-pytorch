@@ -5,144 +5,26 @@ from deepmd_pt.model.model import get_model
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.infer.deep_eval import eval_model
+from .test_permutation import (
+  make_sample,
+  model_dpa1,
+  model_dpa2,
+  # model_dpau,
+  model_hybrid,
+)
 
 dtype = torch.float64
 
-model_dpau_denoise = {
-  "type_map": ["O", "H", "B", "MASKED_TOKEN"],
-  "descriptor": {
-    "type": "se_uni",
-    "sel": 40,
-    "rcut_smth": 0.5,
-    "rcut": 4.0,
-    "nlayers": 2,
-    "g1_dim": 10,
-    "g2_dim": 5,
-    "attn2_hidden": 10,
-    "attn2_nhead": 2,
-    "attn1_hidden": 10,
-    "attn1_nhead": 2,
-    "axis_dim": 4,
-    "update_h2": False,
-    "update_g1_has_conv": True,
-    "update_g1_has_drrd": True,
-    "update_g1_has_grrg": True,
-    "update_g1_has_attn": True,
-    "update_g2_has_g1g1": True,
-    "update_g2_has_attn": True,
-    "attn2_has_gate": True,
-    "smooth": True,
-    "do_bn_mode": "uniform"
-    # "_comment": " that's all"
-  },
-}
+model_dpa1 = copy.deepcopy(model_dpa1)
+model_dpa2 = copy.deepcopy(model_dpa2)
+model_hybrid = copy.deepcopy(model_hybrid)
+model_dpa1["type_map"] = ["O", "H", "B", "MASKED_TOKEN"]
+model_dpa1.pop("fitting_net")
+model_dpa2["type_map"] = ["O", "H", "B", "MASKED_TOKEN"]
+model_dpa2.pop("fitting_net")
+model_hybrid["type_map"] = ["O", "H", "B", "MASKED_TOKEN"]
+model_hybrid.pop("fitting_net")
 
-model_dpa1_denoise = {
-  "type_map": ["O", "H", "B","MASKED_TOKEN"],
-  "descriptor": {
-    "type": "se_atten",
-    "sel": 40,
-    "rcut_smth": 0.5,
-    "rcut": 4.0,
-    "neuron": [25, 50, 100],
-    # "resnet_dt": False,       # unsupported parameter!
-    "axis_neuron": 16,
-    # "seed": 1,                # unsupported parameter!
-    "attn": 64,
-    "attn_layer": 2,
-    "attn_dotr": True,
-    "attn_mask": False,
-    "post_ln": True,
-    "ffn": False,
-    "ffn_embed_dim": 512,
-    "activation": "tanh",
-    "scaling_factor": 1.0,
-    "head_num": 1,
-    "normalize": False,
-    "temperature": 1.0
-    # "_comment": " that's all" # no such comment. use dargs in the future
-  },
-}
-
-model_hybrid_denoise = {
-  "type_map": [
-    "O",
-    "H",
-    "B",
-    "MASKED_TOKEN"
-  ],
-  "descriptor": {
-    "type": "hybrid",
-    "hybrid_mode": "sequential",
-    "list": [
-      {
-        "type": "se_atten",
-        "sel": 120,
-        "rcut_smth": 0.5,
-        "rcut": 6.0,
-        "neuron": [
-          25,
-          50,
-          100
-        ],
-        # "resnet_dt": False,
-        "axis_neuron": 16,
-        # "seed": 1,
-        "attn": 128,
-        "attn_layer": 0,
-        "attn_dotr": True,
-        "attn_mask": False,
-        "post_ln": True,
-        "ffn": False,
-        "ffn_embed_dim": 1024,
-        "activation": "tanh",
-        "scaling_factor": 1.0,
-        "head_num": 1,
-        "normalize": True,
-        "temperature": 1.0
-        # "_comment": " that's all"
-      },
-      {
-        "type": "se_uni",
-        "sel": 40,
-        "rcut_smth": 0.5,
-        "rcut": 4.0,
-        "nlayers": 2,
-        "g1_dim": 10,
-        "g2_dim": 5,
-        "attn2_hidden": 10,
-        "attn2_nhead": 2,
-        "attn1_hidden": 10,
-        "attn1_nhead": 2,
-        "axis_dim": 4,
-        "update_h2": False,
-        "update_g1_has_conv": True,
-        "update_g1_has_drrd": True,
-        "update_g1_has_grrg": True,
-        "update_g1_has_attn": True,
-        "update_g2_has_g1g1": True,
-        "update_g2_has_attn": True,
-        "attn2_has_gate": True,
-        "add_type_ebd_to_seq": True,
-        "smooth": True,
-        "do_bn_mode": "uniform",
-        # "_comment": " that's all"
-      },
-    ]
-  },
-  "_comment": " that's all"
-}
-
-def make_sample(model_params):
-  training_systems = ["tests/water/data/data_0", ]
-  data_stat_nbatch = model_params.get('data_stat_nbatch', 10)
-  train_data = DpLoaderSet(
-    training_systems, batch_size=4, model_params=model_params.copy(),
-  )
-  sampled = make_stat_input(
-    train_data.systems, train_data.dataloaders, data_stat_nbatch)
-  return sampled
-  
 class TestPermutationDenoise:
   def test(
       self,
@@ -164,27 +46,22 @@ class TestPermutationDenoise:
 
 class TestDenoiseModelDPA1(unittest.TestCase, TestPermutationDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpa1_denoise)
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-class TestDenoiseModelDPAUni(unittest.TestCase, TestPermutationDenoise):
+class TestDenoiseModelDPA2(unittest.TestCase, TestPermutationDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-class TestDenoiseModelDPAUni2(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["combine_grrg"] = True
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-
-
+@unittest.skip("hybrid not supported at the moment")
 class TestDenoiseModelHybrid(unittest.TestCase, TestPermutationDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)

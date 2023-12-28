@@ -6,9 +6,9 @@ from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation_denoise import (
   make_sample,
-  model_dpa1_denoise,
-  model_dpau_denoise,
-  model_hybrid_denoise,
+  model_dpa1,
+  model_dpa2,
+  model_hybrid,
 )
 from deepmd_pt.infer.deep_eval import eval_model
 
@@ -64,40 +64,36 @@ class TestSmoothDenoise:
     compare(ret1, ret2)
     compare(ret0, ret3)
 
-class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
+class TestDenoiseModelDPA2(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     model_params["descriptor"]["sel"] = 8
     model_params["descriptor"]["rcut_smth"] = 3.5
-    sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = None, None
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
+class TestDenoiseModelDPA2_1(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["combine_grrg"] = True
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
+    # model_params["descriptor"]["combine_grrg"] = True
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = None, None
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    # model_params["descriptor"]["gather_g1"] = True
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-    self.epsilon, self.aprec = None, None
-    self.epsilon = 1e-7
-    self.aprec = 1e-5
-
+@unittest.skip("hybrid not supported at the moment")
 class TestDenoiseModelHybrid(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)

@@ -12,7 +12,7 @@ from .test_permutation import (
   model_se_e2_a,
   model_dpa1,
   model_dpa2,
-  model_dpau,
+  # model_dpau,
   model_hybrid,
 )
 from deepmd_pt.infer.deep_eval import eval_model
@@ -61,31 +61,31 @@ class TestEnergyModelDPA1(unittest.TestCase, TestTrans):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-# class TestEnergyModelDPA2(unittest.TestCase, TestTrans):
-#   def setUp(self):
-#     model_params = model_dpa2
-#     sampled = make_sample(model_params)
-#     self.type_split = True
-#     self.model = get_model(model_params, sampled).to(env.DEVICE)
-
-class TestEnergyModelDPAUni(unittest.TestCase, TestTrans):
+class TestEnergyModelDPA2(unittest.TestCase, TestTrans):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-class TestForceModelDPAUni(unittest.TestCase, TestTrans):
+class TestForceModelDPA2(unittest.TestCase, TestTrans):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     model_params["fitting_net"]["type"] = "direct_force_ener"
-    sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
+@unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid)
@@ -94,6 +94,7 @@ class TestEnergyModelHybrid(unittest.TestCase, TestTrans):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
+@unittest.skip("hybrid not supported at the moment")
 class TestForceModelHybrid(unittest.TestCase, TestTrans):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid)

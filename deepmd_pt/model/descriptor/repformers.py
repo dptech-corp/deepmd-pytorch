@@ -16,6 +16,7 @@ from deepmd_pt.model.network import (
 )
 from .se_atten import analyze_descrpt
 from .repformer_layer import RepformerLayer
+from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 
 mydtype = env.GLOBAL_PT_FLOAT_PRECISION
 mydev = env.DEVICE
@@ -39,7 +40,6 @@ class DescrptBlockRepformers(DescriptorBlock):
       g1_dim = 128,
       g2_dim = 16,
       axis_dim: int = 4,
-      combine_grrg: bool = False,
       direct_dist: bool = False,
       do_bn_mode: str = 'no',
       bn_momentum: float = 0.1,
@@ -60,7 +60,7 @@ class DescrptBlockRepformers(DescriptorBlock):
       set_davg_zero: bool = True, # TODO
       smooth: bool = True,
       add_type_ebd_to_seq: bool = False,
-      type: str = None,
+      type: Optional[str] = None,
   ):
     """
     smooth: 
@@ -99,7 +99,6 @@ class DescrptBlockRepformers(DescriptorBlock):
         RepformerLayer(
           rcut, rcut_smth, sel, ntypes, self.g1_dim, self.g2_dim,
           axis_dim=self.axis_dim,
-          combine_grrg=combine_grrg,
           update_chnnl_2=(ii != nlayers - 1),
           do_bn_mode=do_bn_mode,
           bn_momentum=bn_momentum,
@@ -276,8 +275,23 @@ class DescrptBlockRepformers(DescriptorBlock):
           index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
           extended_coord = torch.gather(system['coord'], dim=1, index=index)
           extended_coord = extended_coord - system['shift']
+          index = system['mapping']
+          extended_atype = torch.gather(system['atype'], dim=1, index=index)
+          nloc = system['atype'].shape[-1]
+          #######################################################
+          # dirty hack here! the interface of dataload should be
+          # redesigned to support descriptors like dpa2
+          #######################################################
+          nlist = build_neighbor_list(
+            extended_coord,
+            extended_atype,
+            nloc,
+            self.rcut,
+            self.get_sel(),
+            distinguish_types=False,
+          )
           env_mat, _, _ = prod_env_mat_se_a(
-              extended_coord, system['nlist'], system['atype'],
+              extended_coord, nlist, system['atype'],
               self.mean, self.stddev,
               self.rcut, self.rcut_smth,
           )
