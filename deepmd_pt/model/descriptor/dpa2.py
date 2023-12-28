@@ -150,13 +150,14 @@ class DescrptDPA2(Descriptor):
     Returns
     -------
     descriptor:         torch.Tensor
-        the descriptor of shape nb x nloc x g1_dim
-    env_mat:            torch.Tensor
-        the environment matrix
-    diff:               torch.Tensor
-        relative distance between atoms and neighbors
+        the descriptor of shape nb x nloc x g1_dim. 
+        invariant single-atom representation.
+    g2:                 torch.Tensor
+        invariant pair-atom representation.
+    h2:                 torch.Tensor
+        equivariant pair-atom representation.
     rot_mat:            torch.Tensor
-        rotation matrix
+        rotation matrix for equivariant fittings
     sw:                 torch.Tensor
         The switch function for decaying inverse distance.
 
@@ -309,7 +310,7 @@ class DescrptDPA2(Descriptor):
     g1_ext = self.type_embedding(extended_atype)
     if self.concat_output_tebd:
       g1_inp = g1_ext[:,:nloc,:]
-    g1, env_mat, diff, rot_mat, sw = self.repinit(
+    g1, _, _, _, _ = self.repinit(
       nlist_dict[self.repinit.get_rcut()],
       extended_coord,
       extended_atype,
@@ -323,7 +324,7 @@ class DescrptDPA2(Descriptor):
                          .expand(-1, -1, g1.shape[-1])
     g1_ext = torch.gather(g1, 1, mapping_ext)
     # repformer
-    g1, env_mat, diff, rot_mat, sw = self.repformers(
+    g1, g2, h2, rot_mat, sw = self.repformers(
       nlist_dict[self.repformers.get_rcut()],
       extended_coord,
       extended_atype,
@@ -331,5 +332,5 @@ class DescrptDPA2(Descriptor):
     )
     if self.concat_output_tebd:
       g1 = torch.cat([g1, g1_inp], dim=-1)
-    return g1, env_mat, diff, rot_mat, sw
+    return g1, g2, h2, rot_mat, sw
     
