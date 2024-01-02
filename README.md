@@ -22,8 +22,16 @@ pip install deepmd-pytorch
 
 ```bash
 conda activate deepmd-pt
-python3 dp train tests/water/se_e2_a.json
+dp_pt train tests/water/se_e2_a.json
 ```
+
+## Test
+```bash
+dp_pt test -m model.pt -s path_to_system -n 100
+dp_pt test -m model.pt -f path_to_system_file -n 100
+dp_pt test -m model.pt -i path_to_input_script -n 100
+```
+
 
 # Profiling
 

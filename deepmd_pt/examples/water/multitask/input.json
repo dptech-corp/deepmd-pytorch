@@ -1,0 +1,196 @@
+{
+    "_comment": "that's all",
+    "model": {
+        "shared_dict": {
+            "type_map_all": [
+              "O",
+              "H"
+            ],
+            "tebd_1": {
+                "neuron": [
+                    8
+                ],
+                "tebd_input_mode": "concat"
+            },
+            "dpa1_dpau_descriptor_1": {
+                "type": "hybrid",
+                "hybrid_mode": "sequential",
+                "list": [
+                    {
+                        "type": "se_atten",
+                        "sel": 120,
+                        "rcut_smth": 8.0,
+                        "rcut": 9.0,
+                        "neuron": [
+                            25,
+                            50,
+                            100
+                        ],
+                        "resnet_dt": false,
+                        "axis_neuron": 12,
+                        "seed": 1,
+                        "attn": 128,
+                        "attn_layer": 0,
+                        "attn_dotr": true,
+                        "attn_mask": false,
+                        "post_ln": true,
+                        "ffn": false,
+                        "ffn_embed_dim": 1024,
+                        "activation": "tanh",
+                        "scaling_factor": 1.0,
+                        "head_num": 1,
+                        "normalize": true,
+                        "temperature": 1.0,
+                        "add": "concat",
+                        "pre_add": true,
+                        "_comment": " that's all"
+                    },
+                    {
+                        "type": "se_uni",
+                        "sel": 40,
+                        "rcut_smth": 3.5,
+                        "rcut": 4.0,
+                        "nlayers": 12,
+                        "g1_dim": 128,
+                        "g2_dim": 32,
+                        "attn2_hidden": 32,
+                        "attn2_nhead": 4,
+                        "attn1_hidden": 128,
+                        "attn1_nhead": 4,
+                        "axis_dim": 4,
+                        "update_h2": false,
+                        "update_g1_has_conv": true,
+                        "update_g1_has_grrg": true,
+                        "update_g1_has_drrd": true,
+                        "update_g1_has_attn": true,
+                        "update_g2_has_g1g1": true,
+                        "update_g2_has_attn": true,
+                        "attn2_has_gate": true,
+                        "smooth": true,
+                        "add_type_ebd_to_seq": false,
+                        "_comment": " that's all"
+                    }
+                ]
+            },
+            "_comment": "that's all"
+        },
+        "model_dict": {
+            "water_1": {
+                "type_map": "type_map_all",
+                "type_embedding": "tebd_1",
+                "descriptor": "dpa1_dpau_descriptor_1",
+                "fitting_net": {
+                    "neuron": [
+                        240,
+                        240,
+                        240
+                    ],
+                    "resnet_dt": true,
+                    "seed": 1,
+                    "_comment": " that's all"
+                }
+            },
+            "water_2": {
+                "type_map": "type_map_all",
+                "type_embedding": "tebd_1",
+                "descriptor": "dpa1_dpau_descriptor_1",
+                "fitting_net": {
+                    "neuron": [
+                        240,
+                        240,
+                        240
+                    ],
+                    "resnet_dt": true,
+                    "seed": 1,
+                    "_comment": " that's all"
+                }
+            }
+        }
+    },
+    "learning_rate": {
+        "type": "exp",
+        "decay_steps": 5000,
+        "start_lr": 0.0002,
+        "decay_rate": 0.98,
+        "stop_lr": 3.51e-08,
+        "_comment": "that's all"
+    },
+    "loss_dict": {
+        "_comment": " that's all",
+        "water_1": {
+            "type": "ener",
+            "start_pref_e": 0.02,
+            "limit_pref_e": 1,
+            "start_pref_f": 1000,
+            "limit_pref_f": 1,
+            "start_pref_v": 0,
+            "limit_pref_v": 0
+        },
+        "water_2": {
+            "type": "ener",
+            "start_pref_e": 0.02,
+            "limit_pref_e": 1,
+            "start_pref_f": 1000,
+            "limit_pref_f": 1,
+            "start_pref_v": 0,
+            "limit_pref_v": 0
+        }
+    },
+    "training": {
+        "model_prob": {
+            "water_1": 0.5,
+            "water_2": 0.5
+        },
+        "data_dict": {
+            "water_1": {
+                "training_data": {
+                    "systems": [
+                      "../data/data_0",
+                      "../data/data_1",
+                      "../data/data_2"
+                    ],
+                    "batch_size": 1,
+                    "_comment": "that's all"
+                },
+                "validation_data": {
+                    "systems": [
+                      "../data/data_3"
+                    ],
+                    "batch_size": 1,
+                    "_comment": "that's all"
+                }
+            },
+            "water_2": {
+                "training_data": {
+                    "systems": [
+                      "../data/data_0",
+                      "../data/data_1",
+                      "../data/data_2"
+                    ],
+                    "batch_size": 1,
+                    "_comment": "that's all"
+                },
+                "validation_data": {
+                    "systems": [
+                      "../data/data_3"
+                    ],
+                    "batch_size": 1,
+                    "_comment": "that's all"
+                }
+            }
+        },
+        "numb_steps": 100000,
+        "warmup_steps": 0,
+        "gradient_max_norm": 5.0,
+        "seed": 10,
+        "disp_file": "lcurve.out",
+        "disp_freq": 100,
+        "save_freq": 2000,
+        "_comment": "that's all",
+        "wandb_config": {
+            "wandb_enabled": false,
+            "entity": "dp_model_engineering",
+            "project": "DPA"
+        }
+    }
+}

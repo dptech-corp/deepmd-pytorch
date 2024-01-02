@@ -31,7 +31,7 @@ class TestUnusedParamsDPAUni(unittest.TestCase):
         # skip the case g2 is not envolved
         continue
       model = copy.deepcopy(model_dpau)
-      model["descriptor"]["combine_grrg"] = cmbg2
+      # model["descriptor"]["combine_grrg"] = cmbg2
       model["descriptor"]["update_g1_has_conv"] = conv
       model["descriptor"]["update_g1_has_drrd"] = drrd
       model["descriptor"]["update_g1_has_grrg"] = grrg

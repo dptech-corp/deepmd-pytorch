@@ -3,7 +3,7 @@ import torch
 
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, DescriptorBlock, compute_std
 
 try:
     from typing import Final
@@ -12,9 +12,82 @@ except:
 
 from deepmd_pt.model.network import TypeFilter
 
-
 @Descriptor.register("se_e2_a")
 class DescrptSeA(Descriptor):
+    def __init__(
+        self,
+        rcut,
+        rcut_smth,
+        sel,
+        neuron=[25, 50, 100],
+        axis_neuron=16,
+        set_davg_zero: bool = False,
+        **kwargs,
+    ):
+      super(DescrptSeA, self).__init__()
+      self.sea = DescrptBlockSeA(
+        rcut, rcut_smth, sel, neuron, axis_neuron, set_davg_zero,
+        **kwargs,
+      )      
+      
+    def get_rcut(self)->float:
+      """
+      Returns the cut-off radius
+      """
+      return self.sea.get_rcut()
+
+    def get_nsel(self)->int:
+      """
+      Returns the number of selected atoms in the cut-off radius
+      """
+      return self.sea.get_nsel()
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sea.get_sel()
+
+    def get_ntype(self)->int:
+      """
+      Returns the number of element types
+      """
+      return self.sea.get_ntype()
+
+    def get_dim_out(self)->int:
+      """
+      Returns the output dimension
+      """
+      return self.sea.get_dim_out()
+
+    @property
+    def dim_out(self):
+        """
+        Returns the output dimension of this descriptor
+        """
+        return self.sea.dim_out
+
+    def compute_input_stats(self, merged):
+        """Update mean and stddev for descriptor elements.
+        """
+        return self.sea.compute_input_stats(merged)
+
+    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
+        self.sea.init_desc_stat( sumr, suma, sumn, sumr2, suma2)
+
+    def forward(
+        self,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        mapping: Optional[torch.Tensor] = None,
+    ):
+      return self.sea.forward(
+        nlist, extended_coord, extended_atype, None, mapping)
+
+
+@DescriptorBlock.register("se_e2_a")
+class DescrptBlockSeA(DescriptorBlock):
     ndescrpt: Final[int]
     __constants__ = ['ndescrpt']
 
@@ -35,7 +108,7 @@ class DescrptSeA(Descriptor):
         - filter_neuron: Number of neurons in each hidden layers of the embedding net.
         - axis_neuron: Number of columns of the sub-matrix of the embedding matrix.
         """
-        super(DescrptSeA, self).__init__()
+        super(DescrptBlockSeA, self).__init__()
         self.rcut = rcut
         self.rcut_smth = rcut_smth
         self.filter_neuron = neuron
@@ -62,6 +135,42 @@ class DescrptSeA(Descriptor):
             filter_layers.append(one)
             start_index += sel[type_i]
         self.filter_layers = torch.nn.ModuleList(filter_layers)
+
+    def get_rcut(self)->float:
+      """
+      Returns the cut-off radius
+      """
+      return self.rcut
+
+    def get_nsel(self)->int:
+      """
+      Returns the number of selected atoms in the cut-off radius
+      """
+      return sum(self.sel)
+
+    def get_sel(self)->List[int]:
+      """
+      Returns the number of selected atoms for each type.
+      """
+      return self.sel
+
+    def get_ntype(self)->int:
+      """
+      Returns the number of element types
+      """
+      return self.ntypes
+
+    def get_dim_out(self)->int:
+      """
+      Returns the output dimension
+      """
+      return self.dim_out
+
+    def get_dim_in(self)->int:
+      """
+      Returns the input dimension
+      """
+      return self.dim_in
 
     @property
     def dim_out(self):
@@ -134,9 +243,14 @@ class DescrptSeA(Descriptor):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def forward(self, extended_coord, nlist, atype, nlist_type: Optional[torch.Tensor] = None,
-                nlist_loc: Optional[torch.Tensor] = None, atype_tebd: Optional[torch.Tensor] = None,
-                nlist_tebd: Optional[torch.Tensor] = None):
+    def forward(
+        self, 
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
+    ):
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -148,7 +262,9 @@ class DescrptSeA(Descriptor):
         Returns:
         - `torch.Tensor`: descriptor matrix with shape [nframes, natoms[0]*self.filter_neuron[-1]*self.axis_neuron].
         """
+        del extended_atype_embd, mapping
         nloc = nlist.shape[1]
+        atype = extended_atype[:, :nloc]
         dmatrix, diff, _ = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
@@ -171,7 +287,7 @@ class DescrptSeA(Descriptor):
         xyz_scatter_2 = xyz_scatter[:, :, 0:self.axis_neuron]
         result = torch.matmul(xyz_scatter_1,
                               xyz_scatter_2)  # shape is [nframes*nall, self.filter_neuron[-1], self.axis_neuron]
-        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None
+        return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), None, None, None, None
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms):

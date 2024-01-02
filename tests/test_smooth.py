@@ -107,7 +107,7 @@ class TestEnergyModelDPAUni2(unittest.TestCase, TestSmooth):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "ener"
-    model_params["descriptor"]["combine_grrg"] = True
+    # model_params["descriptor"]["combine_grrg"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False
@@ -119,7 +119,7 @@ class TestEnergyModelDPAUni3(unittest.TestCase, TestSmooth):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau)
     model_params["fitting_net"]["type"] = "ener"
-    model_params["descriptor"]["gather_g1"] = True
+    # model_params["descriptor"]["gather_g1"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.test_virial = False

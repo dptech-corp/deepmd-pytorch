@@ -114,10 +114,11 @@ class TestSeA(unittest.TestCase):
         index = self.torch_batch['mapping'].unsqueeze(-1).expand(-1, -1, 3)
         extended_coord = torch.gather(pt_coord, dim=1, index=index)
         extended_coord = extended_coord - self.torch_batch['shift']
-        descriptor_out, _, _, _ = descriptor(
-            extended_coord,
+        extended_atype = torch.gather(self.torch_batch['atype'], dim=1, index=self.torch_batch['mapping'])
+        descriptor_out, _, _, _, _ = descriptor(
             self.torch_batch['nlist'],
-            self.torch_batch['atype']
+            extended_coord,
+            extended_atype,
         )
         my_embedding = descriptor_out.cpu().detach().numpy()
         fake_energy = torch.sum(descriptor_out)

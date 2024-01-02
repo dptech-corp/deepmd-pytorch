@@ -1,12 +1,12 @@
 import torch
 from typing import Optional, List, Union, Dict
-from deepmd_pt.model.descriptor import Descriptor
+from deepmd_pt.model.descriptor import DescriptorBlock
 from deepmd_pt.model.task import Fitting, DenoiseNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list, sort_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
-
+from deepmd_pt.model.descriptor import make_default_type_embedding
 
 class EnergyModel(BaseModel):
     """Energy model.
@@ -69,17 +69,19 @@ class EnergyModel(BaseModel):
             self.has_type_embedding = True
             self.type_split = False
             if type_embedding is None:
-                self.type_embedding = TypeEmbedNet(ntypes, 8)
-                descriptor['tebd_dim'] = 8
-                descriptor['tebd_input_mode'] = 'concat'
-                self.tebd_dim = 8
+                self.type_embedding, aux = make_default_type_embedding(ntypes)
+                self.tebd_dim = aux['tebd_dim']
+                if self.descriptor_type == "se_atten":
+                  descriptor['tebd_dim'] = aux['tebd_dim']
+                  descriptor['tebd_input_mode'] = 'concat'
             else:
                 tebd_dim = type_embedding.get('neuron', [8])[-1]
                 tebd_input_mode = type_embedding.get('tebd_input_mode', 'concat')
                 self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
-                descriptor['tebd_dim'] = tebd_dim
-                descriptor['tebd_input_mode'] = tebd_input_mode
                 self.tebd_dim = tebd_dim
+                if self.descriptor_type == "se_atten":
+                  descriptor['tebd_dim'] = tebd_dim
+                  descriptor['tebd_input_mode'] = tebd_input_mode
         else:
             self.type_embedding = None
 
@@ -104,7 +106,7 @@ class EnergyModel(BaseModel):
                 fitting_net['ntypes'] = 1
                 fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
             else:
-                fitting_net['ntypes'] = self.descriptor.ntypes
+                fitting_net['ntypes'] = self.descriptor.get_ntype()
                 fitting_net['use_tebd'] = False
                 fitting_net['embedding_width'] = self.descriptor.dim_out
 
@@ -195,39 +197,33 @@ class EnergyModel(BaseModel):
         self, 
         extended_coord, 
         extended_atype, 
-        nlist: torch.Tensor, 
+        nlist,
         mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
-        nlist_loc, nlist_type, nframes, nloc = self.process_nlist(nlist, extended_atype, mapping=mapping)
+        nframes, nloc, nnei = nlist.shape
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
         if self.type_embedding is not None:
-            atype_tebd = self.type_embedding(atype)
-            if not self.split_nlist:
-                assert nlist_type is not None
-                nlist_type[nlist_type == -1] = self.ntypes
-                nlist_tebd = self.type_embedding(nlist_type)
-            else:
-                nlist_tebd_list = []
-                nlist_type_list = list(torch.split(nlist_type, self.descriptor.split_sel, -1))
-                for nlist_type_item in nlist_type_list:
-                    nlist_mask = nlist_type_item != -1
-                    input_nlist_type = nlist_type_item * nlist_mask + ~nlist_mask * self.ntypes
-                    nlist_tebd_list.append(self.type_embedding(input_nlist_type))
-                nlist_tebd = torch.cat(nlist_tebd_list, -2)
+            extended_atype_embd = self.type_embedding(extended_atype)
+            atype_embd = extended_atype_embd[:, :nloc, :]
         else:
-            atype_tebd = None
-            nlist_tebd = None
+            extended_atype_embd = None
+            atype_embd = None
+        descriptor, env_mat, diff, rot_mat, sw = \
+          self.descriptor(
+            nlist,
+            extended_coord,
+            extended_atype,
+            extended_atype_embd,
+            mapping=mapping,
+          )
 
-        descriptor, env_mat, diff, rot_mat = self.descriptor(extended_coord, nlist, atype, nlist_type=nlist_type,
-                                                             nlist_loc=nlist_loc, atype_tebd=atype_tebd,
-                                                             nlist_tebd=nlist_tebd)
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
-            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_tebd, rot_mat=rot_mat)
+            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_embd, rot_mat=rot_mat)
             energy = atom_energy.sum(dim=1)
             model_predict = {'energy': energy,
                             'atom_energy': atom_energy,
@@ -263,7 +259,7 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = nlist_list[-1] != -1
-            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor)
+            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
             model_predict = {'updated_coord': updated_coord,
                              'logits': logits,
                             }
@@ -328,44 +324,71 @@ class EnergyModel(BaseModel):
     def process_nlist(self, nlist, extended_atype, mapping: Optional[torch.Tensor] = None):
         # process the nlist_type and nlist_loc
         if not self.split_nlist:
-            nframes, nloc = nlist.shape[:2]
-            nmask = nlist == -1
-            nlist[nmask] = 0
-            if mapping is not None:
-                nlist_loc = torch.gather(mapping, dim=1, index=nlist.reshape(nframes, -1)).reshape(nframes, nloc, -1)
-                nlist_loc[nmask] = -1
-            else:
-                nlist_loc = None
-            nlist_type = torch.gather(extended_atype, dim=1, index=nlist.reshape(nframes, -1)).reshape(nframes, nloc,
-                                                                                                       -1)
-            nlist_type[nmask] = -1
-            nlist[nmask] = -1
-            return nlist_loc, nlist_type, nframes, nloc
+            return process_nlist(
+              nlist, extended_atype, mapping=mapping)
         else:
-            nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
-            nframes, nloc = nlist_list[0].shape[:2]
-            nlist_type_list = []
-            nlist_loc_list = []
-            for nlist_item in nlist_list:
-                nmask = nlist_item == -1
-                nlist_item[nmask] = 0
-                if mapping is not None:
-                    nlist_loc_item = torch.gather(mapping, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
-                        nframes, nloc,
-                        -1)
-                    nlist_loc_item[nmask] = -1
-                    nlist_loc_list.append(nlist_loc_item)
-                nlist_type_item = torch.gather(extended_atype, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
-                    nframes,
-                    nloc,
-                    -1)
-                nlist_type_item[nmask] = -1
-                nlist_type_list.append(nlist_type_item)
-                nlist_item[nmask] = -1
+            return process_nlist_gathered(
+              nlist, extended_atype, self.descriptor.split_sel, mapping=mapping)
 
-            if mapping is not None:
-                nlist_loc = torch.cat(nlist_loc_list, -1)
-            else:
-                nlist_loc = None
-            nlist_type = torch.cat(nlist_type_list, -1)
-            return nlist_loc, nlist_type, nframes, nloc
+
+# should be a stand-alone function!!!!
+def process_nlist(
+    nlist, 
+    extended_atype, 
+    mapping: Optional[torch.Tensor] = None,
+):
+    # process the nlist_type and nlist_loc
+    nframes, nloc = nlist.shape[:2]
+    nmask = nlist == -1
+    nlist[nmask] = 0
+    if mapping is not None:
+        nlist_loc = torch.gather(
+          mapping, 
+          dim=1, 
+          index=nlist.reshape(nframes, -1),
+        ).reshape(nframes, nloc, -1)
+        nlist_loc[nmask] = -1
+    else:
+        nlist_loc = None
+    nlist_type = torch.gather(
+      extended_atype, 
+      dim=1, 
+      index=nlist.reshape(nframes, -1),
+    ).reshape(nframes, nloc,-1)
+    nlist_type[nmask] = -1
+    nlist[nmask] = -1
+    return nlist_loc, nlist_type, nframes, nloc
+
+def process_nlist_gathered(
+    nlist, 
+    extended_atype, 
+    split_sel: List[int],
+    mapping: Optional[torch.Tensor] = None,
+):
+    nlist_list = list(torch.split(nlist, split_sel, -1))
+    nframes, nloc = nlist_list[0].shape[:2]
+    nlist_type_list = []
+    nlist_loc_list = []
+    for nlist_item in nlist_list:
+        nmask = nlist_item == -1
+        nlist_item[nmask] = 0
+        if mapping is not None:
+            nlist_loc_item = torch.gather(mapping, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
+                nframes, nloc,
+                -1)
+            nlist_loc_item[nmask] = -1
+            nlist_loc_list.append(nlist_loc_item)
+        nlist_type_item = torch.gather(extended_atype, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
+            nframes,
+            nloc,
+            -1)
+        nlist_type_item[nmask] = -1
+        nlist_type_list.append(nlist_type_item)
+        nlist_item[nmask] = -1
+
+    if mapping is not None:
+        nlist_loc = torch.cat(nlist_loc_list, -1)
+    else:
+        nlist_loc = None
+    nlist_type = torch.cat(nlist_type_list, -1)
+    return nlist_loc, nlist_type, nframes, nloc

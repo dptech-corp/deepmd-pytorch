@@ -1,12 +1,12 @@
 from ase import Atoms
-from ase.calculators.calculator import Calculator
+from ase.calculators.calculator import Calculator, PropertyNotImplementedError
 from deepmd_pt.infer.deep_eval import DeepPot
 import numpy as np
 import dpdata
 
 
 class DPCalculator(Calculator):
-    implemented_properties = ["energy", "forces"]
+    implemented_properties = ["energy", "free_energy", "forces", "virial", "stress"]
 
     def __init__(
             self,
@@ -24,5 +24,20 @@ class DPCalculator(Calculator):
         input_cells = system.data['cells']
         input_types = list(type_trans[system.data['atom_types']])
         model_predict = self.dp.eval(input_coords, input_cells, input_types)
-        self.results["energy"] = model_predict[0].item()
-        self.results["forces"] = model_predict[1].reshape(-1, 3)
+        self.results = {
+            "energy": model_predict[0].item(),
+            "free_energy": model_predict[0].item(),
+            "forces": model_predict[1].reshape(-1, 3),
+            "virial": model_predict[2].reshape(3, 3)
+        }
+
+        # convert virial into stress for lattice relaxation
+        if "stress" in properties:
+            if sum(atoms.get_pbc()) > 0 or (atoms.cell is not None):
+                # the usual convention (tensile stress is positive)
+                # stress = -virial / volume
+                stress = -0.5 * (self.results["virial"].copy() + self.results["virial"].copy().T) / atoms.get_volume()
+                # Voigt notation
+                self.results["stress"] = stress.flat[[0, 4, 8, 5, 2, 1]]
+            else:
+                raise PropertyNotImplementedError

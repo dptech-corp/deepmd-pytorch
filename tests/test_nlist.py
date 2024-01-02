@@ -10,6 +10,7 @@ from deepmd_pt.utils.region import (
 from deepmd_pt.utils.nlist import (
   extend_coord_with_ghosts,
   build_neighbor_list,
+  build_multiple_neighbor_list,
 )
 from deepmd_pt.utils.preprocess import(
   build_neighbor_list as legacy_build_neighbor_list,
@@ -79,6 +80,29 @@ class TestNeighList(unittest.TestCase):
         torch.sort(torch.split(nlist_loc, self.nsel, dim=-1)[ii], dim=-1)[0],
         torch.sort(torch.split(self.ref_nlist, self.nsel, dim=-1)[ii], dim=-1)[0],
       )
+
+  def test_build_multiple_nlist(self):
+    rcuts = [1.01, 2.01]
+    nsels = [20, 80]
+    ecoord, eatype, mapping = extend_coord_with_ghosts(
+      self.coord, self.atype, self.cell, max(rcuts))
+    nlist1 = build_neighbor_list(
+      ecoord, eatype, self.nloc,
+      rcuts[1], nsels[1]-1,
+      distinguish_types=False,
+    )
+    pad = -1*torch.ones([self.nf,self.nloc,1], dtype=nlist1.dtype, device=nlist1.device)
+    nlist2 = torch.cat([nlist1, pad], dim=-1)
+    nlist0 = build_neighbor_list(
+      ecoord, eatype, self.nloc,
+      rcuts[0], nsels[0],
+      distinguish_types=False,
+    )
+    nlists = build_multiple_neighbor_list(ecoord, nlist1, rcuts, nsels)
+    for dd in range(2):
+      self.assertEqual(nlists[rcuts[dd]].shape[-1], nsels[dd])
+    torch.testing.assert_close(nlists[1.01], nlist0)
+    torch.testing.assert_close(nlists[2.01], nlist2)    
 
   def test_extend_coord(self):
     ecoord, eatype, mapping = extend_coord_with_ghosts(

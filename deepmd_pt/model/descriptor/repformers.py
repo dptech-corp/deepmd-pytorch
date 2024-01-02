@@ -10,12 +10,12 @@ from typing import (
 )
 from deepmd_pt.utils import env
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
 from deepmd_pt.model.network import (
   TypeEmbedNet, SimpleLinear
 )
 from .se_atten import analyze_descrpt
-from .dpa2_layer import DescrptDPA2Layer
+from .repformer_layer import RepformerLayer
 
 mydtype = env.GLOBAL_PT_FLOAT_PRECISION
 mydev = env.DEVICE
@@ -26,8 +26,9 @@ simple_linear  = SimpleLinear
 mylinear = simple_linear
 
 
-@Descriptor.register("se_uni")
-class DescrptSeUni(Descriptor):
+@DescriptorBlock.register("se_repformer")
+@DescriptorBlock.register("se_uni")
+class DescrptBlockRepformers(DescriptorBlock):
   def __init__(
       self,
       rcut,
@@ -38,7 +39,6 @@ class DescrptSeUni(Descriptor):
       g1_dim = 128,
       g2_dim = 16,
       axis_dim: int = 4,
-      combine_grrg: bool = False,
       direct_dist: bool = False,
       do_bn_mode: str = 'no',
       bn_momentum: float = 0.1,
@@ -54,13 +54,12 @@ class DescrptSeUni(Descriptor):
       attn2_hidden: int = 16,
       attn2_nhead: int = 4,
       attn2_has_gate: bool = False,
-      attn_dotr: bool = True,
       activation: str = "tanh",
       update_style: str = "res_avg",
       set_davg_zero: bool = True, # TODO
       smooth: bool = True,
       add_type_ebd_to_seq: bool = False,
-      **kwargs,
+      type: str = None,
   ):
     """
     smooth: 
@@ -70,7 +69,8 @@ class DescrptSeUni(Descriptor):
         whether or not add an type embedding to seq_input. 
         If no seq_input is given, it has no effect. 
     """
-    super(DescrptSeUni, self).__init__()
+    super(DescrptBlockRepformers, self).__init__()
+    del type
     self.epsilon = 1e-4 # protection of 1./nnei
     self.rcut = rcut
     self.rcut_smth = rcut_smth
@@ -95,10 +95,9 @@ class DescrptSeUni(Descriptor):
     layers = []
     for ii in range(nlayers):
       layers.append(
-        DescrptDPA2Layer(
+        RepformerLayer(
           rcut, rcut_smth, sel, ntypes, self.g1_dim, self.g2_dim,
           axis_dim=self.axis_dim,
-          combine_grrg=combine_grrg,
           update_chnnl_2=(ii != nlayers - 1),
           do_bn_mode=do_bn_mode,
           bn_momentum=bn_momentum,
@@ -114,7 +113,6 @@ class DescrptSeUni(Descriptor):
           attn2_has_gate=attn2_has_gate,
           attn2_hidden=attn2_hidden,
           attn2_nhead=attn2_nhead,
-          attn_dotr=attn_dotr,
           activation=activation,
           update_style=update_style,
           smooth=smooth,
@@ -126,6 +124,42 @@ class DescrptSeUni(Descriptor):
     stddev = torch.ones(sshape, dtype=mydtype, device=mydev)
     self.register_buffer('mean', mean)
     self.register_buffer('stddev', stddev)
+
+  def get_rcut(self)->float:
+    """
+    Returns the cut-off radius
+    """
+    return self.rcut
+
+  def get_nsel(self)->int:
+    """
+    Returns the number of selected atoms in the cut-off radius
+    """
+    return sum(self.sel)
+
+  def get_sel(self)->List[int]:
+    """
+    Returns the number of selected atoms for each type.
+    """
+    return self.sel
+
+  def get_ntype(self)->int:
+    """
+    Returns the number of element types
+    """
+    return self.ntypes
+
+  def get_dim_out(self)->int:
+    """
+    Returns the output dimension
+    """
+    return self.dim_out
+
+  def get_dim_in(self)->int:
+    """
+    Returns the input dimension
+    """
+    return self.dim_in
 
   @property
   def dim_out(self):
@@ -149,38 +183,36 @@ class DescrptSeUni(Descriptor):
     return self.g2_dim
 
   def forward(
-          self,
-          extended_coord,
-          nlist,
-          atype,
-          nlist_type: Optional[torch.Tensor] = None,
-          nlist_loc: Optional[torch.Tensor] = None,
-          atype_tebd: Optional[torch.Tensor] = None,
-          nlist_tebd: Optional[torch.Tensor] = None,
-          seq_input: Optional[torch.Tensor] = None
+        self,
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
   ):
 
     """
     extended_coord:     [nb, nloc x 3]
     atype:              [nb, nloc]
     """
-    assert nlist_type is not None
-    assert nlist_loc is not None
-    nframes, nloc = nlist_loc.shape[:2]
+    assert mapping is not None
+    assert extended_atype_embd is not None
+    nframes, nloc, nnei = nlist.shape
+    nall = extended_coord.view(nframes, -1).shape[1] // 3
+    atype = extended_atype[:,:nloc]
     # nb x nloc x nnei x 4, nb x nloc x nnei x 3, nb x nloc x nnei x 1
     dmatrix, diff, sw = prod_env_mat_se_a(
       extended_coord, nlist, atype,
       self.mean, self.stddev,
       self.rcut, self.rcut_smth)
-    nlist_type[nlist_type == -1] = self.ntypes
     nlist_mask = (nlist != -1)
-    masked_nlist_loc = nlist_loc * nlist_mask
     sw = torch.squeeze(sw, -1)
     # beyond the cutoff sw should be 0.0
     sw = sw.masked_fill(~nlist_mask, float(0.0))
 
     # [nframes, nloc, tebd_dim]
-    if seq_input is not None:
+    seq_input = extended_atype_embd[:,:nloc,:]
+    if seq_input.shape[-1] == self.g1_dim:
       if seq_input.shape[0] == nframes * nloc:
         seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
       if self.add_type_ebd_to_seq:
@@ -209,18 +241,24 @@ class DescrptSeUni(Descriptor):
     # nb x nloc x nnei x ng2
     g2 = self.act(self.g2_embd(g2))
 
-    for ll in self.layers:
-      g1, g2, h2 = ll.forward(
-        g1, g2, h2,
-        masked_nlist_loc, nlist_mask, sw,
-      )
+    # set all padding positions to index of 0
+    # if the a neighbor is real or not is indicated by nlist_mask
+    nlist[nlist == -1] = 0
+    # nb x nall x ng1
+    mapping = mapping.view(nframes, nall).unsqueeze(-1).expand(-1, -1, self.g1_dim)
+    for idx,ll in enumerate(self.layers):
+      # g1:     nb x nloc x ng1
+      # g1_ext: nb x nall x ng1
+      g1_ext = torch.gather(g1, 1, mapping)
+      g1, g2, h2 = ll.forward(g1_ext, g2, h2, nlist, nlist_mask, sw,)
+
     # uses the last layer.
     # nb x nloc x 3 x ng2
     h2g2 = ll._cal_h2g2(g2, h2, nlist_mask, sw)
     # (nb x nloc) x ng2 x 3
     rot_mat = torch.permute(h2g2, (0, 1, 3, 2))
 
-    return g1, g2, diff, rot_mat.view(-1, self.dim_emb, 3)
+    return g1, g2, h2, rot_mat.view(-1, self.dim_emb, 3), sw
 
   def compute_input_stats(self, merged):
       """Update mean and stddev for descriptor elements.

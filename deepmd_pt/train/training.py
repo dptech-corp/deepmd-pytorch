@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any, Dict
 import numpy as np
 from deepmd_pt.utils import dp_random
-from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK, DISABLE_TQDM
+from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK, DISABLE_TQDM, SAMPLER_RECORD, NUM_WORKERS
 from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
 from deepmd_pt.utils.learning_rate import LearningRateExp
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
@@ -51,6 +51,7 @@ class Trainer(object):
         model_params = config["model"]
         training_params = config["training"]
         self.multi_task = "model_dict" in model_params
+        self.finetune_multi_task = model_params.pop("finetune_multi_task", False)  # should use pop for next finetune
         self.model_keys = [key for key in model_params["model_dict"]] if self.multi_task else ["Default"]
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -120,7 +121,7 @@ class Trainer(object):
                 _training_data,
                 sampler=train_sampler,
                 batch_size=None,
-                num_workers=8,  # setting to 0 diverges the behavior of its iterator; should be >=1
+                num_workers=NUM_WORKERS,  # setting to 0 diverges the behavior of its iterator; should be >=1
                 drop_last=False,
                 pin_memory=True,
             )
@@ -262,10 +263,10 @@ class Trainer(object):
                         slim_keys = [i + '.*' for i in slim_keys]
                         logging.warning(
                             f"Force load mode allowed! These keys are not in ckpt and will re-init: {slim_keys}")
-                elif model_params.get('finetune_multi_task', False):
+                elif self.finetune_multi_task:
                     new_state_dict = {}
-                    model_branch_chosen = model_params['model_branch_chosen']
-                    new_fitting = model_params.get('new_fitting', False)
+                    model_branch_chosen = model_params.pop('model_branch_chosen')
+                    new_fitting = model_params.pop('new_fitting', False)
                     target_state_dict = self.wrapper.state_dict()
                     target_keys = [i for i in target_state_dict.keys() if i != '_extra_state']
                     for item_key in target_keys:
@@ -356,6 +357,11 @@ class Trainer(object):
         fout = (
             open(self.disp_file, mode="w", buffering=1) if self.rank == 0 else None
         )  # line buffered
+        if SAMPLER_RECORD :
+            record_file = f"Sample_rank_{self.rank}.txt"
+            fout1 = (
+            open(record_file, mode="w", buffering=1) 
+            ) 
         logging.info("Start to train %d steps.", self.num_steps)
         if dist.is_initialized():
             logging.info(f"Rank: {dist.get_rank()}/{dist.get_world_size()}")
@@ -369,7 +375,11 @@ class Trainer(object):
             cur_lr = _lr.value(_step_id)
             pref_lr = cur_lr
             self.optimizer.zero_grad(set_to_none=True)
-            input_dict, label_dict = self.get_data(is_train=True, task_key=task_key)
+            input_dict, label_dict,log_dict = self.get_data(is_train=True, task_key=task_key)
+            if SAMPLER_RECORD :
+                print_str = f"Step {_step_id}: sample system{log_dict['sid']}  frame{log_dict['fid']}\n"
+                fout1.write(print_str)
+                fout1.flush()
             if self.opt_type == "Adam":
                 cur_lr = self.scheduler.get_last_lr()[0]
                 if _step_id < self.warmup_steps:
@@ -454,7 +464,7 @@ class Trainer(object):
                         valid_numb_batch = self.valid_numb_batch[_task_key]
                     for ii in range(valid_numb_batch):
                         self.optimizer.zero_grad()
-                        input_dict, label_dict = self.get_data(is_train=False, task_key=_task_key)
+                        input_dict, label_dict,_ = self.get_data(is_train=False, task_key=_task_key)
                         _, loss, more_loss = self.wrapper(
                             **input_dict,
                             cur_lr=pref_lr,
@@ -492,7 +502,7 @@ class Trainer(object):
                     for _key in self.model_keys:
                         if _key != task_key:
                             self.optimizer.zero_grad()
-                            input_dict, label_dict = self.get_data(is_train=True, task_key=_key)
+                            input_dict, label_dict,_ = self.get_data(is_train=True, task_key=_key)
                             _, loss, more_loss = self.wrapper(
                                 **input_dict,
                                 cur_lr=pref_lr,
@@ -563,6 +573,8 @@ class Trainer(object):
 
         if fout:
             fout.close()
+        if SAMPLER_RECORD :
+            fout1.close()
 
     def save_model(self, save_path, lr=0., step=0):
         module = self.wrapper.module if dist.is_initialized() else self.wrapper
@@ -605,10 +617,12 @@ class Trainer(object):
                     batch_data = next(iter(self.validation_data[task_key]))
 
         for key in batch_data.keys():
-            if not isinstance(batch_data[key], list):
-                if batch_data[key] is not None:
+            if key == 'sid' or key == 'fid':
+                continue
+            elif not isinstance(batch_data[key], list):
+                if batch_data[key] is not None :
                     batch_data[key] = batch_data[key].to(DEVICE)
-            else:
+            else :
                 batch_data[key] = [item.to(DEVICE) for item in batch_data[key]]
         input_dict = {}
         for item in [
@@ -624,7 +638,11 @@ class Trainer(object):
         for item in ["energy", "force", "virial", "clean_coord", "clean_type", "coord_mask", "type_mask"]:
             if item in batch_data:
                 label_dict[item] = batch_data[item]
-        return input_dict, label_dict
+        log_dict = {}
+        if "fid" in batch_data:
+            log_dict['fid'] = batch_data['fid']
+        log_dict['sid'] = batch_data['sid']
+        return input_dict, label_dict,log_dict
 
     def wandb_log(self, data: dict, step, type_suffix=""):
         if not self.wandb_enabled or self.rank != 0:
@@ -649,11 +667,11 @@ class Trainer(object):
             for model_key in self.model_keys:
                 if valid_results[model_key] is not None:
                     prop_fmt = "   %11s %11s"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (k + f"_val_{model_key}", k + f"_trn_{model_key}")
                 else:
                     prop_fmt = "   %11s"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (k + f"_trn_{model_key}")
         print_str += "   %8s\n" % "lr"
         fout.write(print_str)
@@ -676,14 +694,14 @@ class Trainer(object):
             for model_key in self.model_keys:
                 if valid_results[model_key] is not None:
                     prop_fmt = "   %11.2e %11.2e"
-                    for k in valid_results[model_key].keys():
+                    for k in sorted(list(valid_results[model_key].keys())):
                         print_str += prop_fmt % (
                             valid_results[model_key][k],
                             train_results[model_key][k],
                         )
                 else:
                     prop_fmt = "   %11.2e"
-                    for k in train_results[model_key].keys():
+                    for k in sorted(list(train_results[model_key].keys())):
                         print_str += prop_fmt % (train_results[model_key][k])
         print_str += "   %8.1e\n" % cur_lr
         fout.write(print_str)

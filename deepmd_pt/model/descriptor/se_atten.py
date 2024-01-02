@@ -1,9 +1,8 @@
 import numpy as np
 import torch
-from torch import Tensor
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_std
+from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
 
 try:
     from typing import Final
@@ -14,34 +13,35 @@ from typing import Any, Union, Tuple, List
 from deepmd_pt.model.network import TypeFilter, NeighborWiseAttention
 
 
-@Descriptor.register("se_atten")
-class DescrptSeAtten(Descriptor):
-
-    def __init__(self,
-                 rcut,
-                 rcut_smth,
-                 sel,
-                 ntypes: int,
-                 neuron: list = [25, 50, 100],
-                 axis_neuron: int = 16,
-                 tebd_dim: int = 8,
-                 tebd_input_mode: str = 'concat',
-                 # set_davg_zero: bool = False,
-                 set_davg_zero: bool = True,  # TODO
-                 attn: int = 128,
-                 attn_layer: int = 2,
-                 attn_dotr: bool = True,
-                 attn_mask: bool = False,
-                 post_ln=True,
-                 ffn=False,
-                 ffn_embed_dim=1024,
-                 activation="tanh",
-                 scaling_factor=1.0,
-                 head_num=1,
-                 normalize=True,
-                 temperature=None,
-                 return_rot=False,
-                 **kwargs):
+@DescriptorBlock.register("se_atten")
+class DescrptBlockSeAtten(DescriptorBlock):
+    def __init__(
+        self,
+        rcut,
+        rcut_smth,
+        sel,
+        ntypes: int,
+        neuron: list = [25, 50, 100],
+        axis_neuron: int = 16,
+        tebd_dim: int = 8,
+        tebd_input_mode: str = 'concat',
+        # set_davg_zero: bool = False,
+        set_davg_zero: bool = True,  # TODO
+        attn: int = 128,
+        attn_layer: int = 2,
+        attn_dotr: bool = True,
+        attn_mask: bool = False,
+        post_ln=True,
+        ffn=False,
+        ffn_embed_dim=1024,
+        activation="tanh",
+        scaling_factor=1.0,
+        head_num=1,
+        normalize=True,
+        temperature=None,
+        return_rot=False,
+        type: str = None,
+    ):
         """Construct an embedding net of type `se_atten`.
 
         Args:
@@ -51,7 +51,8 @@ class DescrptSeAtten(Descriptor):
         - filter_neuron: Number of neurons in each hidden layers of the embedding net.
         - axis_neuron: Number of columns of the sub-matrix of the embedding matrix.
         """
-        super(DescrptSeAtten, self).__init__()
+        super(DescrptBlockSeAtten, self).__init__()
+        del type
         self.rcut = rcut
         self.rcut_smth = rcut_smth
         self.filter_neuron = neuron
@@ -100,6 +101,42 @@ class DescrptSeAtten(Descriptor):
                          tebd_mode=self.tebd_input_mode)
         filter_layers.append(one)
         self.filter_layers = torch.nn.ModuleList(filter_layers)
+
+    def get_rcut(self)->float:
+        """
+        Returns the cut-off radius
+        """
+        return self.rcut
+
+    def get_nsel(self)->int:
+        """
+        Returns the number of selected atoms in the cut-off radius
+        """
+        return sum(self.sel)
+
+    def get_sel(self)->List[int]:
+        """
+        Returns the number of selected atoms for each type.
+        """
+        return self.sel
+
+    def get_ntype(self)->int:
+        """
+        Returns the number of element types
+        """
+        return self.ntypes
+
+    def get_dim_in(self)->int:
+        """
+        Returns the output dimension
+        """
+        return self.dim_in
+
+    def get_dim_out(self)->int:
+        """
+        Returns the output dimension
+        """
+        return self.dim_out
 
     @property
     def dim_out(self):
@@ -187,15 +224,12 @@ class DescrptSeAtten(Descriptor):
 
     def forward(
         self, 
-        extended_coord, 
-        nlist, 
-        atype, 
-        nlist_type, 
-        nlist_loc: Optional[torch.Tensor] = None,
-        atype_tebd: Optional[torch.Tensor] = None, 
-        nlist_tebd: Optional[torch.Tensor] = None,
-        seq_input: Optional[torch.Tensor] = None,
-    ) -> List[Tensor]:
+        nlist: torch.Tensor,
+        extended_coord: torch.Tensor,
+        extended_atype: torch.Tensor,
+        extended_atype_embd: Optional[torch.Tensor] = None,
+        mapping: Optional[torch.Tensor] = None,
+    ) -> List[torch.Tensor]:
         """Calculate decoded embedding for each atom.
 
         Args:
@@ -208,7 +242,12 @@ class DescrptSeAtten(Descriptor):
         - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
-        nframes, nloc = nlist.shape[:2]
+        del mapping
+        assert extended_atype_embd is not None
+        nframes, nloc, nnei = nlist.shape
+        atype = extended_atype[:,:nloc]
+        nb = nframes
+        nall = extended_coord.view(nb, -1, 3).shape[1]
         dmatrix, diff, sw = prod_env_mat_se_a(
             extended_coord, nlist, atype,
             self.mean, self.stddev,
@@ -216,22 +255,29 @@ class DescrptSeAtten(Descriptor):
         )
         dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
         nlist_mask = (nlist != -1)
+        nlist[nlist == -1] = 0
         sw = torch.squeeze(sw, -1)
         # beyond the cutoff sw should be 0.0
         sw = sw.masked_fill(~nlist_mask, float(0.0))
-        # [nframes, nloc, tebd_dim]
-        if seq_input is not None:
-            if seq_input.shape[0] == nframes * nloc:
-                seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-            if atype_tebd is not None:
-                atype_tebd += seq_input
-        if atype_tebd is not None:
-            atype_tebd = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
-        ret = self.filter_layers[0](dmatrix, atype_tebd=atype_tebd,
-                                    nlist_tebd=nlist_tebd)  # shape is [nframes*nall, self.neei, out_size]
+        # nf x nloc x nt -> nf x nloc x nnei x nt
+        atype_tebd = extended_atype_embd[:,:nloc,:]
+        atype_tebd_nnei = atype_tebd.unsqueeze(2).expand(-1, -1, self.nnei, -1)
+        # nf x nall x nt
+        nt = extended_atype_embd.shape[-1]
+        atype_tebd_ext = extended_atype_embd
+        # nb x (nloc x nnei) x nt
+        index = nlist.reshape(nb, nloc * nnei).unsqueeze(-1).expand(-1, -1, nt)
+        # nb x (nloc x nnei) x nt
+        atype_tebd_nlist = torch.gather(atype_tebd_ext, dim=1, index=index)
+        # nb x nloc x nnei x nt
+        atype_tebd_nlist = atype_tebd_nlist.view(nb, nloc, nnei, nt)
+        ret = self.filter_layers[0](
+          dmatrix,
+          atype_tebd=atype_tebd_nnei,
+          nlist_tebd=atype_tebd_nlist,
+        )  # shape is [nframes*nall, self.neei, out_size]
         input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
-        nei_mask = nlist_type != self.ntypes
-        ret = self.dpa1_attention(ret, nei_mask, input_r=input_r, sw=sw)  # shape is [nframes*nloc, self.neei, out_size]
+        ret = self.dpa1_attention(ret, nlist_mask, input_r=input_r, sw=sw)  # shape is [nframes*nloc, self.neei, out_size]
         inputs_reshape = dmatrix.view(-1, self.nnei, 4).permute(0, 2, 1)  # shape is [nframes*natoms[0], 4, self.neei]
         xyz_scatter = torch.matmul(inputs_reshape, ret)  # shape is [nframes*natoms[0], 4, out_size]
         xyz_scatter = xyz_scatter / self.nnei
@@ -242,7 +288,7 @@ class DescrptSeAtten(Descriptor):
                               xyz_scatter_2)  # shape is [nframes*nloc, self.filter_neuron[-1], self.axis_neuron]
         return result.view(-1, nloc, self.filter_neuron[-1] * self.axis_neuron), \
                ret.view(-1, nloc, self.nnei, self.filter_neuron[-1]), diff, \
-               rot_mat.view(-1, self.filter_neuron[-1], 3)
+               rot_mat.view(-1, self.filter_neuron[-1], 3), sw
 
 
 def analyze_descrpt(matrix, ndescrpt, natoms, mixed_type=False, real_atype=None):

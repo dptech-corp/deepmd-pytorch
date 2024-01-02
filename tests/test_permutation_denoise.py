@@ -32,8 +32,8 @@ model_dpau_denoise = {
     "update_g2_has_attn": True,
     "attn2_has_gate": True,
     "smooth": True,
-    "do_bn_mode": "uniform",
-    "_comment": " that's all"
+    "do_bn_mode": "uniform"
+    # "_comment": " that's all"
   },
 }
 
@@ -45,9 +45,9 @@ model_dpa1_denoise = {
     "rcut_smth": 0.5,
     "rcut": 4.0,
     "neuron": [25, 50, 100],
-    "resnet_dt": False,
+    # "resnet_dt": False,       # unsupported parameter!
     "axis_neuron": 16,
-    "seed": 1,
+    # "seed": 1,                # unsupported parameter!
     "attn": 64,
     "attn_layer": 2,
     "attn_dotr": True,
@@ -59,8 +59,8 @@ model_dpa1_denoise = {
     "scaling_factor": 1.0,
     "head_num": 1,
     "normalize": False,
-    "temperature": 1.0,
-    "_comment": " that's all"
+    "temperature": 1.0
+    # "_comment": " that's all" # no such comment. use dargs in the future
   },
 }
 
@@ -85,9 +85,9 @@ model_hybrid_denoise = {
           50,
           100
         ],
-        "resnet_dt": False,
+        # "resnet_dt": False,
         "axis_neuron": 16,
-        "seed": 1,
+        # "seed": 1,
         "attn": 128,
         "attn_layer": 0,
         "attn_dotr": True,
@@ -99,8 +99,8 @@ model_hybrid_denoise = {
         "scaling_factor": 1.0,
         "head_num": 1,
         "normalize": True,
-        "temperature": 1.0,
-        "_comment": " that's all"
+        "temperature": 1.0
+        # "_comment": " that's all"
       },
       {
         "type": "se_uni",
@@ -126,7 +126,7 @@ model_hybrid_denoise = {
         "add_type_ebd_to_seq": True,
         "smooth": True,
         "do_bn_mode": "uniform",
-        "_comment": " that's all"
+        # "_comment": " that's all"
       },
     ]
   },
@@ -179,16 +179,7 @@ class TestDenoiseModelDPAUni(unittest.TestCase, TestPermutationDenoise):
 class TestDenoiseModelDPAUni2(unittest.TestCase, TestPermutationDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["combine_grrg"] = True
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-
-
-class TestDenoiseModelDPAUni3(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["gather_g1"] = True
+    # model_params["descriptor"]["combine_grrg"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)

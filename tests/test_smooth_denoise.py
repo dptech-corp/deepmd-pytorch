@@ -64,19 +64,6 @@ class TestSmoothDenoise:
     compare(ret1, ret2)
     compare(ret0, ret3)
 
-@unittest.skip("not smooth at the moment")
-class TestDenoiseModelDPA1(unittest.TestCase, TestSmoothDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpa1_denoise)
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
-    # less degree of smoothness,
-    # error can be systematically removed by reducing epsilon
-    self.epsilon = 1e-7
-    self.aprec = 1e-5
-
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
@@ -89,11 +76,10 @@ class TestDenoiseModelDPAUni(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["combine_grrg"] = True
+    # model_params["descriptor"]["combine_grrg"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -101,11 +87,10 @@ class TestDenoiseModelDPAUni2(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_dpau_denoise)
-    model_params["descriptor"]["gather_g1"] = True
+    # model_params["descriptor"]["gather_g1"] = True
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
@@ -113,7 +98,6 @@ class TestDenoiseModelDPAUni3(unittest.TestCase, TestSmoothDenoise):
     self.epsilon = 1e-7
     self.aprec = 1e-5
 
-@unittest.skip("not smooth at the moment")
 class TestDenoiseModelHybrid(unittest.TestCase, TestSmoothDenoise):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid_denoise)
