@@ -86,7 +86,12 @@ void DeepPot::init(const std::string& model, const int& gpu_rank) {
 
     module = torch::jit::load(model,device);
     //module = torch::jit::load(model);
-    
+    torch::jit::FusionStrategy strategy;
+    strategy = {{torch::jit::FusionBehavior::DYNAMIC, 10}};
+    torch::jit::setFusionStrategy(strategy);
+
+    at::globalContext().setAllowTF32CuBLAS(true);
+    at::globalContext().setAllowTF32CuDNN(true);
     auto rcut_ = module.run_method("get_rcut").toDouble();
     rcut = static_cast<VALUETYPE>(rcut_);
 }
