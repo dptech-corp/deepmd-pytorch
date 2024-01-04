@@ -85,11 +85,10 @@ class EnergyModel(BaseModel):
             fitting_net['type'] = fitting_net.get('type', 'ener')
             if self.descriptor_type not in ['se_e2_a']:
                 fitting_net['ntypes'] = 1
-                fitting_net['embedding_width'] = self.descriptor.dim_out
             else:
                 fitting_net['ntypes'] = self.descriptor.get_ntype()
                 fitting_net['use_tebd'] = False
-                fitting_net['embedding_width'] = self.descriptor.dim_out
+            fitting_net['embedding_width'] = self.descriptor.dim_out
 
             self.grad_force = 'direct' not in fitting_net['type']
             if not self.grad_force:
