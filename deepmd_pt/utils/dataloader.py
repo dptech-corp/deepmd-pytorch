@@ -61,7 +61,7 @@ class DpLoaderSet(Dataset):
                 info_dict = Descriptor.get_data_process_key(model_params["descriptor"])
                 rcut = info_dict["rcut"]
                 sel = info_dict["sel"]
-            else:
+            else:  ### need to remove this
                 rcut = []
                 sel = []
                 for ii in model_params["descriptor"]["list"]:

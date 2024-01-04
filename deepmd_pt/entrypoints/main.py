@@ -73,7 +73,7 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
                                                                  model_params_single["stat_file"])
             if not os.path.exists(model_params_single["stat_file_path"]):
                 has_stat_file_path = False
-        else:
+        else:  ### need to remove this
             default_stat_file_name = []
             for descrpt in model_params_single["descriptor"]["list"]:
                 default_stat_file_name.append(f'stat_file_rcut{descrpt["rcut"]:.2f}_'
