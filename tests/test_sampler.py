@@ -31,6 +31,7 @@ class TestSampler(unittest.TestCase):
         self.my_dataset = DpLoaderSet(self.systems, self.batch_size,
                                       model_params={
                                           'descriptor': {
+                                              'type': 'se_e2_a',
                                               'sel': self.sel,
                                               'rcut': self.rcut,
                                           },

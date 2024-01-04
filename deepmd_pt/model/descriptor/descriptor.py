@@ -115,6 +115,16 @@ class Descriptor(torch.nn.Module, ABC):
         """
         return Descriptor.__plugins.register(key)
 
+    @classmethod
+    def get_stat_name(cls, config):
+        descrpt_type = config["type"]
+        return Descriptor.__plugins.plugins[descrpt_type].get_stat_name(config)
+
+    @classmethod
+    def get_data_process_key(cls, config):
+        descrpt_type = config["type"]
+        return Descriptor.__plugins.plugins[descrpt_type].get_data_process_key(config)
+
     def __new__(cls, *args, **kwargs):
         if cls is Descriptor:
             try:

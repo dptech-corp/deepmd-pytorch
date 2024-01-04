@@ -14,6 +14,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from deepmd_pt.utils.finetune import change_finetune_model_params
 from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.utils.multi_task import preprocess_shared_params
+from deepmd_pt.model.descriptor import Descriptor
 
 from deepmd_pt import __version__
 
@@ -65,16 +66,14 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
             ### this design requires "rcut", "rcut_smth" and "sel" in the descriptor
             ### VERY BAD DESIGN!!!!
             ### not all descriptors provides these parameter in their constructor
-            default_stat_file_name = f'stat_file_rcut{model_params_single["descriptor"]["rcut"]:.2f}_' \
-                                     f'smth{model_params_single["descriptor"]["rcut_smth"]:.2f}_' \
-                                     f'sel{model_params_single["descriptor"]["sel"]}.npz'
+            default_stat_file_name = Descriptor.get_stat_name(model_params_single["descriptor"])
             model_params_single["stat_file_dir"] = data_dict_single.get("stat_file_dir", f"stat_files{suffix}")
             model_params_single["stat_file"] = data_dict_single.get("stat_file", default_stat_file_name)
             model_params_single["stat_file_path"] = os.path.join(model_params_single["stat_file_dir"],
                                                                  model_params_single["stat_file"])
             if not os.path.exists(model_params_single["stat_file_path"]):
                 has_stat_file_path = False
-        else:
+        else:  ### need to remove this
             default_stat_file_name = []
             for descrpt in model_params_single["descriptor"]["list"]:
                 default_stat_file_name.append(f'stat_file_rcut{descrpt["rcut"]:.2f}_'

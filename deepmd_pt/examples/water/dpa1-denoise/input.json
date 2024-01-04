@@ -7,7 +7,7 @@
    "MASKED_TOKEN"
   ],
   "descriptor": {
-   "type": "se_atten",
+   "type": "dpa1",
    "sel": 120,
    "rcut_smth": 0.5,
    "rcut": 6.0,
@@ -16,9 +16,7 @@
     50,
     100
    ],
-   "resnet_dt": false,
    "axis_neuron": 16,
-   "seed": 1,
    "attn": 128,
    "attn_layer": 2,
    "attn_dotr": true,
@@ -30,8 +28,7 @@
    "scaling_factor": 1.0,
    "head_num": 1,
    "normalize": true,
-   "temperature": 1.0,
-   "_comment": " that's all"
+   "temperature": 1.0
   },
   "_comment": " that's all"
  },

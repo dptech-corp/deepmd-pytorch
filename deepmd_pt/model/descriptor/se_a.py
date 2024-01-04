@@ -75,6 +75,18 @@ class DescrptSeA(Descriptor):
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
         self.sea.init_desc_stat( sumr, suma, sumn, sumr2, suma2)
 
+    @classmethod
+    def get_stat_name(cls, config):
+        descrpt_type = config["type"]
+        assert descrpt_type in ["se_e2_a"]
+        return f'stat_file_sea_rcut{config["rcut"]:.2f}_smth{config["rcut_smth"]:.2f}_sel{config["sel"]}.npz'
+
+    @classmethod
+    def get_data_process_key(cls, config):
+        descrpt_type = config["type"]
+        assert descrpt_type in ["se_e2_a"]
+        return {"sel": config["sel"], "rcut": config["rcut"]}
+
     def forward(
         self,
         nlist: torch.Tensor,
