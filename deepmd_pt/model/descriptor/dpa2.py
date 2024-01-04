@@ -297,6 +297,19 @@ class DescrptDPA2(Descriptor):
       for ii, descrpt in enumerate([self.repinit, self.repformers]):
           descrpt.init_desc_stat(sumr[ii], suma[ii], sumn[ii], sumr2[ii], suma2[ii])
 
+  @classmethod
+  def get_stat_name(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa2"]
+    return f'stat_file_dpa2_repinit_rcut{config["repinit_rcut"]:.2f}_smth{config["repinit_rcut_smth"]:.2f}_sel{config["repinit_nsel"]}' \
+           f'_repformer_rcut{config["repformer_rcut"]:.2f}_smth{config["repformer_rcut_smth"]:.2f}_sel{config["repformer_nsel"]}.npz'
+
+  @classmethod
+  def get_data_process_key(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa2"]
+    return {"sel": [config["repinit_nsel"], config["repformer_nsel"]], "rcut": [config["repinit_rcut"], config["repformer_rcut"]]}
+
   def forward(
         self,
         nlist: torch.Tensor,
