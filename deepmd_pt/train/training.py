@@ -63,6 +63,10 @@ class Trainer(object):
         self.disp_freq = training_params.get("disp_freq", 1000)
         self.save_ckpt = training_params.get("save_ckpt", "model.pt")
         self.save_freq = training_params.get("save_freq", 1000)
+        self.print_model_para = training_params.get("print_model_para", False)
+        self.print_model_para_freq = training_params.get("print_model_para_freq", 1)
+        if self.print_model_para:
+            self.para_out = (open("para.log", mode="w"))
         self.lcurve_should_print_header = True
 
         # Init wandb
@@ -380,6 +384,19 @@ class Trainer(object):
                 print_str = f"Step {_step_id}: sample system{log_dict['sid']}  frame{log_dict['fid']}\n"
                 fout1.write(print_str)
                 fout1.flush()
+
+            def print_para():
+                torch.set_printoptions(threshold=10_000)
+                for name, param in self.wrapper.model[task_key].named_parameters():
+                    if param.requires_grad:
+                        print_str = f"Name: {name}, Size: {param.size()}, Type: {param.dtype}, Value: {param.data}\n"
+                        self.para_out.write(print_str)
+                        self.para_out.flush()
+
+            if self.print_model_para and _step_id % self.print_model_para_freq == 0:
+                self.para_out.write(f"Model Key: {task_key}. Before step: {_step_id}\n")
+                print_para()
+
             if self.opt_type == "Adam":
                 cur_lr = self.scheduler.get_last_lr()[0]
                 if _step_id < self.warmup_steps:
@@ -431,6 +448,10 @@ class Trainer(object):
                     )
             else:
                 raise ValueError("Not supported optimizer type '%s'" % self.opt_type)
+
+            if self.print_model_para and _step_id % self.print_model_para_freq == 0:
+                self.para_out.write(f"Model Key: {task_key}. After step: {_step_id}\n")
+                print_para()
 
             # Log and persist
             if _step_id % self.disp_freq == 0:
