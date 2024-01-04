@@ -791,13 +791,13 @@ class GatedSelfAttetion(nn.Module):
             attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(1), float("-inf"))
         attn_weights = F.softmax(attn_weights, dim=-1)
         attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(-1), float(0.0))
+        if self.smooth: 
+            assert sw is not None
+            attn_weights = attn_weights * sw[:,:,None] * sw[:,None,:]
         if self.dotr:
             assert input_r is not None, "input_r must be provided when dotr is True!"
             angular_weight = torch.bmm(input_r, input_r.transpose(1, 2))
             attn_weights = attn_weights * angular_weight
-        if not self.dotr and self.smooth: 
-            assert sw is not None
-            attn_weights = attn_weights * sw[:,:,None] * sw[:,None,:]
         o = torch.bmm(attn_weights, v)
         output = self.out_proj(o)
         return output

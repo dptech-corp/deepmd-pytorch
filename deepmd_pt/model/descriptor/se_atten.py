@@ -40,7 +40,7 @@ class DescrptBlockSeAtten(DescriptorBlock):
         normalize=True,
         temperature=None,
         return_rot=False,
-        type: str = None,
+        type: Optional[str] = None,
     ):
         """Construct an embedding net of type `se_atten`.
 

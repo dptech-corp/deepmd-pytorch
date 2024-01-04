@@ -62,6 +62,9 @@ def get_trainer(config, init_model=None, restart_model=None, finetune_model=None
         hybrid_descrpt = model_params_single["descriptor"]["type"] == "hybrid"
         has_stat_file_path = True
         if not hybrid_descrpt:
+            ### this design requires "rcut", "rcut_smth" and "sel" in the descriptor
+            ### VERY BAD DESIGN!!!!
+            ### not all descriptors provides these parameter in their constructor
             default_stat_file_name = f'stat_file_rcut{model_params_single["descriptor"]["rcut"]:.2f}_' \
                                      f'smth{model_params_single["descriptor"]["rcut_smth"]:.2f}_' \
                                      f'sel{model_params_single["descriptor"]["sel"]}.npz'

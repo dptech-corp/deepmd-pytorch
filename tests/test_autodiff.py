@@ -1,4 +1,4 @@
-from copy import deepcopy
+import copy
 import torch
 import unittest
 import numpy as np
@@ -10,7 +10,7 @@ dtype = torch.float64
 from .test_permutation import (
   model_se_e2_a,
   model_dpa1,
-  model_dpau,
+  model_dpa2,
   eval_model,
   make_sample,
 )
@@ -97,44 +97,50 @@ class TestVirial():
 
 class TestEnergyModelSeAForce(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = deepcopy(model_se_e2_a)
+    model_params = copy.deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelSeAVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = deepcopy(model_se_e2_a)
+    model_params = copy.deepcopy(model_se_e2_a)
     sampled = make_sample(model_params)
     self.type_split = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Force(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = deepcopy(model_dpa1)
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPA1Virial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = deepcopy(model_dpa1)
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 
-class TestEnergyModelDPAUniForce(unittest.TestCase, TestForce):
+class TestEnergyModelDPA2Force(unittest.TestCase, TestForce):
   def setUp(self):
-    model_params = deepcopy(model_dpau)
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
 class TestEnergyModelDPAUniVirial(unittest.TestCase, TestVirial):
   def setUp(self):
-    model_params = deepcopy(model_dpau)
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 

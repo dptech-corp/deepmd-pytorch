@@ -11,6 +11,7 @@ from deepmd_pt.utils.nlist import (
   extend_coord_with_ghosts,
   build_neighbor_list,
   build_multiple_neighbor_list,
+  get_multiple_nlist_key,
 )
 from deepmd_pt.utils.preprocess import(
   build_neighbor_list as legacy_build_neighbor_list,
@@ -100,9 +101,18 @@ class TestNeighList(unittest.TestCase):
     )
     nlists = build_multiple_neighbor_list(ecoord, nlist1, rcuts, nsels)
     for dd in range(2):
-      self.assertEqual(nlists[rcuts[dd]].shape[-1], nsels[dd])
-    torch.testing.assert_close(nlists[1.01], nlist0)
-    torch.testing.assert_close(nlists[2.01], nlist2)    
+      self.assertEqual(
+        nlists[get_multiple_nlist_key(rcuts[dd], nsels[dd])].shape[-1],
+        nsels[dd],
+      )
+    torch.testing.assert_close(
+      nlists[get_multiple_nlist_key(rcuts[0], nsels[0])],
+      nlist0,
+    )
+    torch.testing.assert_close(
+      nlists[get_multiple_nlist_key(rcuts[1], nsels[1])],
+      nlist2,
+    )
 
   def test_extend_coord(self):
     ecoord, eatype, mapping = extend_coord_with_ghosts(

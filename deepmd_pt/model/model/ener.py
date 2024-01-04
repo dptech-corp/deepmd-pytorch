@@ -1,6 +1,6 @@
 import torch
 from typing import Optional, List, Union, Dict
-from deepmd_pt.model.descriptor import DescriptorBlock
+from deepmd_pt.model.descriptor import Descriptor
 from deepmd_pt.model.task import Fitting, DenoiseNet
 from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
@@ -63,32 +63,14 @@ class EnergyModel(BaseModel):
             self.prefactor=descriptor.get('prefactor', [0.5,0.5])
         self.descriptor_type = descriptor['type']
 
-        self.has_type_embedding = False
         self.type_split = True
         if self.descriptor_type not in ['se_e2_a']:
-            self.has_type_embedding = True
             self.type_split = False
-            if type_embedding is None:
-                self.type_embedding, aux = make_default_type_embedding(ntypes)
-                self.tebd_dim = aux['tebd_dim']
-                if self.descriptor_type == "se_atten":
-                  descriptor['tebd_dim'] = aux['tebd_dim']
-                  descriptor['tebd_input_mode'] = 'concat'
-            else:
-                tebd_dim = type_embedding.get('neuron', [8])[-1]
-                tebd_input_mode = type_embedding.get('tebd_input_mode', 'concat')
-                self.type_embedding = TypeEmbedNet(ntypes, tebd_dim)
-                self.tebd_dim = tebd_dim
-                if self.descriptor_type == "se_atten":
-                  descriptor['tebd_dim'] = tebd_dim
-                  descriptor['tebd_input_mode'] = tebd_input_mode
-        else:
-            self.type_embedding = None
 
-        self.descriptor = DescriptorBlock(**descriptor)
+        self.descriptor = Descriptor(**descriptor)
         self.rcut = self.descriptor.get_rcut()
         self.sel = self.descriptor.get_sel()
-        self.split_nlist = descriptor['type'] in ['hybrid']
+        self.split_nlist = False
 
         # Statistics
         self.compute_or_load_stat(fitting_net, ntypes,
@@ -103,11 +85,10 @@ class EnergyModel(BaseModel):
             fitting_net['type'] = fitting_net.get('type', 'ener')
             if self.descriptor_type not in ['se_e2_a']:
                 fitting_net['ntypes'] = 1
-                fitting_net['embedding_width'] = self.descriptor.dim_out + self.tebd_dim
             else:
                 fitting_net['ntypes'] = self.descriptor.get_ntype()
                 fitting_net['use_tebd'] = False
-                fitting_net['embedding_width'] = self.descriptor.dim_out
+            fitting_net['embedding_width'] = self.descriptor.dim_out
 
             self.grad_force = 'direct' not in fitting_net['type']
             if not self.grad_force:
@@ -148,24 +129,12 @@ class EnergyModel(BaseModel):
             coord_normalized = normalize_coord(coord, box.reshape(-1, 3, 3))
         else:
             coord_normalized = coord.clone()
-        if not isinstance(self.rcut, list):
-            rcut_max = self.rcut
-        else:
-            rcut_max = max(self.rcut)
+        rcut_max = self.rcut
         extended_coord, extended_atype, mapping = extend_coord_with_ghosts(
             coord_normalized, atype, box, rcut_max)
-        if not isinstance(self.rcut, list):
-            nlist = build_neighbor_list(
-                extended_coord, extended_atype, nloc,
-                self.rcut, self.sel, distinguish_types=self.type_split)
-        else:
-            nlist_list = []
-            for rcut, sel in zip(self.rcut, self.sel):
-                nlist_list.append(
-                    build_neighbor_list(
-                        extended_coord, extended_atype, nloc,
-                        rcut, sel, distinguish_types=self.type_split))
-            nlist = torch.cat(nlist_list, -1)
+        nlist = build_neighbor_list(
+            extended_coord, extended_atype, nloc,
+            self.rcut, self.sel, distinguish_types=self.type_split)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
         model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
         if self.fitting_net is not None:
@@ -200,25 +169,18 @@ class EnergyModel(BaseModel):
         atype = extended_atype[:, :nloc]
         if self.grad_force:
             extended_coord.requires_grad_(True)
-        if self.type_embedding is not None:
-            extended_atype_embd = self.type_embedding(extended_atype)
-            atype_embd = extended_atype_embd[:, :nloc, :]
-        else:
-            extended_atype_embd = None
-            atype_embd = None
         descriptor, env_mat, diff, rot_mat, sw = \
           self.descriptor(
             nlist,
             extended_coord,
             extended_atype,
-            extended_atype_embd,
             mapping=mapping,
           )
 
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
-            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=atype_embd, rot_mat=rot_mat)
+            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=None, rot_mat=rot_mat)
             energy = atom_energy.sum(dim=1)
             model_predict = {'energy': energy,
                             'atom_energy': atom_energy,
@@ -242,7 +204,7 @@ class EnergyModel(BaseModel):
                 model_predict['dforce'] = dforce
         # denoise
         else:
-            nlist_list = list(torch.split(nlist, self.descriptor.split_sel, -1))
+            nlist_list = [nlist]
             if not self.split_nlist:
                 nnei_mask = nlist != -1
             elif self.combination:
@@ -284,14 +246,6 @@ class EnergyModel(BaseModel):
       return extended_virial_corr
       
 
-    def process_nlist(self, nlist, extended_atype, mapping: Optional[torch.Tensor] = None):
-        # process the nlist_type and nlist_loc
-        if not self.split_nlist:
-            return process_nlist(
-              nlist, extended_atype, mapping=mapping)
-        else:
-            return process_nlist_gathered(
-              nlist, extended_atype, self.descriptor.split_sel, mapping=mapping)
 
 
 # should be a stand-alone function!!!!

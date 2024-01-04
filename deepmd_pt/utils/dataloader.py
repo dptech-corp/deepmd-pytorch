@@ -53,6 +53,9 @@ class DpLoaderSet(Dataset):
             logging.info(f"Constructing DataLoaders from {len(systems)} systems")
 
         def construct_dataset(system):
+            ### this design requires "rcut" and "sel" in the descriptor
+            ### VERY BAD DESIGN!!!!
+            ### not all descriptors provides these parameter in their constructor
             if model_params["descriptor"].get("type") != "hybrid":
                 rcut = model_params["descriptor"]["rcut"]
                 sel = model_params["descriptor"]["sel"]
