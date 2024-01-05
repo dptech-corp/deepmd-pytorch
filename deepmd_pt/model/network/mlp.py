@@ -115,17 +115,21 @@ class MLPLayer(nn.Module):
         The dict to deserialize from.
     """
     nl = NativeLayer.deserialize(data)
-    self.use_timestep = nl["idt"] is not None
-    self.activate_name = nl["activation_function"]
-    self.activate = ActivationFn(self.activate_name)
+    obj = cls(
+      nl["matrix"].shape[0],
+      nl["matrix"].shape[1],
+      nl["bias"] is not None,
+      nl["idt"] is not None,
+      nl["activation_function"],
+      nl["resnet"],
+    )
     check_load_param = \
-      lambda ss: nn.Parameter(data=torch.Tensor(nl[ss], dtype=dtype, device=device)) \
+      lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=dtype, device=device)) \
       if nl[ss] is not None else None
-    self.matrix = check_load_param("matrix")
-    self.bias = check_load_param("bias")
-    self.idt = check_load_param("idt")
-    assert (self.idt is not None) == self.use_timestep
-    self.resnet = nl["resnet"]
+    obj.matrix = check_load_param("matrix")
+    obj.bias = check_load_param("bias")
+    obj.idt = check_load_param("idt")
+    return obj
 
 
 class MLP(nn.Module):
