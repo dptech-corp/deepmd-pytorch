@@ -145,7 +145,8 @@ def test(FLAGS):
                                numb_test=FLAGS.numb_test,
                                detail_file=FLAGS.detail_file,
                                shuffle_test=FLAGS.shuffle_test,
-                               head=FLAGS.head)
+                               head=FLAGS.head,
+                               batchsize=FLAGS.batchsize if FLAGS.batchsize.startswith("auto") else int(FLAGS.batchsize))
     trainer.run()
 
 
@@ -250,6 +251,9 @@ def main(args=None):
     )
     test_parser.add_argument(
         "--shuffle-test", action="store_true", default=False, help="Shuffle test data"
+    )
+    test_parser.add_argument(
+        "-b", "--batchsize", default="auto", type=str, help="The batch size for test"
     )
 
     freeze_parser = subparsers.add_parser('freeze', help='Freeze a model.')

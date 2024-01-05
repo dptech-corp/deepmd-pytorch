@@ -26,7 +26,8 @@ if torch.__version__.startswith("2"):
 class Tester(object):
 
     def __init__(self, model_ckpt, input_script=None, system=None, datafile=None,
-                 numb_test=100, detail_file=None, shuffle_test=False, head=None):
+                 numb_test=100, detail_file=None, shuffle_test=False, head=None,
+                 batchsize="auto"):
         """Construct a DeePMD tester.
 
         Args:
@@ -75,12 +76,12 @@ class Tester(object):
                 logging.info(f"Testing validation systems in head {head} of input script: {input_script}")
         elif system is not None:
             self.systems = expand_sys_str(system)
-            self.batchsize = "auto"
+            self.batchsize = batchsize
             logging.info("Testing systems in path: %s", system)
         elif datafile is not None:
             with open(datafile, 'r') as fin:
                 self.systems = fin.read().splitlines()
-            self.batchsize = "auto"
+            self.batchsize = batchsize
             logging.info("Testing systems in file: %s", datafile)
         else:
             self.systems = None
