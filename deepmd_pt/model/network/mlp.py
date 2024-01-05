@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 import numpy as np
 import torch
 import torch.nn as nn
@@ -126,3 +126,42 @@ class MLPLayer(nn.Module):
     self.idt = check_load_param("idt")
     assert (self.idt is not None) == self.use_timestep
     self.resnet = nl["resnet"]
+
+
+class MLP(nn.Module):
+  def __init__(
+      self, 
+      layers: List[MLPLayer],
+  ):
+    super(MLP, self).__init__()
+    self.layers = nn.ModuleList(layers)
+
+  def forward(
+      self,
+      xx: torch.Tensor,
+  )->torch.Tensor:
+    for ll in self.layers:
+      xx = ll(xx)
+    return xx
+
+  def serialize(self) -> dict:
+    """Serialize the network to a dict.
+
+    Returns
+    -------
+    dict
+        The serialized network.
+    """
+    return {"layers": [layer.serialize() for layer in self.layers]}    
+  
+  @classmethod
+  def deserialize(cls, data: dict) -> "NativeNet":
+    """Deserialize the network from a dict.
+
+    Parameters
+    ----------
+    data : dict
+        The dict to deserialize from.
+    """
+    return cls([MLPLayer.deserialize(layer) for layer in data["layers"]])
+    
