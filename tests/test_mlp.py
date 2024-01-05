@@ -22,13 +22,17 @@ class TestMLPLayer(unittest.TestCase):
         [True, False],                          # use time step
         ["tanh", "none"],                       # activation
         [True, False],                          # resnet
+        [None, [4], [3,2]],                     # prefix shapes
     )
 
   def test_match_native_layer(
       self,
   ):
-    for (ninp, nout), bias, ut, ac, resnet in self.test_cases:
-      xx = torch.arange(ninp, dtype=dtype)
+    for (ninp, nout), bias, ut, ac, resnet, ashp in self.test_cases:
+      inp_shap = [ninp]
+      if ashp is not None:
+        inp_shap = ashp + inp_shap
+      xx = torch.arange(np.prod(inp_shap), dtype=dtype).view(inp_shap)
       ml = MLPLayer(ninp, nout, bias, ut, ac, resnet)
       data = ml.serialize()
       nl = NativeLayer.deserialize(data)
@@ -36,9 +40,8 @@ class TestMLPLayer(unittest.TestCase):
         ml.forward(xx).detach().numpy(), nl.call(xx.detach().numpy()),
         err_msg=f"(i={ninp}, o={nout}) bias={bias} use_dt={ut} act={ac} resnet={resnet}"
       )
-      model = torch.jit.script(ml)
 
   def test_jit(self):
-    for (ninp, nout), bias, ut, ac, resnet in self.test_cases:
+    for (ninp, nout), bias, ut, ac, resnet, _ in self.test_cases:
       ml = MLPLayer(ninp, nout, bias, ut, ac, resnet)
       model = torch.jit.script(ml)
