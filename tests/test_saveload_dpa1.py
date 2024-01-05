@@ -27,6 +27,7 @@ def get_dataset(config):
     dataset = DpLoaderSet(systems, batch_size,
                           model_params={
                               'descriptor': {
+                                  'type': 'dpa1',
                                   'sel': sel,
                                   'rcut': rcut,
                               },
