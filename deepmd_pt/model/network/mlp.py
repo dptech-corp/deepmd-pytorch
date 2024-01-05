@@ -71,13 +71,13 @@ class MLPLayer(nn.Module):
     yy: torch.Tensor
         The output.
     """
-    yy = torch.matmul(xx, self.matrix)
-    yy = yy + self.bias if self.bias is not None else yy
+    yy = (
+      torch.matmul(xx, self.matrix) + self.bias \
+      if self.bias is not None \
+      else torch.matmul(xx, self.matrix)
+    )
     yy = self.activate.forward(yy)
-    if self.use_timestep:
-      yy = yy * self.idt
-    else:
-      yy = yy
+    yy = yy * self.idt if self.idt is not None else yy
     if self.resnet:
       if xx.shape[-1] == yy.shape[-1]:
         yy += xx
@@ -99,7 +99,7 @@ class MLPLayer(nn.Module):
     nl = NativeLayer(
       self.matrix.detach().numpy(),
       self.bias.detach().numpy() if self.bias is not None else None,
-      self.idt.detach().numpy() if self.use_timestep else None,
+      self.idt.detach().numpy() if self.idt is not None else None,
       activation_function=self.activate_name,
       resnet=self.resnet
     )
