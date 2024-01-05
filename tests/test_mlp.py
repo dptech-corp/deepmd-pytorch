@@ -2,13 +2,20 @@ import torch, copy
 import unittest
 import itertools
 import numpy as np
-from deepmd_pt.model.network.mlp import MLPLayer, MLP, dtype
+try:
+  from deepmd_pt.model.network.mlp import MLPLayer, MLP, dtype
+  support_native_net = True
+except ModuleNotFoundError:
+  support_native_net = False
+
 try :
   from deepmd_utils.model_format import (
     NativeLayer,
     NativeNet,
   )
   support_native_net = True
+except ModuleNotFoundError:
+  support_native_net = False
 except ImportError:
   support_native_net = False
 
