@@ -6,16 +6,17 @@ from typing import List, Callable, Any, Dict, Optional
 def get_activation_fn(activation: str) -> Callable:
     """ Returns the activation function corresponding to `activation` """
 
-    if activation == "relu":
+    if activation.lower() == "relu":
         return F.relu
-    elif activation == "gelu":
+    elif activation.lower() == "gelu":
         return F.gelu
-    elif activation == "tanh":
+    elif activation.lower() == "tanh":
         return torch.tanh
-    elif activation == "linear":
+    elif activation.lower() == "linear" or activation.lower() == "none":
         return lambda x: x
     else:
-        raise RuntimeError("--activation-fn {} not supported".format(activation))
+        raise RuntimeError(f"activation function {activation} not supported")
+
 
 class ActivationFn(torch.nn.Module):
     def __init__(self, activation: Optional[str]):
@@ -26,13 +27,13 @@ class ActivationFn(torch.nn.Module):
         """ Returns the tensor after applying activation function corresponding to `activation` """
         # See jit supported types: https://pytorch.org/docs/stable/jit_language_reference.html#supported-type
 
-        if self.activation == "relu":
+        if self.activation.lower() == "relu":
             return F.relu(x)
-        elif self.activation == "gelu":
+        elif self.activation.lower() == "gelu":
             return F.gelu(x)
-        elif self.activation == "tanh":
+        elif self.activation.lower() == "tanh":
             return torch.tanh(x)
-        elif self.activation == "linear":
+        elif self.activation.lower() == "linear" or self.activation.lower() == "none":
             return x
         else:
-            raise RuntimeError("activation-fn not supported")
+            raise RuntimeError(f"activation function {self.activation} not supported")
