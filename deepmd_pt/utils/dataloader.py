@@ -14,6 +14,7 @@ from deepmd_pt.utils import env
 from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.data.distributed import DistributedSampler
+from deepmd_pt.model.descriptor import Descriptor
 from tqdm import tqdm
 import torch.multiprocessing
 
@@ -53,10 +54,14 @@ class DpLoaderSet(Dataset):
             logging.info(f"Constructing DataLoaders from {len(systems)} systems")
 
         def construct_dataset(system):
+            ### this design requires "rcut" and "sel" in the descriptor
+            ### VERY BAD DESIGN!!!!
+            ### not all descriptors provides these parameter in their constructor
             if model_params["descriptor"].get("type") != "hybrid":
-                rcut = model_params["descriptor"]["rcut"]
-                sel = model_params["descriptor"]["sel"]
-            else:
+                info_dict = Descriptor.get_data_process_key(model_params["descriptor"])
+                rcut = info_dict["rcut"]
+                sel = info_dict["sel"]
+            else:  ### need to remove this
                 rcut = []
                 sel = []
                 for ii in model_params["descriptor"]["list"]:

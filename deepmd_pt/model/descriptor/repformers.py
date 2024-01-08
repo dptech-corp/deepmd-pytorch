@@ -16,6 +16,7 @@ from deepmd_pt.model.network import (
 )
 from .se_atten import analyze_descrpt
 from .repformer_layer import RepformerLayer
+from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 
 mydtype = env.GLOBAL_PT_FLOAT_PRECISION
 mydev = env.DEVICE
@@ -59,7 +60,7 @@ class DescrptBlockRepformers(DescriptorBlock):
       set_davg_zero: bool = True, # TODO
       smooth: bool = True,
       add_type_ebd_to_seq: bool = False,
-      type: str = None,
+      type: Optional[str] = None,
   ):
     """
     smooth: 
@@ -90,7 +91,6 @@ class DescrptBlockRepformers(DescriptorBlock):
     self.direct_dist = direct_dist
     self.add_type_ebd_to_seq = add_type_ebd_to_seq
 
-    self.type_embd = TypeEmbedNet(self.ntypes, self.g1_dim)
     self.g2_embd = mylinear(1, self.g2_dim)
     layers = []
     for ii in range(nlayers):
@@ -211,26 +211,10 @@ class DescrptBlockRepformers(DescriptorBlock):
     sw = sw.masked_fill(~nlist_mask, float(0.0))
 
     # [nframes, nloc, tebd_dim]
-    seq_input = extended_atype_embd[:,:nloc,:]
-    if seq_input.shape[-1] == self.g1_dim:
-      if seq_input.shape[0] == nframes * nloc:
-        seq_input = seq_input[:, 0, :].reshape(nframes, nloc, -1)
-      if self.add_type_ebd_to_seq:
-        # nb x nloc x ng1
-        atype_tebd = self.type_embd(atype) + seq_input
-      else:
-        # nb x nloc x ng1        
-        atype_tebd = seq_input
-        # wasted evalueation of type_embd, 
-        # since whether seq_input is None or not can only be 
-        # known at runtime, we cannot decide whether create the
-        # type embedding net or not at `__init__`
-        foo = self.type_embd(atype)
-    else:
-      # nb x nloc x ng1
-      atype_tebd = self.type_embd(atype)
+    atype_embd = extended_atype_embd[:,:nloc,:]
+    assert list(atype_embd.shape) == [nframes, nloc, self.g1_dim]
 
-    g1 = self.act(atype_tebd)
+    g1 = self.act(atype_embd)
     # nb x nloc x nnei x 1,  nb x nloc x nnei x 3
     if not self.direct_dist:
       g2, h2 = torch.split(dmatrix, [1, 3], dim=-1)
@@ -274,8 +258,23 @@ class DescrptBlockRepformers(DescriptorBlock):
           index = system['mapping'].unsqueeze(-1).expand(-1, -1, 3)
           extended_coord = torch.gather(system['coord'], dim=1, index=index)
           extended_coord = extended_coord - system['shift']
+          index = system['mapping']
+          extended_atype = torch.gather(system['atype'], dim=1, index=index)
+          nloc = system['atype'].shape[-1]
+          #######################################################
+          # dirty hack here! the interface of dataload should be
+          # redesigned to support descriptors like dpa2
+          #######################################################
+          nlist = build_neighbor_list(
+            extended_coord,
+            extended_atype,
+            nloc,
+            self.rcut,
+            self.get_sel(),
+            distinguish_types=False,
+          )
           env_mat, _, _ = prod_env_mat_se_a(
-              extended_coord, system['nlist'], system['atype'],
+              extended_coord, nlist, system['atype'],
               self.mean, self.stddev,
               self.rcut, self.rcut_smth,
           )

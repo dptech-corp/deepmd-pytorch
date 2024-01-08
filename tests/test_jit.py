@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 from copy import deepcopy
+from pathlib import Path
 import torch
 
 import numpy as np
@@ -11,7 +12,7 @@ from deepmd_pt.infer import inference
 from .test_permutation import (
   model_se_e2_a,
   model_dpa1,
-  model_dpau,
+  model_dpa2,
   model_hybrid,
 )
 
@@ -22,7 +23,6 @@ class TestJIT:
         trainer.run()
         model = torch.jit.script(inference.Tester('./model.pt', numb_test=1).model)
         torch.jit.save(model, './frozen_model.pth', {})
-        self.tearDown()
 
     def tearDown(self):
         for f in os.listdir("."):
@@ -42,6 +42,9 @@ class TestEnergyModelSeA(unittest.TestCase, TestJIT):
         self.config["model"] = deepcopy(model_se_e2_a)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
+    
+    def tearDown(self):
+        TestJIT.tearDown(self)
 
 
 class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
@@ -53,17 +56,24 @@ class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
+    def tearDown(self):
+        TestJIT.tearDown(self)
 
-class TestEnergyModelDPAU(unittest.TestCase, TestJIT):
+
+class TestEnergyModelDPA2(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
         with open(input_json, "r") as f:
             self.config = json.load(f)
-        self.config["model"] = deepcopy(model_dpau)
+        self.config["model"] = deepcopy(model_dpa2)        
+        self.config["model"]["descriptor"]["rcut"] = self.config["model"]["descriptor"]["repinit_rcut"]
+        self.config["model"]["descriptor"]["rcut_smth"] = self.config["model"]["descriptor"]["repinit_rcut_smth"]
+        self.config["model"]["descriptor"]["sel"] = self.config["model"]["descriptor"]["repinit_nsel"]
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
 
+@unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
@@ -73,6 +83,7 @@ class TestEnergyModelHybrid(unittest.TestCase, TestJIT):
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
+@unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid2(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"

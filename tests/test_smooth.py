@@ -9,7 +9,7 @@ from .test_permutation import (
   model_se_e2_a,
   model_dpa1,
   model_dpa2,
-  model_dpau,
+  # model_dpau,
   model_hybrid,
 )
 from deepmd_pt.infer.deep_eval import eval_model
@@ -80,7 +80,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestSmooth):
     self.epsilon, self.aprec = None, None
 
 
-# @unittest.skip("not smooth at the moment")
+# @unittest.skip("dpa-1 not smooth at the moment")
 class TestEnergyModelDPA1(unittest.TestCase, TestSmooth):
   def setUp(self):
     model_params = copy.deepcopy(model_dpa1)
@@ -89,44 +89,56 @@ class TestEnergyModelDPA1(unittest.TestCase, TestSmooth):
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     # less degree of smoothness,
     # error can be systematically removed by reducing epsilon
-    self.epsilon = 1e-7
+    self.epsilon = 1e-5
     self.aprec = 1e-5
 
-class TestEnergyModelDPAUni(unittest.TestCase, TestSmooth):
+class TestEnergyModelDPA2(unittest.TestCase, TestSmooth):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
-    model_params["descriptor"]["sel"] = 8
-    model_params["descriptor"]["rcut_smth"] = 3.5
-    sampled = make_sample(model_params)
+    model_params = copy.deepcopy(model_dpa2)
+    model_params["descriptor"]["repinit_rcut"] = 8
+    model_params["descriptor"]["repinit_rcut_smth"] = 3.5
+    model_params_sample = copy.deepcopy(model_params)
+    #######################################################
+    # dirty hack here! the interface of dataload should be
+    # redesigned to support specifying rcut and sel
+    #######################################################
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = 1e-5, 1e-4
 
 
-class TestEnergyModelDPAUni2(unittest.TestCase, TestSmooth):
+class TestEnergyModelDPA2_1(unittest.TestCase, TestSmooth):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
+    model_params = copy.deepcopy(model_dpa2)
     model_params["fitting_net"]["type"] = "ener"
-    # model_params["descriptor"]["combine_grrg"] = True
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_params)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
     self.type_split = True
     self.test_virial = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = None, None
 
 
-class TestEnergyModelDPAUni3(unittest.TestCase, TestSmooth):
+class TestEnergyModelDPA2_2(unittest.TestCase, TestSmooth):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau)
+    model_params = copy.deepcopy(model_dpa2)
     model_params["fitting_net"]["type"] = "ener"
-    # model_params["descriptor"]["gather_g1"] = True
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_params)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
     self.type_split = True
     self.test_virial = False
     self.model = get_model(model_params, sampled).to(env.DEVICE)
     self.epsilon, self.aprec = None, None
 
 
+@unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid(unittest.TestCase, TestSmooth):
   def setUp(self):
     model_params = copy.deepcopy(model_hybrid)

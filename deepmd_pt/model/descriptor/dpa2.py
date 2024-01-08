@@ -14,7 +14,9 @@ from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, compute_st
 from deepmd_pt.model.network import (
   TypeEmbedNet, SimpleLinear, Identity, Linear
 )
-from deepmd_pt.utils.nlist import build_multiple_neighbor_list
+from deepmd_pt.utils.nlist import (
+  get_multiple_nlist_key, build_multiple_neighbor_list
+)
 
 from .se_atten import analyze_descrpt
 from .se_atten import DescrptBlockSeAtten
@@ -63,6 +65,10 @@ class DescrptDPA2(Descriptor):
       repformer_update_style: str = "res_avg",
       repformer_set_davg_zero: bool = True, # TODO
       repformer_add_type_ebd_to_seq: bool = False,
+      type: Optional[str] = None,       # work around the bad design in get_trainer and DpLoaderSet!
+      rcut: Optional[float] = None,     # work around the bad design in get_trainer and DpLoaderSet!
+      rcut_smth: Optional[float] = None,# work around the bad design in get_trainer and DpLoaderSet!
+      sel: Optional[int] = None,        # work around the bad design in get_trainer and DpLoaderSet!
   ):
     """ The DPA-2 descriptor. see https://arxiv.org/abs/2312.15492
     
@@ -163,6 +169,7 @@ class DescrptDPA2(Descriptor):
 
     """
     super(DescrptDPA2, self).__init__()
+    del type, rcut, rcut_smth, sel
     self.repinit = DescrptBlockSeAtten(
       repinit_rcut,
       repinit_rcut_smth,
@@ -253,21 +260,21 @@ class DescrptDPA2(Descriptor):
     """
     Returns the output dimension of this descriptor
     """
-    ret = self.dim_out
+    ret = self.repformers.dim_out
     if self.concat_output_tebd:
       ret += self.tebd_dim
     return ret
 
   @property
   def dim_out(self):
-    return self.repformers.get_dim_out()
+    return self.get_dim_out()
 
   @property
   def dim_emb(self):
     """
     Returns the embedding dimension g2
     """
-    return self.g2_dim
+    return self.repformers.dim_emb
 
   def compute_input_stats(self, merged):
       sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
@@ -287,8 +294,21 @@ class DescrptDPA2(Descriptor):
     
 
   def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
-      for ii, descrpt in enumerate(self.descriptor_list):
+      for ii, descrpt in enumerate([self.repinit, self.repformers]):
           descrpt.init_desc_stat(sumr[ii], suma[ii], sumn[ii], sumr2[ii], suma2[ii])
+
+  @classmethod
+  def get_stat_name(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa2"]
+    return f'stat_file_dpa2_repinit_rcut{config["repinit_rcut"]:.2f}_smth{config["repinit_rcut_smth"]:.2f}_sel{config["repinit_nsel"]}' \
+           f'_repformer_rcut{config["repformer_rcut"]:.2f}_smth{config["repformer_rcut_smth"]:.2f}_sel{config["repformer_nsel"]}.npz'
+
+  @classmethod
+  def get_data_process_key(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa2"]
+    return {"sel": [config["repinit_nsel"], config["repformer_nsel"]], "rcut": [config["repinit_rcut"], config["repformer_rcut"]]}
 
   def forward(
         self,
@@ -308,10 +328,10 @@ class DescrptDPA2(Descriptor):
     )
     # repinit
     g1_ext = self.type_embedding(extended_atype)
-    if self.concat_output_tebd:
-      g1_inp = g1_ext[:,:nloc,:]
+    g1_inp = g1_ext[:,:nloc,:]
     g1, _, _, _, _ = self.repinit(
-      nlist_dict[self.repinit.get_rcut()],
+      nlist_dict[get_multiple_nlist_key(
+        self.repinit.get_rcut(), self.repinit.get_nsel())],
       extended_coord,
       extended_atype,
       g1_ext, mapping,
@@ -319,13 +339,15 @@ class DescrptDPA2(Descriptor):
     # linear to change shape
     g1 = self.g1_shape_tranform(g1)
     # mapping g1
+    assert mapping is not None
     mapping_ext = mapping.view(nframes, nall)\
                          .unsqueeze(-1)\
                          .expand(-1, -1, g1.shape[-1])
     g1_ext = torch.gather(g1, 1, mapping_ext)
     # repformer
     g1, g2, h2, rot_mat, sw = self.repformers(
-      nlist_dict[self.repformers.get_rcut()],
+      nlist_dict[get_multiple_nlist_key(
+        self.repformers.get_rcut(), self.repformers.get_nsel())],
       extended_coord,
       extended_atype,
       g1_ext, mapping,

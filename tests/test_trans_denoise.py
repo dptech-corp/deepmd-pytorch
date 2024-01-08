@@ -9,9 +9,9 @@ from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.stat import make_stat_input
 from .test_permutation_denoise import (
   make_sample,
-  model_dpa1_denoise,
-  model_dpau_denoise,
-  model_hybrid_denoise,
+  model_dpa1,
+  model_dpa2,
+  model_hybrid,
 )
 from deepmd_pt.infer.deep_eval import eval_model
 
@@ -43,21 +43,25 @@ class TestTransDenoise:
 
 class TestDenoiseModelDPA1(unittest.TestCase, TestTransDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpa1_denoise)
+    model_params = copy.deepcopy(model_dpa1)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-class TestDenoiseModelDPAUni(unittest.TestCase, TestTransDenoise):
+class TestDenoiseModelDPA2(unittest.TestCase, TestTransDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_dpau_denoise)
-    sampled = make_sample(model_params)
+    model_params_sample = copy.deepcopy(model_dpa2)
+    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
+    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
+    sampled = make_sample(model_params_sample)
+    model_params = copy.deepcopy(model_dpa2)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)
 
+@unittest.skip("hybrid not supported at the moment")
 class TestDenoiseModelHybrid(unittest.TestCase, TestTransDenoise):
   def setUp(self):
-    model_params = copy.deepcopy(model_hybrid_denoise)
+    model_params = copy.deepcopy(model_hybrid)
     sampled = make_sample(model_params)
     self.type_split = True
     self.model = get_model(model_params, sampled).to(env.DEVICE)

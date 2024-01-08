@@ -48,8 +48,10 @@ class DescrptDPA1(Descriptor):
       temperature=None,
       return_rot=False,
       concat_output_tebd: bool = True,
+      type: Optional[str] = None,
   ):
     super(DescrptDPA1, self).__init__()
+    del type
     self.se_atten = DescrptBlockSeAtten(
       rcut, rcut_smth, sel, ntypes,
       neuron=neuron,
@@ -108,11 +110,32 @@ class DescrptDPA1(Descriptor):
       ret += self.tebd_dim
     return ret
 
+  @property
+  def dim_out(self):
+    return self.get_dim_out()
+
+  @property
+  def dim_emb(self):
+    return self.se_atten.dim_emb
+  
+
   def compute_input_stats(self, merged):
-    self.se_atten.compute_input_stats(merged)
+    return self.se_atten.compute_input_stats(merged)
     
   def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
     self.se_atten.init_desc_stat(sumr, suma, sumn, sumr2, suma2)
+
+  @classmethod
+  def get_stat_name(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa1", "se_atten"]
+    return f'stat_file_dpa1_rcut{config["rcut"]:.2f}_smth{config["rcut_smth"]:.2f}_sel{config["sel"]}.npz'
+
+  @classmethod
+  def get_data_process_key(cls, config):
+    descrpt_type = config["type"]
+    assert descrpt_type in ["dpa1", "se_atten"]
+    return {"sel": config["sel"], "rcut": config["rcut"]}
 
   def forward(
         self,
@@ -125,8 +148,7 @@ class DescrptDPA1(Descriptor):
     nframes, nloc, nnei = nlist.shape
     nall = extended_coord.view(nframes, -1).shape[1] // 3
     g1_ext = self.type_embedding(extended_atype)
-    if self.concat_output_tebd:
-      g1_inp = g1_ext[:,:nloc,:]
+    g1_inp = g1_ext[:,:nloc,:]
     g1, env_mat, diff, rot_mat, sw = self.se_atten(
       nlist,
       extended_coord,

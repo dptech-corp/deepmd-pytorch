@@ -27,8 +27,8 @@ class DeepEval:
         self.type_map = self.input_param['type_map']
         self.dp = ModelWrapper(get_model(self.input_param, None).to(DEVICE))
         self.dp.load_state_dict(state_dict)
-        self.rcut = self.dp.model['Default'].descriptor.rcut
-        self.sec = self.dp.model['Default'].descriptor.sec
+        self.rcut = self.dp.model['Default'].descriptor.get_rcut()
+        self.sec = np.cumsum(self.dp.model['Default'].descriptor.get_sel())
 
     def eval(
             self,
