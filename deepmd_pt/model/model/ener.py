@@ -85,7 +85,7 @@ class EnergyModel(BaseModel):
         else:
             self.type_embedding = None
 
-        self.descriptor = Descriptor(**descriptor)
+        self.descriptor = DescriptorBlock(**descriptor)
         self.rcut = self.descriptor.rcut
         self.sel = self.descriptor.sel
         self.nnei = self.descriptor.nnei
