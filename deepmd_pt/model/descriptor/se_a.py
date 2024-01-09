@@ -359,19 +359,6 @@ class DescrptBlockSeA(DescriptorBlock):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
-    def _cal_gr(
-        self,
-        ii: int,
-        dmatrix: torch.Tensor,
-        ll: torch.nn.Module,
-    )->torch.Tensor:
-      # nfnl x nt x 4
-      rr = dmatrix[:, self.sec[ii]:self.sec[ii+1], :]
-      ss = rr[:,:,:1]
-      # nfnl x nt x ng
-      gg = ll.forward(ss)
-      # nfnl x 4 x ng
-      return torch.matmul(rr.permute(0,2,1), gg)
 
     def forward(
         self, 
