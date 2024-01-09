@@ -4,6 +4,10 @@ import torch
 from typing import Optional, List, Dict
 from deepmd_pt.utils import env
 from deepmd_pt.model.descriptor import prod_env_mat_se_a, Descriptor, DescriptorBlock, compute_std
+from deepmd_pt.utils.env import (
+  PRECISION_DICT,
+  DEFAULT_PRECISION,
+)
 
 try:
     from typing import Final
@@ -11,6 +15,12 @@ except:
     from torch.jit import Final
 
 from deepmd_pt.model.network import TypeFilter
+from deepmd_pt.model.network.mlp import EmbeddingNet
+
+from deepmd_utils.model_format import (
+  EnvMat as DPEnvMat,
+)
+
 
 @Descriptor.register("se_e2_a")
 class DescrptSeA(Descriptor):
@@ -22,11 +32,16 @@ class DescrptSeA(Descriptor):
         neuron=[25, 50, 100],
         axis_neuron=16,
         set_davg_zero: bool = False,
+        activation_function: str = "tanh",
+        precision: str = "float64",
+        resnet_dt: bool = True,
+        old_impl: bool = False,
         **kwargs,
     ):
       super(DescrptSeA, self).__init__()
       self.sea = DescrptBlockSeA(
-        rcut, rcut_smth, sel, neuron, axis_neuron, set_davg_zero,
+        rcut, rcut_smth, sel, neuron, axis_neuron, set_davg_zero, 
+        activation_function, precision, resnet_dt, old_impl,
         **kwargs,
       )      
       
@@ -106,6 +121,46 @@ class DescrptSeA(Descriptor):
       self.sea.stddev = stddev
 
 
+    def serialize(self)->dict:
+      obj = self.sea
+      return {
+        "rcut": obj.rcut,
+        "rcut_smth": obj.rcut_smth,
+        "sel": obj.sel,
+        "neuron": obj.neuron,
+        "axis_neuron": obj.axis_neuron,
+        "resnet_dt": obj.resnet_dt,
+        "set_davg_zero": obj.set_davg_zero,
+        "activation_function": obj.activation_function,
+        "precision": obj.precision,
+        "embeddings": [ii.serialize() for ii in obj.filter_layers],
+        "env_mat": DPEnvMat(obj.rcut, obj.rcut_smth).serialize(),
+        "@variables" : {
+          "davg" : obj["davg"].detach().numpy(),
+          "dstd" : obj["dstd"].detach().numpy(),
+        },
+        ## to be updated when the options are supported.
+        "trainable": True,
+        "type_one_side": True,
+        "exclude_types": [],
+        "spin": None,
+        "stripped_type_embedding": False,
+      }   
+    
+    @classmethod
+    def deserialize(cls, data: dict)->"DescrptSeA":
+      variables = data.pop("@variables")
+      embeddings = data.pop("embeddings")
+      env_mat = data.pop("env_mat")
+      obj = cls(**data)
+      t_cvt = lambda xx: torch.tensor(xx, dtype=obj.sea.prec, device=env.DEVICE)
+      obj.sea["davg"] = t_cvt(variables["davg"])
+      obj.sea["dstd"] = t_cvt(variables["dstd"])
+      obj.sea.filter_layers = torch.nn.ModuleList(
+        [EmbeddingNet.deserialize(dd) for dd in embeddings]
+      )
+      return obj
+
 
 @DescriptorBlock.register("se_e2_a")
 class DescrptBlockSeA(DescriptorBlock):
@@ -119,6 +174,10 @@ class DescrptBlockSeA(DescriptorBlock):
                  neuron=[25, 50, 100],
                  axis_neuron=16,
                  set_davg_zero: bool = False,
+                 activation_function: str = "tanh",
+                 precision: str = "float64",
+                 resnet_dt: bool = True,
+                 old_impl: bool = False,
                  **kwargs):
         """Construct an embedding net of type `se_a`.
 
@@ -132,30 +191,49 @@ class DescrptBlockSeA(DescriptorBlock):
         super(DescrptBlockSeA, self).__init__()
         self.rcut = rcut
         self.rcut_smth = rcut_smth
-        self.filter_neuron = neuron
+        self.neuron = neuron
+        self.filter_neuron = self.neuron
         self.axis_neuron = axis_neuron
         self.set_davg_zero = set_davg_zero
+        self.activation_function = activation_function
+        self.precision = precision
+        self.prec = PRECISION_DICT[self.precision]
+        self.resnet_dt = resnet_dt
+        self.old_impl = old_impl
 
         self.ntypes = len(sel)  # 元素数量
         self.sel = sel  # 每种元素在邻居中的位移
-        self.sec = np.cumsum(self.sel)
+        self.sec = torch.tensor(np.append([0], np.cumsum(self.sel)), dtype=int, device=env.DEVICE)
         self.split_sel = self.sel
         self.nnei = sum(sel)  # 总的邻居数量
         self.ndescrpt = self.nnei * 4  # 描述符的元素数量
 
         wanted_shape = (self.ntypes, self.nnei, 4)
-        mean = torch.zeros(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
-        stddev = torch.ones(wanted_shape, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+        mean = torch.zeros(wanted_shape, dtype=self.prec, device=env.DEVICE)
+        stddev = torch.ones(wanted_shape, dtype=self.prec, device=env.DEVICE)
         self.register_buffer('mean', mean)
         self.register_buffer('stddev', stddev)
 
         filter_layers = []
-        start_index = 0
-        for type_i in range(self.ntypes):
-            one = TypeFilter(start_index, sel[type_i], self.filter_neuron)
-            filter_layers.append(one)
-            start_index += sel[type_i]
+        if self.old_impl:
+          # TODO: remove
+          start_index = 0
+          for type_i in range(self.ntypes):
+              one = TypeFilter(start_index, sel[type_i], self.filter_neuron)
+              filter_layers.append(one)
+              start_index += sel[type_i]
+        else:
+          for ii in range(self.ntypes):
+            filter_layers.append(
+              EmbeddingNet(
+                1, 
+                self.filter_neuron, 
+                activation_function=self.activation_function,
+                precision=self.precision,
+                resnet_dt=self.resnet_dt,
+              ))
         self.filter_layers = torch.nn.ModuleList(filter_layers)
+
 
     def get_rcut(self)->float:
       """
@@ -206,6 +284,23 @@ class DescrptBlockSeA(DescriptorBlock):
         Returns the atomic input dimension of this descriptor
         """
         return 0
+
+    def __setitem__(self, key, value):
+        if key in ("avg", "data_avg", "davg"):
+            self.mean = value
+        elif key in ("std", "data_std", "dstd"):
+            self.stddev = value
+        else:
+            raise KeyError(key)
+
+    def __getitem__(self, key):
+        if key in ("avg", "data_avg", "davg"):
+            return self.mean
+        elif key in ("std", "data_std", "dstd"):
+            return self.stddev
+        else:
+            raise KeyError(key)
+
 
     def compute_input_stats(self, merged):
         """Update mean and stddev for descriptor elements.
@@ -264,6 +359,20 @@ class DescrptBlockSeA(DescriptorBlock):
         stddev = np.stack(all_dstd)
         self.stddev.copy_(torch.tensor(stddev, device=env.DEVICE))
 
+    def _cal_gr(
+        self,
+        ii: int,
+        dmatrix: torch.Tensor,
+        ll: torch.nn.Module,
+    )->torch.Tensor:
+      # nfnl x nt x 4
+      rr = dmatrix[:, self.sec[ii]:self.sec[ii+1], :]
+      ss = rr[:,:,:1]
+      # nfnl x nt x ng
+      gg = ll.forward(ss)
+      # nfnl x 4 x ng
+      return torch.matmul(rr.permute(0,2,1), gg)
+
     def forward(
         self, 
         nlist: torch.Tensor,
@@ -291,16 +400,30 @@ class DescrptBlockSeA(DescriptorBlock):
             self.mean, self.stddev,
             self.rcut, self.rcut_smth,
         )
-        dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
-        xyz_scatter = torch.empty(1, )
 
-        ret = self.filter_layers[0](dmatrix)
-        xyz_scatter = ret
-
-        for ii, transform in enumerate(self.filter_layers[1:]):
-            # shape is [nframes*nall, 4, self.filter_neuron[-1]]
-            ret = transform.forward(dmatrix)
-            xyz_scatter = xyz_scatter + ret
+        if self.old_impl:
+          dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
+          xyz_scatter = torch.empty(1, )
+          ret = self.filter_layers[0](dmatrix)
+          xyz_scatter = ret
+          for ii, transform in enumerate(self.filter_layers[1:]):
+              # shape is [nframes*nall, 4, self.filter_neuron[-1]]
+              ret = transform.forward(dmatrix)
+              xyz_scatter = xyz_scatter + ret
+        else:
+          dmatrix = dmatrix.view(-1, self.nnei, 4)
+          nfnl = dmatrix.shape[0]
+          # pre-allocate a shape to pass jit
+          xyz_scatter = torch.zeros([nfnl, 4, self.filter_neuron[-1]], dtype=self.prec, device=env.DEVICE)
+          for ii,ll in enumerate(self.filter_layers):
+            # nfnl x nt x 4
+            rr = dmatrix[:, self.sec[ii]:self.sec[ii+1], :]
+            ss = rr[:,:,:1]
+            # nfnl x nt x ng
+            gg = ll.forward(ss)
+            # nfnl x 4 x ng
+            gr = torch.matmul(rr.permute(0,2,1), gg)
+            xyz_scatter += gr
 
         xyz_scatter /= self.nnei
         xyz_scatter_1 = xyz_scatter.permute(0, 2, 1)

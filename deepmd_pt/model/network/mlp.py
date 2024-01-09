@@ -102,7 +102,7 @@ class MLPLayer(nn.Module):
       if self.bias is not None \
       else torch.matmul(xx, self.matrix)
     )
-    yy = self.activate.forward(yy)
+    yy = self.activate(yy).clone()
     yy = yy * self.idt if self.idt is not None else yy
     if self.resnet:
       if xx.shape[-1] == yy.shape[-1]:
