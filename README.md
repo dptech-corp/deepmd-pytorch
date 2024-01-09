@@ -56,7 +56,7 @@ To start an unsupervised task:
 
 ```bash
 conda activate deepmd-pt
-dp_pt train deepmd_pt/examples/water/hybrid-denoise/input.json
+dp_pt train deepmd_pt/examples/water/dpa2-denoise/input.json
 ```
 
 #### Distributed training on multiple GPUs
