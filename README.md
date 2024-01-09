@@ -52,6 +52,13 @@ conda activate deepmd-pt
 dp_pt train tests/water/se_e2_a.json
 ```
 
+To start an unsupervised task:
+
+```bash
+conda activate deepmd-pt
+dp_pt train deepmd_pt/examples/water/hybrid-denoise/input.json
+```
+
 #### Distributed training on multiple GPUs
 
 We use [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html#usage) to launch a DDP training session.
