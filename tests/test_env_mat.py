@@ -53,7 +53,6 @@ class TestEnvMat(unittest.TestCase, TestCaseSingleFrameWithNlist):
   def setUp(self):
     TestCaseSingleFrameWithNlist.setUp(self)
 
-
   def test_consistency(
       self,
   ):
