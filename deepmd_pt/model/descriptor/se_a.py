@@ -34,7 +34,7 @@ class DescrptSeA(Descriptor):
         set_davg_zero: bool = False,
         activation_function: str = "tanh",
         precision: str = "float64",
-        resnet_dt: bool = True,
+        resnet_dt: bool = False,
         old_impl: bool = False,
         **kwargs,
     ):
@@ -176,7 +176,7 @@ class DescrptBlockSeA(DescriptorBlock):
                  set_davg_zero: bool = False,
                  activation_function: str = "tanh",
                  precision: str = "float64",
-                 resnet_dt: bool = True,
+                 resnet_dt: bool = False,
                  old_impl: bool = False,
                  **kwargs):
         """Construct an embedding net of type `se_a`.
