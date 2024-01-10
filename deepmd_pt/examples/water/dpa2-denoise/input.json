@@ -7,51 +7,71 @@
    "MASKED_TOKEN"
   ],
   "descriptor": {
-   "type": "se_atten",
-   "sel": 120,
-   "rcut_smth": 0.5,
-   "rcut": 6.0,
-   "neuron": [
-    25,
-    50,
-    100
-   ],
-   "resnet_dt": false,
-   "axis_neuron": 16,
-   "seed": 1,
-   "attn": 128,
-   "attn_layer": 2,
-   "attn_dotr": true,
-   "attn_mask": false,
-   "post_ln": true,
-   "ffn": false,
-   "ffn_embed_dim": 1024,
-   "activation": "tanh",
-   "scaling_factor": 1.0,
-   "head_num": 1,
-   "normalize": true,
-   "temperature": 1.0,
-   "_comment": " that's all"
-  },
-  "backbone":{
-   "type": "evo-2b",
-   "layer_num": 6,
-   "attn_head": 8,
-   "feature_dim": 1024,
-   "ffn_dim": 2048,
-   "post_ln": false,
-   "final_layer_norm": true,
-   "final_head_layer_norm": false,
-   "emb_layer_norm": false,
-   "atomic_residual": false,
-   "activation_function": "gelu"
+    "type": "hybrid",
+    "hybrid_mode": "sequential",
+    "list": [
+        {
+            "type": "se_atten",
+            "sel": 120,
+            "rcut_smth": 8.0,
+            "rcut": 9.0,
+            "neuron": [
+                25,
+                50,
+                100
+            ],
+            "resnet_dt": false,
+            "axis_neuron": 12,
+            "seed": 1,
+            "attn": 128,
+            "attn_layer": 0,
+            "attn_dotr": true,
+            "attn_mask": false,
+            "post_ln": true,
+            "ffn": false,
+            "ffn_embed_dim": 1024,
+            "activation": "tanh",
+            "scaling_factor": 1.0,
+            "head_num": 1,
+            "normalize": true,
+            "temperature": 1.0,
+            "add": "concat",
+            "pre_add": true,
+            "_comment": " that's all"
+        },
+        {
+            "type": "se_uni",
+            "sel": 40,
+            "rcut_smth": 3.5,
+            "rcut": 4.0,
+            "nlayers": 12,
+            "g1_dim": 128,
+            "g2_dim": 32,
+            "attn2_hidden": 32,
+            "attn2_nhead": 4,
+            "attn1_hidden": 128,
+            "attn1_nhead": 4,
+            "axis_dim": 4,
+            "update_h2": false,
+            "update_g1_has_conv": true,
+            "update_g1_has_grrg": true,
+            "update_g1_has_drrd": true,
+            "update_g1_has_attn": true,
+            "update_g2_has_g1g1": true,
+            "update_g2_has_attn": true,
+            "attn2_has_gate": true,
+            "add_type_ebd_to_seq": false,
+            "smooth": true,
+            "_comment": " that's all"
+        }
+     ]
   },
   "_comment": " that's all"
  },
  "learning_rate": {
   "type": "exp",
   "decay_steps": 5000,
-  "start_lr": 0.001,
+  "start_lr": 0.0002,
   "stop_lr": 3.51e-08,
   "_comment": "that's all"
  },
@@ -59,41 +79,41 @@
   "type": "denoise",
   "noise_type": "uniform",
   "noise": 1.0,
-  "noise_mode": "fix_num",
+  "noise_mode": "prob",
   "mask_num": 8,
   "mask_prob": 0.15,
   "mask_coord": true,
-  "mask_type": false,
+  "mask_type": true,
   "same_mask": false,
   "max_fail_num": 10,
   "masked_token_loss": 1.0,
-  "masked_coord_loss": 1.0,
+  "masked_coord_loss": 5.0,
   "norm_loss": 0.0,
   "use_l1": true,
   "beta": 1.0,
   "mask_loss_coord": true,
-  "mask_loss_token": false,
+  "mask_loss_token": true,
   "_comment": " that's all"
  },
  "training": {
   "training_data": {
    "systems": [
-	   "../data/data_0",
-	   "../data/data_1",
-	   "../data/data_2"
+    "../data/data_0",
+    "../data/data_1",
+    "../data/data_2"
    ],
    "batch_size": 1,
    "_comment": "that's all"
   },
   "validation_data": {
    "systems": [
-	   "../data/data_3"
+    "../data/data_3"
    ],
    "batch_size": 1,
    "numb_btch": 3,
    "_comment": "that's all"
   },
-  "wandb_config":{
+  "wandb_config": {
    "wandb_enabled": false,
    "entity": "dp_model_engineering",
    "project": "DPA"
