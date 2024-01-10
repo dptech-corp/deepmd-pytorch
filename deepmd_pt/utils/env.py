@@ -27,3 +27,14 @@ JIT = False
 CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
 TEST_CONFIG = 'tests/water/se_e2_a.json'
 ENERGY_BIAS_TRAINABLE = True
+
+PRECISION_DICT = {
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "half": torch.float16,
+    "single": torch.float32,
+    "double": torch.float64,
+}
+DEFAULT_PRECISION = "float64"
+  
