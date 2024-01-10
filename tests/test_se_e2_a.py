@@ -94,7 +94,7 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
       )
       # old impl
       dd1 = DescrptSeA.deserialize(dd0.serialize())
-      dd1.old_impl = False
+      dd1.old_impl = True
       rd1, _,_,_,_ = dd1(
         torch.tensor(self.nlist, dtype=int), 
         torch.tensor(self.coord_ext, dtype=dtype), 
