@@ -139,9 +139,9 @@ class DescrptDPA1(Descriptor):
 
   def forward(
         self,
-        nlist: torch.Tensor,
         extended_coord: torch.Tensor,
         extended_atype: torch.Tensor,
+        nlist: torch.Tensor,
         mapping: Optional[torch.Tensor] = None,
   ):
     del mapping

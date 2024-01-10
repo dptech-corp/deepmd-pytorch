@@ -62,7 +62,7 @@ class TestEnvMat(unittest.TestCase, TestCaseSingleFrameWithNlist):
     dstd = rng.normal(size=(self.nt, nnei, 4))
     dstd = 0.1 + np.abs(dstd)
     em0 = EnvMat(self.rcut, self.rcut_smth)
-    mm0, ww0 = em0.call(self.nlist, self.coord_ext, self.atype_ext, davg, dstd)
+    mm0, ww0 = em0.call(self.coord_ext, self.atype_ext, self.nlist, davg, dstd)
     mm1, _, ww1 = prod_env_mat_se_a(
       torch.tensor(self.coord_ext, dtype=dtype), 
       torch.tensor(self.nlist, dtype=int), 

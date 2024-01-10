@@ -171,9 +171,9 @@ class EnergyModel(BaseModel):
             extended_coord.requires_grad_(True)
         descriptor, env_mat, diff, rot_mat, sw = \
           self.descriptor(
-            nlist,
             extended_coord,
             extended_atype,
+            nlist,
             mapping=mapping,
           )
 
