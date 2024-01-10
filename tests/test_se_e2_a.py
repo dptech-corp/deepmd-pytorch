@@ -88,17 +88,17 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
       dd0.mean = davg
       dd0.dstd = dstd
       rd0, _,_,_,_ = dd0(
-        torch.tensor(self.nlist, dtype=int), 
         torch.tensor(self.coord_ext, dtype=dtype), 
         torch.tensor(self.atype_ext, dtype=int),
+        torch.tensor(self.nlist, dtype=int), 
       )
       # old impl
       dd1 = DescrptSeA.deserialize(dd0.serialize())
       dd1.old_impl = False
       rd1, _,_,_,_ = dd1(
-        torch.tensor(self.nlist, dtype=int), 
         torch.tensor(self.coord_ext, dtype=dtype), 
         torch.tensor(self.atype_ext, dtype=int),
+        torch.tensor(self.nlist, dtype=int), 
       )
       np.testing.assert_allclose(
         rd0.detach().numpy(), rd1.detach().numpy(),

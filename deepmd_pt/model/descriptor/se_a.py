@@ -104,9 +104,9 @@ class DescrptSeA(Descriptor):
 
     def forward(
         self,
-        nlist: torch.Tensor,
         extended_coord: torch.Tensor,
         extended_atype: torch.Tensor,
+        nlist: torch.Tensor,
         mapping: Optional[torch.Tensor] = None,
     ):
       return self.sea.forward(
@@ -144,7 +144,6 @@ class DescrptSeA(Descriptor):
         "type_one_side": True,
         "exclude_types": [],
         "spin": None,
-        "stripped_type_embedding": False,
       }   
     
     @classmethod

@@ -124,9 +124,9 @@ class TestDPA1(unittest.TestCase):
     )
     descriptor, env_mat, diff, rot_mat, sw = \
       des(
-        nlist,
         extended_coord,
         extended_atype,
+        nlist,
         mapping=mapping,
       )
     self.assertEqual(descriptor.shape[-1], des.get_dim_out())
@@ -141,9 +141,9 @@ class TestDPA1(unittest.TestCase):
     )
     descriptor, env_mat, diff, rot_mat, sw = \
       des(
-        nlist,
         extended_coord,
         extended_atype,
+        nlist,
         mapping=mapping,
       )
     self.assertEqual(descriptor.shape[-1], des.get_dim_out())
