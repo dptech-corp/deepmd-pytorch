@@ -15,7 +15,7 @@ except:
     from torch.jit import Final
 
 from deepmd_pt.model.network import TypeFilter
-from deepmd_pt.model.network.mlp import EmbeddingNet
+from deepmd_pt.model.network.mlp import EmbeddingNet, NetworkCollection
 
 from deepmd_utils.model_format import (
   EnvMat as DPEnvMat,
@@ -133,7 +133,7 @@ class DescrptSeA(Descriptor):
         "set_davg_zero": obj.set_davg_zero,
         "activation_function": obj.activation_function,
         "precision": obj.precision,
-        "embeddings": [ii.serialize() for ii in obj.filter_layers],
+        "embeddings": obj.filter_layers.serialize(),
         "env_mat": DPEnvMat(obj.rcut, obj.rcut_smth).serialize(),
         "@variables" : {
           "davg" : obj["davg"].detach().numpy(),
@@ -144,7 +144,6 @@ class DescrptSeA(Descriptor):
         "type_one_side": True,
         "exclude_types": [],
         "spin": None,
-        "stripped_type_embedding": False,
       }   
     
     @classmethod
@@ -156,9 +155,7 @@ class DescrptSeA(Descriptor):
       t_cvt = lambda xx: torch.tensor(xx, dtype=obj.sea.prec, device=env.DEVICE)
       obj.sea["davg"] = t_cvt(variables["davg"])
       obj.sea["dstd"] = t_cvt(variables["dstd"])
-      obj.sea.filter_layers = torch.nn.ModuleList(
-        [EmbeddingNet.deserialize(dd) for dd in embeddings]
-      )
+      obj.sea.filter_layers = NetworkCollection.deserialize(embeddings)
       return obj
 
 
@@ -214,25 +211,25 @@ class DescrptBlockSeA(DescriptorBlock):
         self.register_buffer('mean', mean)
         self.register_buffer('stddev', stddev)
 
-        filter_layers = []
+        filter_layers = NetworkCollection(ndim=1, ntypes=len(sel), network_type="embedding_network")
         if self.old_impl:
           # TODO: remove
           start_index = 0
           for type_i in range(self.ntypes):
               one = TypeFilter(start_index, sel[type_i], self.filter_neuron)
-              filter_layers.append(one)
+              filter_layers[(type_i,)] = one
               start_index += sel[type_i]
         else:
+          # TODO: ndim=2 if type_one_side=False
           for ii in range(self.ntypes):
-            filter_layers.append(
-              EmbeddingNet(
+            filter_layers[(ii,)] = EmbeddingNet(
                 1, 
                 self.filter_neuron, 
                 activation_function=self.activation_function,
                 precision=self.precision,
                 resnet_dt=self.resnet_dt,
-              ))
-        self.filter_layers = torch.nn.ModuleList(filter_layers)
+              )
+        self.filter_layers = filter_layers
 
 
     def get_rcut(self)->float:
@@ -391,9 +388,9 @@ class DescrptBlockSeA(DescriptorBlock):
         if self.old_impl:
           dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
           xyz_scatter = torch.empty(1, )
-          ret = self.filter_layers[0](dmatrix)
+          ret = self.filter_layers.networks[0](dmatrix)
           xyz_scatter = ret
-          for ii, transform in enumerate(self.filter_layers[1:]):
+          for ii, transform in enumerate(self.filter_layers.networks[1:]):
               # shape is [nframes*nall, 4, self.filter_neuron[-1]]
               ret = transform.forward(dmatrix)
               xyz_scatter = xyz_scatter + ret
@@ -402,7 +399,7 @@ class DescrptBlockSeA(DescriptorBlock):
           nfnl = dmatrix.shape[0]
           # pre-allocate a shape to pass jit
           xyz_scatter = torch.zeros([nfnl, 4, self.filter_neuron[-1]], dtype=self.prec, device=env.DEVICE)
-          for ii,ll in enumerate(self.filter_layers):
+          for ii,ll in enumerate(self.filter_layers.networks):
             # nfnl x nt x 4
             rr = dmatrix[:, self.sec[ii]:self.sec[ii+1], :]
             ss = rr[:,:,:1]
