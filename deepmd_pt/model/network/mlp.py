@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import ClassVar, Dict, Optional, List, Union
+from deepmd_utils.model_format.network import NativeNet
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +15,7 @@ from deepmd_pt.utils.env import (
 from deepmd_utils.model_format import (
   NativeLayer,
   NativeNet,
+  NetworkCollection as DPNetworkCollection,
   load_dp_model,
   save_dp_model,
 )
@@ -262,3 +264,17 @@ class EmbeddingNet(MLP):
         obj = cls(**data)
         super(EmbeddingNet, obj).__init__(layers)
         return obj
+
+
+class NetworkCollection(DPNetworkCollection, nn.Module):
+    """PyTorch implementation of NetworkCollection."""
+    NETWORK_TYPE_MAP: ClassVar[Dict[str, type]] = {
+        "network": MLP,
+        "embedding_network": EmbeddingNet,
+    }
+
+    def __init__(self, *args, **kwargs):
+       # init both two base classes
+        DPNetworkCollection.__init__(self, *args, **kwargs)
+        nn.Module.__init__(self)
+        self.networks = self._networks = torch.nn.ModuleList(self._networks)
