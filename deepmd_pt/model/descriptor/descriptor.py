@@ -84,9 +84,9 @@ class Descriptor(torch.nn.Module, ABC):
     @abstractmethod
     def forward(
         self,
-        nlist,
         extended_coord,
         extended_atype,
+        nlist,
         mapping: Optional[torch.Tensor] = None,
     ):
         """Calculate descriptor.
