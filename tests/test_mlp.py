@@ -2,27 +2,68 @@ import torch, copy
 import unittest
 import itertools
 import numpy as np
+from deepmd_pt.utils.env import (
+  PRECISION_DICT,
+)
+
 try:
-  from deepmd_pt.model.network.mlp import MLPLayer, MLP, EmbeddingNet
+  from deepmd_pt.model.network.mlp import (
+    MLPLayer,
+    MLP,
+  )
   support_native_net = True
 except ModuleNotFoundError:
   support_native_net = False
 
-from deepmd_pt.utils.env import (
-  PRECISION_DICT,
-)
+try:
+  from deepmd_pt.model.network.mlp import (
+    EmbeddingNet,
+  )
+  support_embedding_net = True
+except ModuleNotFoundError:
+  support_embedding_net = False
+
+try:
+  from deepmd_pt.model.network.mlp import (
+    FittingNet,
+  )
+  support_fitting_net = True
+except ModuleNotFoundError:
+  support_fitting_net = False
+
 
 try :
   from deepmd_utils.model_format import (
     NativeLayer,
     NativeNet,
-    EmbeddingNet as DPEmbeddingNet,
   )
   support_native_net = True
 except ModuleNotFoundError:
   support_native_net = False
 except ImportError:
   support_native_net = False
+
+try :
+  from deepmd_utils.model_format import (
+    EmbeddingNet as DPEmbeddingNet,
+  )
+  support_embedding_net = True
+except ModuleNotFoundError:
+  support_embedding_net = False
+except ImportError:
+  support_embedding_net = False
+
+try :
+  from deepmd_utils.model_format import (
+    FittingNet as DPFittingNet,
+  )
+  support_fitting_net = True
+except ModuleNotFoundError:
+  support_fitting_net = False
+except ImportError:
+  support_fitting_net = False
+
+
 
 def get_tols(prec):
   if prec in ["single", "float32"]:
@@ -141,7 +182,7 @@ class TestMLP(unittest.TestCase):
       model = torch.jit.script(ml1)
 
 
-@unittest.skipIf(not support_native_net, "NativeLayer not supported")
+@unittest.skipIf(not support_embedding_net, "EmbeddingNet not supported")
 class TestEmbeddingNet(unittest.TestCase):
   def setUp(self):
     self.test_cases =  itertools.product(
@@ -184,6 +225,56 @@ class TestEmbeddingNet(unittest.TestCase):
       # def MLP
       ml = EmbeddingNet(idim, nn, act, idt, prec)
       ml1 = EmbeddingNet.deserialize(ml.serialize())
+      model = torch.jit.script(ml)
+      model = torch.jit.script(ml1)
+
+
+
+@unittest.skipIf(not support_fitting_net, "FittingNet not supported")
+class TestFittingNet(unittest.TestCase):
+  def setUp(self):
+    self.test_cases =  itertools.product(
+        [1, 3],                                 # inp
+        [1, 5],                                 # out
+        [[24, 48, 96], [24, 36]],               # and hiddens
+        ["tanh", "none"],                       # activation
+        [True, False],                          # resnet_dt
+        ["float32", "double"],                  # precision
+        [True, False],                          # bias_out
+    )
+
+  def test_match_fitting_net(
+      self,
+  ):
+    for idim, odim, nn, act, idt, prec, ob in self.test_cases:
+      # input
+      rtol, atol = get_tols(prec)
+      dtype = PRECISION_DICT[prec]
+      xx = torch.arange(idim, dtype=dtype)
+      # def MLP
+      ml = FittingNet(idim, odim, nn, act, idt, prec, ob)
+      # check consistency
+      nl = DPFittingNet.deserialize(ml.serialize())
+      np.testing.assert_allclose(
+        ml.forward(xx).detach().numpy(), nl.call(xx.detach().numpy()),
+        rtol=rtol, atol=atol,        
+        err_msg=f"idim={idim} nn={nn} use_dt={idt} act={act} prec={prec}"
+      )
+      # check self-consistency
+      ml1 = FittingNet.deserialize(ml.serialize())
+      np.testing.assert_allclose(
+        ml.forward(xx).detach().numpy(), ml1.forward(xx).detach().numpy(),
+        rtol=rtol, atol=atol,        
+        err_msg=f"idim={idim} nn={nn} use_dt={idt} act={act} prec={prec}"
+      )
+    
+  def test_jit(
+      self,
+  ):
+    for idim, odim, nn, act, idt, prec, ob in self.test_cases:
+      # def MLP
+      ml = FittingNet(idim, odim, nn, act, idt, prec, ob)
+      ml1 = FittingNet.deserialize(ml.serialize())
       model = torch.jit.script(ml)
       model = torch.jit.script(ml1)
     

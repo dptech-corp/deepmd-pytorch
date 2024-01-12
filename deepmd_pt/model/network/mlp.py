@@ -205,6 +205,23 @@ class MLP(nn.Module):
 
 
 class EmbeddingNet(MLP):
+    """The embedding network.
+
+    Parameters
+    ----------
+    in_dim
+        Input dimension.
+    neuron
+        The number of neurons in each layer. The output dimension
+        is the same as the dimension of the last layer.
+    activation_function
+        The activation function.
+    resnet_dt
+        Use time step at the resnet architecture.
+    precision
+        Floating point precision for the model paramters.
+
+    """
     def __init__(
         self,
         in_dim,
@@ -266,11 +283,100 @@ class EmbeddingNet(MLP):
         return obj
 
 
+class FittingNet(EmbeddingNet):
+    """The fitting network. It may be implemented as an embedding
+    net connected with a linear output layer.
+
+    Parameters
+    ----------
+    in_dim
+        Input dimension.
+    out_dim
+        Output dimension
+    neuron
+        The number of neurons in each hidden layer. 
+    activation_function
+        The activation function.
+    resnet_dt
+        Use time step at the resnet architecture.
+    precision
+        Floating point precision for the model paramters.
+    bias_out
+        The last linear layer has bias.
+
+    """
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        neuron: List[int] = [24, 48, 96],
+        activation_function: str = "tanh",
+        resnet_dt: bool = False,
+        precision: str = DEFAULT_PRECISION,
+        bias_out: bool = True,
+    ):
+        super().__init__(
+            in_dim,
+            neuron=neuron,
+            activation_function=activation_function,
+            resnet_dt=resnet_dt,
+            precision=precision,
+        )
+        i_in, i_ot = neuron[-1], out_dim
+        self.layers.append(
+          MLPLayer(
+            i_in,
+            i_ot,
+            bias=bias_out,
+            use_timestep=False,
+            activation_function=None,
+            resnet=False,
+            precision=precision,
+          )
+        )
+        self.out_dim = out_dim
+        self.bias_out = bias_out  
+
+    def serialize(self) -> dict:
+        """Serialize the network to a dict.
+
+        Returns
+        -------
+        dict
+            The serialized network.
+        """
+        return {
+            "in_dim": self.in_dim,
+            "out_dim": self.out_dim,
+            "neuron": self.neuron.copy(),
+            "activation_function": self.activation_function,
+            "resnet_dt": self.resnet_dt,
+            "precision": self.precision,
+            "bias_out": self.bias_out,
+            "layers": [layer.serialize() for layer in self.layers],
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "FittingNet":
+        """Deserialize the network from a dict.
+
+        Parameters
+        ----------
+        data : dict
+            The dict to deserialize from.
+        """
+        layers = data.pop("layers")
+        obj = cls(**data)
+        MLP.__init__(obj, layers)
+        return obj
+
+
 class NetworkCollection(DPNetworkCollection, nn.Module):
     """PyTorch implementation of NetworkCollection."""
     NETWORK_TYPE_MAP: ClassVar[Dict[str, type]] = {
         "network": MLP,
         "embedding_network": EmbeddingNet,
+        "fitting_network": EmbeddingNet,
     }
 
     def __init__(self, *args, **kwargs):
