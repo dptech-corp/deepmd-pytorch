@@ -376,7 +376,7 @@ class NetworkCollection(DPNetworkCollection, nn.Module):
     NETWORK_TYPE_MAP: ClassVar[Dict[str, type]] = {
         "network": MLP,
         "embedding_network": EmbeddingNet,
-        "fitting_network": EmbeddingNet,
+        # "fitting_network": FittingNet,
     }
 
     def __init__(self, *args, **kwargs):
