@@ -252,7 +252,14 @@ class TestFittingNet(unittest.TestCase):
       dtype = PRECISION_DICT[prec]
       xx = torch.arange(idim, dtype=dtype)
       # def MLP
-      ml = FittingNet(idim, odim, nn, act, idt, prec, ob)
+      ml = FittingNet(
+        idim, odim, 
+        neuron=nn, 
+        activation_function=act, 
+        resnet_dt=idt, 
+        precision=prec, 
+        bias_out=ob,
+      )
       # check consistency
       nl = DPFittingNet.deserialize(ml.serialize())
       np.testing.assert_allclose(
@@ -273,7 +280,14 @@ class TestFittingNet(unittest.TestCase):
   ):
     for idim, odim, nn, act, idt, prec, ob in self.test_cases:
       # def MLP
-      ml = FittingNet(idim, odim, nn, act, idt, prec, ob)
+      ml = FittingNet(
+        idim, odim, 
+        neuron=nn, 
+        activation_function=act, 
+        resnet_dt=idt, 
+        precision=prec, 
+        bias_out=ob,
+      )
       ml1 = FittingNet.deserialize(ml.serialize())
       model = torch.jit.script(ml)
       model = torch.jit.script(ml1)
