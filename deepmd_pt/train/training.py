@@ -10,7 +10,7 @@ import numpy as np
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.env import DEVICE, JIT, LOCAL_RANK, DISABLE_TQDM, SAMPLER_RECORD, NUM_WORKERS
 from deepmd_pt.optimizer import KFOptimizerWrapper, LKFOptimizer
-from deepmd_pt.utils.learning_rate import LearningRateExp
+from deepmd_pt.utils.learning_rate import LearningRateExp, LearningRatePolynomial
 from deepmd_pt.loss import EnergyStdLoss, DenoiseLoss
 from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
@@ -92,7 +92,10 @@ class Trainer(object):
 
         def get_opt_param(params):
             opt_type = params.get("opt_type", "Adam")
-            opt_param = {'kf_blocksize': params.get("kf_blocksize", 5120),
+            opt_param = {'adam_betas': params.get("adam_betas", [0.9, 0.999]),
+                         'adam_eps': params.get("adam_eps", 0.00000001),
+                         'adam_weight_decay': params.get("adam_weight_decay", 0),
+                         'kf_blocksize': params.get("kf_blocksize", 5120),
                          'kf_start_pref_e': params.get("kf_start_pref_e", 1),
                          'kf_limit_pref_e': params.get("kf_limit_pref_e", 1),
                          'kf_start_pref_f': params.get("kf_start_pref_f", 1),
@@ -150,10 +153,14 @@ class Trainer(object):
             return model
 
         def get_lr(lr_params):
-            assert lr_params.get("type", "exp") == "exp", "Only learning rate `exp` is supported!"
+            lr_type = lr_params.get("type", "exp")
+            assert lr_type in ["exp", "polynomial"], "Only learning rate `exp` and `polynomial` is supported!"
             lr_params["stop_steps"] = self.num_steps - self.warmup_steps
-            lr_exp = LearningRateExp(**lr_params)
-            return lr_exp
+            if(lr_type == "exp"):
+                lr_schedule = LearningRateExp(**lr_params)
+            elif(lr_type == "polynomial"):
+                lr_schedule = LearningRatePolynomial(**lr_params)
+            return lr_schedule
 
         def get_loss(loss_params, start_lr, _ntypes):
             loss_type = loss_params.get("type", "ener")
@@ -203,11 +210,11 @@ class Trainer(object):
         self.gradient_max_norm = training_params.get("gradient_max_norm", 0.)
         assert self.num_steps - self.warmup_steps > 0, "Warm up steps must be less than total training steps!"
         if self.multi_task and config.get("learning_rate_dict", None) is not None:
-            self.lr_exp = {}
+            self.lr_schedule = {}
             for model_key in self.model_keys:
-                self.lr_exp[model_key] = get_lr(config["learning_rate_dict"][model_key])
+                self.lr_schedule[model_key] = get_lr(config["learning_rate_dict"][model_key])
         else:
-            self.lr_exp = get_lr(config["learning_rate"])
+            self.lr_schedule = get_lr(config["learning_rate"])
 
         # Loss
         if not self.multi_task:
@@ -318,12 +325,14 @@ class Trainer(object):
             if step < warmup_steps:
                 return step / warmup_steps
             else:
-                return self.lr_exp.value(step - warmup_steps) / self.lr_exp.start_lr
+                return self.lr_schedule.value(step - warmup_steps) / self.lr_schedule.start_lr
 
         # TODO ZD add optimizers for multitask
         if self.opt_type == "Adam":
             self.optimizer = torch.optim.Adam(
-                self.wrapper.parameters(), lr=self.lr_exp.start_lr
+                self.wrapper.parameters(), lr=self.lr_schedule.start_lr,
+                betas=tuple(self.opt_param['adam_betas']), eps=self.opt_param['adam_eps'],
+                weight_decay=self.opt_param['adam_weight_decay']
             )
             if optimizer_state_dict is not None and self.restart_training:
                 self.optimizer.load_state_dict(optimizer_state_dict)
@@ -368,10 +377,10 @@ class Trainer(object):
 
         def step(_step_id, task_key="Default"):
             self.wrapper.train()
-            if isinstance(self.lr_exp, dict):
-                _lr = self.lr_exp[task_key]
+            if isinstance(self.lr_schedule, dict):
+                _lr = self.lr_schedule[task_key]
             else:
-                _lr = self.lr_exp
+                _lr = self.lr_schedule
             cur_lr = _lr.value(_step_id)
             pref_lr = cur_lr
             self.optimizer.zero_grad(set_to_none=True)
