@@ -136,8 +136,8 @@ class DescrptSeA(Descriptor):
         "embeddings": obj.filter_layers.serialize(),
         "env_mat": DPEnvMat(obj.rcut, obj.rcut_smth).serialize(),
         "@variables" : {
-          "davg" : obj["davg"].detach().numpy(),
-          "dstd" : obj["dstd"].detach().numpy(),
+          "davg" : obj["davg"].detach().cpu().numpy(),
+          "dstd" : obj["dstd"].detach().cpu().numpy(),
         },
         ## to be updated when the options are supported.
         "trainable": True,
@@ -210,16 +210,21 @@ class DescrptBlockSeA(DescriptorBlock):
         stddev = torch.ones(wanted_shape, dtype=self.prec, device=env.DEVICE)
         self.register_buffer('mean', mean)
         self.register_buffer('stddev', stddev)
+        self.filter_layers_old = None
+        self.filter_layers = None
 
-        filter_layers = NetworkCollection(ndim=1, ntypes=len(sel), network_type="embedding_network")
+
         if self.old_impl:
+          filter_layers = []
           # TODO: remove
           start_index = 0
           for type_i in range(self.ntypes):
               one = TypeFilter(start_index, sel[type_i], self.filter_neuron)
-              filter_layers[(type_i,)] = one
+              filter_layers.append(one)
               start_index += sel[type_i]
+          self.filter_layers_old = torch.nn.ModuleList(filter_layers)
         else:
+          filter_layers = NetworkCollection(ndim=1, ntypes=len(sel), network_type="embedding_network")
           # TODO: ndim=2 if type_one_side=False
           for ii in range(self.ntypes):
             filter_layers[(ii,)] = EmbeddingNet(
@@ -229,7 +234,7 @@ class DescrptBlockSeA(DescriptorBlock):
                 precision=self.precision,
                 resnet_dt=self.resnet_dt,
               )
-        self.filter_layers = filter_layers
+          self.filter_layers = filter_layers
 
 
     def get_rcut(self)->float:
@@ -386,15 +391,17 @@ class DescrptBlockSeA(DescriptorBlock):
         )
 
         if self.old_impl:
+          assert self.filter_layers_old is not None
           dmatrix = dmatrix.view(-1, self.ndescrpt)  # shape is [nframes*nall, self.ndescrpt]
           xyz_scatter = torch.empty(1, )
-          ret = self.filter_layers.networks[0](dmatrix)
+          ret = self.filter_layers_old[0](dmatrix)
           xyz_scatter = ret
-          for ii, transform in enumerate(self.filter_layers.networks[1:]):
+          for ii, transform in enumerate(self.filter_layers_old[1:]):
               # shape is [nframes*nall, 4, self.filter_neuron[-1]]
               ret = transform.forward(dmatrix)
               xyz_scatter = xyz_scatter + ret
         else:
+          assert self.filter_layers is not None
           dmatrix = dmatrix.view(-1, self.nnei, 4)
           nfnl = dmatrix.shape[0]
           # pre-allocate a shape to pass jit
