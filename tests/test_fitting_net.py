@@ -101,7 +101,8 @@ class TestFittingNet(unittest.TestCase):
         embedding = torch.from_numpy(self.embedding)
         embedding = embedding.view(4, -1, self.embedding_width)
         atype = torch.from_numpy(self.atype)
-        my_energy, _ = my_fn(embedding, atype)
+        ret = my_fn(embedding, atype)
+        my_energy = ret["energy"]
         my_energy = my_energy.detach()
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 

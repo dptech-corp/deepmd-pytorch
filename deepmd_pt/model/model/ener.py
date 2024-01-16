@@ -8,6 +8,14 @@ from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
 from deepmd_pt.model.descriptor import make_default_type_embedding
 
+from deepmd_pt.model.model.translate_output import (
+  fit_output_to_model_output,
+)
+from deepmd_utils.model_format import (
+  model_check_output,
+)
+
+
 class EnergyModel(BaseModel):
     """Energy model.
 
@@ -180,28 +188,21 @@ class EnergyModel(BaseModel):
         assert descriptor is not None
         # energy, force
         if self.fitting_net is not None:
-            atom_energy, dforce = self.fitting_net(descriptor, atype, atype_tebd=None, rot_mat=rot_mat)
-            energy = atom_energy.sum(dim=1)
-            model_predict = {'energy': energy,
-                            'atom_energy': atom_energy,
-                            }
+            fit_ret = self.fitting_net(descriptor, atype, atype_tebd=None, rot_mat=rot_mat)
+            model_ret = fit_output_to_model_output(
+                fit_ret, 
+                self.fitting_net.output_def(),
+                extended_coord,
+            )
+            model_predict = {}
+            model_predict["atom_energy"] = model_ret["energy"]
+            model_predict["energy"] = model_ret["energy_redu"]
             if self.grad_force:
-                faked_grad = torch.ones_like(energy)
-                lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-                extended_force = torch.autograd.grad([energy], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-                assert extended_force is not None
-                extended_force = -extended_force
-                extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
-                model_predict['extended_force'] = extended_force
-                if do_atomic_virial:
-                    # the correction sums to zero, which does not contribute to global virial
-                    extended_virial_corr = self.atomic_virial_corr(extended_coord, atom_energy)
-                    model_predict['extended_virial'] = extended_virial + extended_virial_corr
-                else:
-                    model_predict['extended_virial'] = extended_virial
+                model_predict['extended_force'] = model_ret['energy_derv_r'].squeeze(-2)
+                model_predict['extended_virial'] = model_ret['energy_derv_c'].squeeze(-3)
             else:
-                assert dforce is not None
-                model_predict['dforce'] = dforce
+                assert model_ret["dforce"] is not None
+                model_predict["dforce"] = model_ret["dforce"]
         # denoise
         else:
             nlist_list = [nlist]
@@ -224,26 +225,6 @@ class EnergyModel(BaseModel):
         return model_predict
 
 
-    def atomic_virial_corr(self, extended_coord, atom_energy):
-      nall = extended_coord.shape[1]
-      nloc = atom_energy.shape[1]
-      coord, _ = torch.split(extended_coord, [nloc, nall-nloc], dim=1)
-      # no derivative with respect to the loc coord.
-      coord = coord.detach()
-      ce = coord * atom_energy
-      sumce0, sumce1, sumce2 = torch.split(torch.sum(ce, dim=1), [1,1,1], dim=-1)
-      faked_grad = torch.ones_like(sumce0)
-      lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
-      extended_virial_corr0 = torch.autograd.grad([sumce0], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-      assert extended_virial_corr0 is not None
-      extended_virial_corr1 = torch.autograd.grad([sumce1], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-      assert extended_virial_corr1 is not None
-      extended_virial_corr2 = torch.autograd.grad([sumce2], [extended_coord], grad_outputs=lst, create_graph=True)[0]
-      assert extended_virial_corr2 is not None
-      extended_virial_corr = torch.concat([extended_virial_corr0.unsqueeze(-1),
-                                           extended_virial_corr1.unsqueeze(-1),
-                                           extended_virial_corr2.unsqueeze(-1)], dim=-1)
-      return extended_virial_corr
       
 
 

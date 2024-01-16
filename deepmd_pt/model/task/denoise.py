@@ -12,6 +12,12 @@ except:
 from deepmd_pt.model.network import NonLinearHead, MaskLMHead
 from deepmd_pt.model.task import TaskBaseMethod
 
+from deepmd_utils.model_format import (
+  FittingOutputDef,
+  OutputVariableDef,
+  fitting_check_output,
+)
+
 
 class DenoiseNet(TaskBaseMethod):
 
@@ -53,6 +59,14 @@ class DenoiseNet(TaskBaseMethod):
                 _pair2coord_proj = NonLinearHead(self.attn_head[ii], 1, activation_fn=activation_function)
                 self.pair2coord_proj.append(_pair2coord_proj)
             self.pair2coord_proj = torch.nn.ModuleList(self.pair2coord_proj)
+
+
+    def output_def():
+        return FittingOutputDef([
+            OutputVariableDef("updated_coord", [3], reduciable=False, differentiable=False),
+            OutputVariableDef("logits", [-1], reduciable=False, differentiable=False)
+        ])
+
 
     def forward(self, pair_weights, diff, nlist_mask, features, sw, masked_tokens: Optional[torch.Tensor]=None):
         """Calculate the updated coord.
