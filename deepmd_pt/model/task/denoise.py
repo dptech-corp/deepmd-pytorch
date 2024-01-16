@@ -19,6 +19,7 @@ from deepmd_utils.model_format import (
 )
 
 
+@fitting_check_output
 class DenoiseNet(TaskBaseMethod):
 
     def __init__(self,
@@ -37,7 +38,7 @@ class DenoiseNet(TaskBaseMethod):
         - bias_atom_e: Average enery per atom for each element.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(DenoiseNet, self).__init__()
+        super().__init__()
         self.feature_dim = feature_dim
         self.ntypes = ntypes
         self.attn_head = attn_head
@@ -61,10 +62,10 @@ class DenoiseNet(TaskBaseMethod):
             self.pair2coord_proj = torch.nn.ModuleList(self.pair2coord_proj)
 
 
-    def output_def():
+    def output_def(self):
         return FittingOutputDef([
             OutputVariableDef("updated_coord", [3], reduciable=False, differentiable=False),
-            OutputVariableDef("logits", [-1], reduciable=False, differentiable=False)
+            OutputVariableDef("logits", [-1], reduciable=False, differentiable=False),
         ])
 
 
@@ -83,8 +84,7 @@ class DenoiseNet(TaskBaseMethod):
         logits = self.lm_head(features, masked_tokens=masked_tokens)
         if not isinstance(self.attn_head, list):
             attn_probs = self.pair2coord_proj(pair_weights)
-            coord_update = (attn_probs * diff).sum(dim=-2) / (sw.sum(dim=-1).unsqueeze(-1)+1e-6)
-            return coord_update, logits
+            out_coord = (attn_probs * diff).sum(dim=-2) / (sw.sum(dim=-1).unsqueeze(-1)+1e-6)
         else:
             assert len(self.prefactor) == self.ndescriptor
             all_coord_update = []
@@ -96,4 +96,7 @@ class DenoiseNet(TaskBaseMethod):
             out_coord = self.prefactor[0] * all_coord_update[0]
             for ii in range(self.ndescriptor-1):
                 out_coord += self.prefactor[ii+1] * all_coord_update[ii+1]
-            return out_coord, logits
+        return {
+            "updated_coord": out_coord, 
+            "logits": logits,
+        }

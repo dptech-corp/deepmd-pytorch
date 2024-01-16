@@ -217,11 +217,7 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = nlist_list[-1] != -1
-            updated_coord, logits = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
-            model_predict = {'updated_coord': updated_coord,
-                             'logits': logits,
-                            }
-
+            model_predict = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
         return model_predict
 
 

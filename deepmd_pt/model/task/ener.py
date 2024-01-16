@@ -19,7 +19,7 @@ from deepmd_utils.model_format import (
 
 
 @Fitting.register("ener")
-# @fitting_check_output
+@fitting_check_output
 class EnergyFittingNet(Fitting):
 
     def __init__(
@@ -100,6 +100,7 @@ class EnergyFittingNet(Fitting):
 
 @Fitting.register("direct_force")
 @Fitting.register("direct_force_ener")
+@fitting_check_output
 class EnergyFittingNetDirect(Fitting):
 
     def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, out_dim=1, resnet_dt=True, use_tebd=True, return_energy=False, **kwargs):
@@ -112,7 +113,7 @@ class EnergyFittingNetDirect(Fitting):
         - bias_atom_e: Average enery per atom for each element.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(EnergyFittingNetDirect, self).__init__()
+        super().__init__()
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         self.use_tebd = use_tebd
