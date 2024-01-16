@@ -92,35 +92,17 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
         torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
         torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
       )
-      # old impl
-      if idt == False and prec == "float64":
-          dd1 = DescrptSeA(
-              self.rcut, self.rcut_smth, self.sel,
-              precision=prec,
-              resnet_dt=idt,
-              old_impl=True,
-          ).to(env.DEVICE)
-          dd0_state_dict = dd0.sea.state_dict()
-          dd1_state_dict = dd1.sea.state_dict()
-          for i in dd1_state_dict:
-              dd1_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
-                  .replace('filter_layers_old.', 'filter_layers.networks.')].detach().clone()
-              if '.bias' in i:
-                  dd1_state_dict[i] = dd1_state_dict[i].unsqueeze(0)
-          dd1.sea.load_state_dict(dd1_state_dict)
-
-          dd1.old_impl = True
-          rd1, _,_,_,_ = dd1(
-            torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
-            torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
-            torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
-          )
-          np.testing.assert_allclose(
-            rd0.detach().cpu().numpy(), rd1.detach().cpu().numpy(),
-            rtol=rtol, atol=atol, err_msg=err_msg,
-          )
-
-
+      # serialization
+      dd1 = DescrptSeA.deserialize(dd0.serialize())
+      rd1, _, _, _, _ = dd1(
+          torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+          torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+          torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
+      )
+      np.testing.assert_allclose(
+          rd0.detach().cpu().numpy(), rd1.detach().cpu().numpy(),
+          rtol=rtol, atol=atol, err_msg=err_msg,
+      )
       # dp impl
       dd2 = DPDescrptSeA.deserialize(dd0.serialize())
       rd2 = dd2.call(
@@ -130,7 +112,32 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
         rd0.detach().cpu().numpy(), rd2,
         rtol=rtol, atol=atol, err_msg=err_msg,
       )
-      
+      # old impl
+      if idt == False and prec == "float64":
+          dd3 = DescrptSeA(
+              self.rcut, self.rcut_smth, self.sel,
+              precision=prec,
+              resnet_dt=idt,
+              old_impl=True,
+          ).to(env.DEVICE)
+          dd0_state_dict = dd0.sea.state_dict()
+          dd3_state_dict = dd3.sea.state_dict()
+          for i in dd3_state_dict:
+              dd3_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
+                  .replace('filter_layers_old.', 'filter_layers.networks.')].detach().clone()
+              if '.bias' in i:
+                  dd3_state_dict[i] = dd3_state_dict[i].unsqueeze(0)
+          dd3.sea.load_state_dict(dd3_state_dict)
+
+          rd3, _,_,_,_ = dd3(
+            torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+            torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+            torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
+          )
+          np.testing.assert_allclose(
+            rd0.detach().cpu().numpy(), rd3.detach().cpu().numpy(),
+            rtol=rtol, atol=atol, err_msg=err_msg,
+          )
 
   def test_jit(
       self,
