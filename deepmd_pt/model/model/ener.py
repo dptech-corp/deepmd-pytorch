@@ -10,13 +10,15 @@ from deepmd_pt.model.descriptor import make_default_type_embedding
 
 from deepmd_pt.model.model.translate_output import (
   fit_output_to_model_output,
+  communicate_extended_output,
 )
 from deepmd_utils.model_format import (
   model_check_output,
+  ModelOutputDef,
 )
 
 
-class EnergyModel(BaseModel):
+class CommonEnergyModel(BaseModel):
     """Energy model.
 
     Parameters
@@ -60,7 +62,7 @@ class EnergyModel(BaseModel):
         - model_params: The Dict-like configuration with model options.
         - sampled: The sampled dataset for stat.
         """
-        super(EnergyModel, self).__init__()
+        super().__init__()
         # Descriptor + Type Embedding Net (Optional)
         ntypes = len(type_map)
         self.type_map = type_map
@@ -114,7 +116,17 @@ class EnergyModel(BaseModel):
             else:
                 self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
 
-    def forward(
+
+    def output_def(self):
+        return ModelOutputDef(
+          (
+            self.fitting_net.output_def() 
+              if self.fitting_net is not None 
+              else self.coord_denoise_net.output_def()
+          )
+        )
+
+    def common_forward(
         self,
         coord,
         atype,
@@ -144,28 +156,22 @@ class EnergyModel(BaseModel):
             extended_coord, extended_atype, nloc,
             self.rcut, self.sel, distinguish_types=self.type_split)
         extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.forward_lower(extended_coord, extended_atype, nlist, mapping, do_atomic_virial=do_atomic_virial)
-        if self.fitting_net is not None:
-            if self.grad_force:
-                mapping = mapping.unsqueeze(-1).expand(-1, -1, 3)
-                force = torch.zeros_like(coord)
-                model_predict_lower['force'] = torch.scatter_reduce(force, 1, index=mapping,
-                                                                src=model_predict_lower['extended_force'], reduce='sum')
-                atomic_virial = torch.zeros_like(coord).unsqueeze(-1).expand(-1, -1, -1, 3)
-                mapping = mapping.unsqueeze(-1).expand(-1, -1, -1, 3)
-                reduced_virial = torch.scatter_reduce(atomic_virial, 1, index=mapping,
-                                                  src=model_predict_lower['extended_virial'],
-                                                  reduce='sum')
-                model_predict_lower['virial'] = torch.sum(reduced_virial, dim=1)
-                if do_atomic_virial:
-                    model_predict_lower['atomic_virial'] = reduced_virial
-            else:
-                model_predict_lower['force'] = model_predict_lower['dforce']
-        else:
-            model_predict_lower['updated_coord'] += coord
-        return model_predict_lower
+        model_predict_lower = self.common_forward_lower(
+          extended_coord,
+          extended_atype,
+          nlist,
+          mapping,
+          do_atomic_virial=do_atomic_virial,
+        )
+        model_predict = communicate_extended_output(
+          model_predict_lower,
+          self.output_def(),
+          mapping,
+        )
+        return model_predict
 
-    def forward_lower(
+
+    def common_forward_lower(
         self, 
         extended_coord, 
         extended_atype, 
@@ -189,20 +195,6 @@ class EnergyModel(BaseModel):
         # energy, force
         if self.fitting_net is not None:
             fit_ret = self.fitting_net(descriptor, atype, atype_tebd=None, rot_mat=rot_mat)
-            model_ret = fit_output_to_model_output(
-                fit_ret, 
-                self.fitting_net.output_def(),
-                extended_coord,
-            )
-            model_predict = {}
-            model_predict["atom_energy"] = model_ret["energy"]
-            model_predict["energy"] = model_ret["energy_redu"]
-            if self.grad_force:
-                model_predict['extended_force'] = model_ret['energy_derv_r'].squeeze(-2)
-                model_predict['extended_virial'] = model_ret['energy_derv_c'].squeeze(-3)
-            else:
-                assert model_ret["dforce"] is not None
-                model_predict["dforce"] = model_ret["dforce"]
         # denoise
         else:
             nlist_list = [nlist]
@@ -217,11 +209,74 @@ class EnergyModel(BaseModel):
                 env_mat = env_mat[-1]
                 diff = diff[-1]
                 nnei_mask = nlist_list[-1] != -1
-            model_predict = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
+            fit_ret = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
+        model_predict = fit_output_to_model_output(
+            fit_ret, 
+            (
+              self.fitting_net.output_def() 
+              if self.fitting_net is not None 
+              else self.coord_denoise_net.output_def()
+            ),
+            extended_coord,
+        )
         return model_predict
 
 
-      
+class EnergyModel(CommonEnergyModel):
+    def __init__(
+        self,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+
+    def forward(
+        self,
+        coord,
+        atype,
+        box: Optional[torch.Tensor] = None, 
+        do_atomic_virial: bool = False,
+    ) -> Dict[str, torch.Tensor]:
+        model_ret = self.common_forward(coord, atype, box, do_atomic_virial)
+        if self.fitting_net is not None:
+            model_predict = {}
+            model_predict["atom_energy"] = model_ret["energy"]
+            model_predict["energy"] = model_ret["energy_redu"]
+            if self.grad_force:
+                model_predict["force"] = model_ret["energy_derv_r"].squeeze(-2)
+                model_predict["atomic_virial"] = model_ret["energy_derv_c"].squeeze(-3)
+                model_predict["virial"] = model_ret["energy_derv_c_redu"].squeeze(-3)
+            else:
+                model_predict['force'] = model_ret['dforce']
+        else:
+            model_predict = model_ret
+            model_predict['updated_coord'] += coord
+        return model_predict
+
+
+    def forward_lower(
+        self, 
+        extended_coord, 
+        extended_atype, 
+        nlist,
+        mapping: Optional[torch.Tensor] = None,
+        do_atomic_virial: bool = False,
+    ):
+        model_ret = self.common_forward_lower(
+          extended_coord, extended_atype, nlist, mapping, do_atomic_virial)
+        if self.fitting_net is not None:
+            model_predict = {}
+            model_predict["atom_energy"] = model_ret["energy"]
+            model_predict["energy"] = model_ret["energy_redu"]
+            if self.grad_force:
+                model_predict['extended_force'] = model_ret['energy_derv_r'].squeeze(-2)
+                model_predict['extended_virial'] = model_ret['energy_derv_c'].squeeze(-3)
+            else:
+                assert model_ret["dforce"] is not None
+                model_predict["dforce"] = model_ret["dforce"]            
+        else:
+            model_predict = model_ret
+        return model_predict
 
 
 

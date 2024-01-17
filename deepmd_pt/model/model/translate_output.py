@@ -12,6 +12,7 @@ from deepmd_utils.model_format import (
   VariableDef,
   OutputVariableDef,
   FittingOutputDef,
+  ModelOutputDef,
 )
 
 
@@ -61,12 +62,16 @@ def get_leading_dims(
     vv: torch.Tensor, 
     vdef: OutputVariableDef,
 ):
+  """Get the dimensions of nf x nloc.
+  """
   vshape = vv.shape
   return list(vshape[:(len(vshape) - len(vdef.shape))])
 
 def get_atom_axis(
     vdef: torch.Tensor,
 ):
+  """Get the axis of atoms
+  """
   atom_axis = -(len(vdef.shape) + 1)
   return atom_axis
 
@@ -103,6 +108,10 @@ def fit_output_to_model_output(
     fit_output_def: FittingOutputDef,
     coord_ext: torch.Tensor,
 ) -> Dict[str, torch.Tensor]:
+  """Transform the output of the fitting network to 
+  the model output.
+
+  """
   model_ret = {kk:vv for kk,vv in fit_ret.items()}
   for kk, vv in fit_ret.items():
     vdef = fit_output_def[kk]
@@ -117,3 +126,54 @@ def fit_output_to_model_output(
         model_ret[kk_derv_r] = dr
         model_ret[kk_derv_c] = dc
   return model_ret
+
+
+def communicate_extended_output(
+    model_ret: Dict[str, torch.Tensor],
+    model_output_def: ModelOutputDef,
+    mapping: torch.Tensor,                # nf x nloc
+) -> Dict[str, torch.Tensor]:
+  """Transform the output of the model network defined on 
+  local and ghost (extended) atoms to local atoms.
+
+  """
+  new_ret = {}
+  for kk in model_output_def.keys_outp():
+    vv = model_ret[kk]
+    vdef = model_output_def[kk]
+    new_ret[kk] = vv
+    if vdef.reduciable:
+      kk_redu = get_reduce_name(kk)
+      new_ret[kk_redu] = model_ret[kk_redu]
+      if vdef.differentiable:
+        # nf x nloc
+        vldims = get_leading_dims(vv, vdef)
+        # nf x nall
+        mldims = list(mapping.shape)
+        kk_derv_r, kk_derv_c = get_deriv_name(kk)
+        # vdim x 3
+        derv_r_ext_dims = vdef.shape + [3]
+        mapping = mapping\
+          .view(mldims + [1] * len(derv_r_ext_dims))\
+          .expand([-1]*len(mldims) + derv_r_ext_dims)
+        force = torch.zeros(vldims + derv_r_ext_dims, dtype=vv.dtype, device=vv.device)
+        # nf x nloc x 1 x 3
+        new_ret[kk_derv_r] = torch.scatter_reduce(
+          force, 1,
+          index=mapping,
+          src=model_ret[kk_derv_r],
+          reduce='sum',
+        )
+        mapping = mapping\
+          .unsqueeze(-1)\
+          .expand([-1]*(len(mldims) + len(derv_r_ext_dims)) + [3])
+        virial = torch.zeros(vldims + derv_r_ext_dims + [3], dtype=vv.dtype, device=vv.device)
+        # nf x nloc x 1 x 3
+        new_ret[kk_derv_c] = torch.scatter_reduce(
+          virial, 1,
+          index=mapping,
+          src=model_ret[kk_derv_c],
+          reduce='sum',
+        )
+        new_ret[kk_derv_c+'_redu'] = torch.sum(new_ret[kk_derv_c], dim=1)
+  return new_ret
