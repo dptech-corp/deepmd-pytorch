@@ -8,7 +8,7 @@ from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
 from deepmd_pt.model.descriptor import make_default_type_embedding
 
-from deepmd_pt.model.model.translate_output import (
+from deepmd_pt.model.model.transform_output import (
   fit_output_to_model_output,
   communicate_extended_output,
 )
