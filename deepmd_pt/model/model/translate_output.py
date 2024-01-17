@@ -9,7 +9,6 @@ from typing import (
 from deepmd_utils.model_format import (
   get_reduce_name,
   get_deriv_name,
-  VariableDef,
   OutputVariableDef,
   FittingOutputDef,
   ModelOutputDef,
