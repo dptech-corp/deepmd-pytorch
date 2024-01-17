@@ -80,29 +80,28 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
       err_msg = f"idt={idt} prec={prec}"
       # sea new impl
       dd0 = DescrptSeA(
-        self.rcut, self.rcut_smth, self.sel, 
+        self.rcut, self.rcut_smth, self.sel,
         precision=prec,
         resnet_dt=idt,
         old_impl=False,
-      )
-      dd0.mean = davg
-      dd0.dstd = dstd
+      ).to(env.DEVICE)
+      dd0.sea.mean = torch.tensor(davg, dtype=dtype, device=env.DEVICE)
+      dd0.sea.dstd = torch.tensor(dstd, dtype=dtype, device=env.DEVICE)
       rd0, _,_,_,_ = dd0(
-        torch.tensor(self.coord_ext, dtype=dtype), 
-        torch.tensor(self.atype_ext, dtype=int),
-        torch.tensor(self.nlist, dtype=int), 
+        torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+        torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+        torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
       )
-      # old impl
+      # serialization
       dd1 = DescrptSeA.deserialize(dd0.serialize())
-      dd1.old_impl = True
-      rd1, _,_,_,_ = dd1(
-        torch.tensor(self.coord_ext, dtype=dtype), 
-        torch.tensor(self.atype_ext, dtype=int),
-        torch.tensor(self.nlist, dtype=int), 
+      rd1, _, _, _, _ = dd1(
+          torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+          torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+          torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
       )
       np.testing.assert_allclose(
-        rd0.detach().numpy(), rd1.detach().numpy(),
-        rtol=rtol, atol=atol, err_msg=err_msg,
+          rd0.detach().cpu().numpy(), rd1.detach().cpu().numpy(),
+          rtol=rtol, atol=atol, err_msg=err_msg,
       )
       # dp impl
       dd2 = DPDescrptSeA.deserialize(dd0.serialize())
@@ -110,10 +109,35 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
         self.coord_ext, self.atype_ext, self.nlist,
       )
       np.testing.assert_allclose(
-        rd0.detach().numpy(), rd2, 
+        rd0.detach().cpu().numpy(), rd2,
         rtol=rtol, atol=atol, err_msg=err_msg,
       )
-      
+      # old impl
+      if idt == False and prec == "float64":
+          dd3 = DescrptSeA(
+              self.rcut, self.rcut_smth, self.sel,
+              precision=prec,
+              resnet_dt=idt,
+              old_impl=True,
+          ).to(env.DEVICE)
+          dd0_state_dict = dd0.sea.state_dict()
+          dd3_state_dict = dd3.sea.state_dict()
+          for i in dd3_state_dict:
+              dd3_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
+                  .replace('filter_layers_old.', 'filter_layers.networks.')].detach().clone()
+              if '.bias' in i:
+                  dd3_state_dict[i] = dd3_state_dict[i].unsqueeze(0)
+          dd3.sea.load_state_dict(dd3_state_dict)
+
+          rd3, _,_,_,_ = dd3(
+            torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+            torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+            torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
+          )
+          np.testing.assert_allclose(
+            rd0.detach().cpu().numpy(), rd3.detach().cpu().numpy(),
+            rtol=rtol, atol=atol, err_msg=err_msg,
+          )
 
   def test_jit(
       self,
@@ -138,8 +162,8 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
         resnet_dt=idt,
         old_impl=False,
       )
-      dd0.mean = davg
-      dd0.dstd = dstd
+      dd0.sea.mean = torch.tensor(davg, dtype=dtype, device=env.DEVICE)
+      dd0.sea.dstd = torch.tensor(dstd, dtype=dtype, device=env.DEVICE)
       dd1 = DescrptSeA.deserialize(dd0.serialize())
       model = torch.jit.script(dd0)
       model = torch.jit.script(dd1)

@@ -144,9 +144,9 @@ class MLPLayer(nn.Module):
       precision=self.precision,
     )
     nl.w, nl.b, nl.idt = (
-      self.matrix.detach().numpy(),
-      self.bias.detach().numpy() if self.bias is not None else None,
-      self.idt.detach().numpy() if self.idt is not None else None,
+      self.matrix.detach().cpu().numpy(),
+      self.bias.detach().cpu().numpy() if self.bias is not None else None,
+      self.idt.detach().cpu().numpy() if self.idt is not None else None,
     )
     return nl.serialize()
 
