@@ -141,9 +141,9 @@ class DeepPot(DeepEval):
         atomic: bool = False,
     ):
         model = self.dp.to(DEVICE)
-        return eval(model, coords, cells, atom_types, atomic=atomic)
+        return eval_model(model, coords, cells, atom_types, atomic=atomic)
 
-def eval(
+def eval_model(
         model,
         coords: np.ndarray,
         cells: Optional[np.ndarray],
