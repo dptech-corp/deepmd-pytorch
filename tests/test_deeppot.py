@@ -26,7 +26,7 @@ class TestDeepPot(unittest.TestCase):
 
         input_dict, label_dict, _ = trainer.get_data(is_train=False)
         trainer.wrapper(**input_dict, label=label_dict, cur_lr=1.0)
-        self.model = Path(__file__).parent /  "model.pt"
+        self.model = "model.pt"
 
     def test_dp_test(self):
         dp = DeepPot(str(self.model))
