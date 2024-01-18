@@ -139,56 +139,68 @@ class DeepPot(DeepEval):
         cells: Optional[np.ndarray],
         atom_types: np.ndarray,
         atomic: bool = False,
-        denoise: bool = False,
     ):
         model = self.dp.to(DEVICE)
-        energy_out = None
-        atomic_energy_out = None
-        force_out = None
-        virial_out = None
-        atomic_virial_out = None
-        updated_coord_out = None
-        logits_out = None
+        return eval(model, coords, cells, atom_types, atomic=atomic)
 
-        nframes = coords.shape[0]
-        if len(atom_types.shape) == 1:
-            natoms = len(atom_types)
-            if isinstance(atom_types, torch.Tensor):
-                atom_types = torch.tile(atom_types.unsqueeze(0), [nframes, 1]).reshape(nframes, -1)
-            else:
-                atom_types = np.tile(atom_types, nframes).reshape(nframes, -1)
+def eval(
+        model,
+        coords: np.ndarray,
+        cells: Optional[np.ndarray],
+        atom_types: np.ndarray,
+        atomic: bool = False,
+        denoise: bool = False,
+    ):
+    # cast input to numpy array
+    coords = np.array(coords)
+    if cells is not None:
+        cells = np.array(cells)
+    atom_types = np.array(atom_types, dtype=np.int32)
+
+    energy_out = None
+    atomic_energy_out = None
+    force_out = None
+    virial_out = None
+    atomic_virial_out = None
+    updated_coord_out = None
+    logits_out = None
+
+    nframes = coords.shape[0]
+    if len(atom_types.shape) == 1:
+        natoms = len(atom_types)
+        atom_types = np.tile(atom_types, nframes).reshape(nframes, -1)
+    else:
+        natoms = len(atom_types[0])
+
+    coord_input = torch.tensor(coords.reshape([-1, natoms, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+    type_input = torch.tensor(atom_types, dtype=torch.long).to(DEVICE)
+    if cells is not None:
+        box_input = torch.tensor(cells.reshape([-1, 3, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+    else:
+        box_input = None
+
+    batch_output = model(coord_input, type_input, box=box_input, do_atomic_virial=atomic)
+    if isinstance(batch_output, tuple):
+        batch_output = batch_output[0]
+    if 'energy' in batch_output:
+        energy_out = batch_output['energy'].detach().cpu().numpy()
+    if 'atom_energy' in batch_output:
+        atomic_energy_out = batch_output['atom_energy'].detach().cpu().numpy()
+    if 'force' in batch_output:
+        force_out = batch_output['force'].detach().cpu().numpy()
+    if 'virial' in batch_output:
+        virial_out = batch_output['virial'].detach().cpu().numpy()
+    if 'atomic_virial' in batch_output:
+        atomic_virial_out = batch_output['atomic_virial'].detach().cpu().numpy()
+    if 'updated_coord' in batch_output:
+        updated_coord_out = batch_output['updated_coord'].detach().cpu().numpy()
+    if 'logits' in batch_output:
+        logits_out = batch_output['logits'].detach().cpu().numpy()
+
+    if denoise:
+        return updated_coord_out, logits_out
+    else:    
+        if not atomic:
+            return energy_out, force_out, virial_out
         else:
-            natoms = len(atom_types[0])
-
-        coord_input = torch.tensor(coords.reshape([-1, natoms, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-        type_input = torch.tensor(atom_types, dtype=torch.long).to(DEVICE)
-        if cells is not None:
-            box_input = torch.tensor(cells.reshape([-1, 3, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
-        else:
-            box_input = None
-
-        batch_output = model(coord_input, type_input, box=box_input, do_atomic_virial=atomic)
-        if isinstance(batch_output, tuple):
-            batch_output = batch_output[0]
-        if 'energy' in batch_output:
-            energy_out = batch_output['energy'].detach().cpu().numpy()
-        if 'atom_energy' in batch_output:
-            atomic_energy_out = batch_output['atom_energy'].detach().cpu().numpy()
-        if 'force' in batch_output:
-            force_out = batch_output['force'].detach().cpu().numpy()
-        if 'virial' in batch_output:
-            virial_out = batch_output['virial'].detach().cpu().numpy()
-        if 'atomic_virial' in batch_output:
-            atomic_virial_out = batch_output['atomic_virial'].detach().cpu().numpy()
-        if 'updated_coord' in batch_output:
-            updated_coord_out = batch_output['updated_coord'].detach().cpu().numpy()
-        if 'logits' in batch_output:
-            logits_out = batch_output['logits'].detach().cpu().numpy()
-
-        if denoise:
-            return updated_coord_out, logits_out
-        else:    
-            if not atomic:
-                return energy_out, force_out, virial_out
-            else:
-                return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
+            return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
