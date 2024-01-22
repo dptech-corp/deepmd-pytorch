@@ -1,8 +1,5 @@
 import torch
 from typing import Optional, List, Union, Dict
-from deepmd_pt.model.descriptor import Descriptor
-from deepmd_pt.model.task import Fitting, DenoiseNet
-from deepmd_pt.model.network import TypeEmbedNet
 from deepmd_pt.model.model import BaseModel
 from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
 from deepmd_pt.utils.region import normalize_coord
@@ -16,213 +13,17 @@ from deepmd_utils.model_format import (
   model_check_output,
   ModelOutputDef,
 )
+from .dp_atomic_model import DPAtomicModel
+from .make_model import make_model
 
 
-class CommonEnergyModel(BaseModel):
-    """Energy model.
+DPModel = make_model(DPAtomicModel)
 
-    Parameters
-    ----------
-    descriptor
-            Descriptor
-    fitting_net
-            Fitting net
-    type_map
-            Mapping atom type to the name (str) of the type.
-            For example `type_map[1]` gives the name of the type 1.
-    type_embedding
-            Type embedding net
-    resuming
-            Whether to resume/fine-tune from checkpoint or not.
-    stat_file_dir
-            The directory to the state files.
-    stat_file_path
-            The path to the state files.
-    sampled
-            Sampled frames to compute the statistics.
-    """
+
+class EnergyModel(DPModel):
 
     model_type = "ener"
 
-    def __init__(
-            self,
-            descriptor: dict,
-            fitting_net: dict,
-            type_map: Optional[List[str]],
-            type_embedding: Optional[dict] = None,
-            resuming: bool = False,
-            stat_file_dir=None,
-            stat_file_path=None,
-            sampled=None,
-            **kwargs,
-    ):
-        """Based on components, construct a DPA-1 model for energy.
-
-        Args:
-        - model_params: The Dict-like configuration with model options.
-        - sampled: The sampled dataset for stat.
-        """
-        super().__init__()
-        # Descriptor + Type Embedding Net (Optional)
-        ntypes = len(type_map)
-        self.type_map = type_map
-        self.ntypes = ntypes
-        descriptor['ntypes'] = ntypes
-        self.combination = descriptor.get('combination',False)
-        if(self.combination):
-            self.prefactor=descriptor.get('prefactor', [0.5,0.5])
-        self.descriptor_type = descriptor['type']
-
-        self.type_split = True
-        if self.descriptor_type not in ['se_e2_a']:
-            self.type_split = False
-
-        self.descriptor = Descriptor(**descriptor)
-        self.rcut = self.descriptor.get_rcut()
-        self.sel = self.descriptor.get_sel()
-        self.split_nlist = False
-
-        # Statistics
-        self.compute_or_load_stat(fitting_net, ntypes,
-                                  resuming=resuming,
-                                  type_map=type_map,
-                                  stat_file_dir=stat_file_dir,
-                                  stat_file_path=stat_file_path,
-                                  sampled=sampled)
-
-        # Fitting
-        if fitting_net:
-            fitting_net['type'] = fitting_net.get('type', 'ener')
-            if self.descriptor_type not in ['se_e2_a']:
-                fitting_net['ntypes'] = 1
-            else:
-                fitting_net['ntypes'] = self.descriptor.get_ntype()
-                fitting_net['use_tebd'] = False
-            fitting_net['embedding_width'] = self.descriptor.dim_out
-
-            self.grad_force = 'direct' not in fitting_net['type']
-            if not self.grad_force:
-                fitting_net['out_dim'] = self.descriptor.dim_emb
-                if 'ener' in fitting_net['type']:
-                    fitting_net['return_energy'] = True
-            self.fitting_net = Fitting(**fitting_net)
-        else:
-            self.fitting_net = None
-            self.grad_force = False
-            if not self.split_nlist:
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
-            elif self.combination:
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb_list, self.prefactor)
-            else:
-                self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
-
-
-    def output_def(self):
-        return ModelOutputDef(
-          (
-            self.fitting_net.output_def() 
-              if self.fitting_net is not None 
-              else self.coord_denoise_net.output_def()
-          )
-        )
-
-    def common_forward(
-        self,
-        coord,
-        atype,
-        box: Optional[torch.Tensor] = None, 
-        do_atomic_virial: bool = False,
-    ) -> Dict[str, torch.Tensor]:
-        """Return total energy of the system.
-        Args:
-        - coord: Atom coordinates with shape [nframes, natoms[1]*3].
-        - atype: Atom types with shape [nframes, natoms[1]].
-        - natoms: Atom statisics with shape [self.ntypes+2].
-        - box: Simulation box with shape [nframes, 9].
-        - atomic_virial: Whether or not compoute the atomic virial.
-        Returns:
-        - energy: Energy per atom.
-        - force: XYZ force per atom.
-        """
-        nframes, nloc = atype.shape[:2]
-        if box is not None:
-            coord_normalized = normalize_coord(coord, box.reshape(-1, 3, 3))
-        else:
-            coord_normalized = coord.clone()
-        rcut_max = self.rcut
-        extended_coord, extended_atype, mapping = extend_coord_with_ghosts(
-            coord_normalized, atype, box, rcut_max)
-        nlist = build_neighbor_list(
-            extended_coord, extended_atype, nloc,
-            self.rcut, self.sel, distinguish_types=self.type_split)
-        extended_coord = extended_coord.reshape(nframes, -1, 3)
-        model_predict_lower = self.common_forward_lower(
-          extended_coord,
-          extended_atype,
-          nlist,
-          mapping,
-          do_atomic_virial=do_atomic_virial,
-        )
-        model_predict = communicate_extended_output(
-          model_predict_lower,
-          self.output_def(),
-          mapping,
-        )
-        return model_predict
-
-
-    def common_forward_lower(
-        self, 
-        extended_coord, 
-        extended_atype, 
-        nlist,
-        mapping: Optional[torch.Tensor] = None,
-        do_atomic_virial: bool = False,
-    ):
-        nframes, nloc, nnei = nlist.shape
-        atype = extended_atype[:, :nloc]
-        if self.grad_force:
-            extended_coord.requires_grad_(True)
-        descriptor, env_mat, diff, rot_mat, sw = \
-          self.descriptor(
-            extended_coord,
-            extended_atype,
-            nlist,
-            mapping=mapping,
-          )
-
-        assert descriptor is not None
-        # energy, force
-        if self.fitting_net is not None:
-            fit_ret = self.fitting_net(descriptor, atype, atype_tebd=None, rot_mat=rot_mat)
-        # denoise
-        else:
-            nlist_list = [nlist]
-            if not self.split_nlist:
-                nnei_mask = nlist != -1
-            elif self.combination:
-                nnei_mask = []
-                for item in nlist_list:
-                    nnei_mask_item = item != -1
-                    nnei_mask.append(nnei_mask_item)
-            else:
-                env_mat = env_mat[-1]
-                diff = diff[-1]
-                nnei_mask = nlist_list[-1] != -1
-            fit_ret = self.coord_denoise_net(env_mat, diff, nnei_mask, descriptor, sw)
-        model_predict = fit_output_to_model_output(
-            fit_ret, 
-            (
-              self.fitting_net.output_def() 
-              if self.fitting_net is not None 
-              else self.coord_denoise_net.output_def()
-            ),
-            extended_coord,
-        )
-        return model_predict
-
-
-class EnergyModel(CommonEnergyModel):
     def __init__(
         self,
         *args,
@@ -237,7 +38,7 @@ class EnergyModel(CommonEnergyModel):
         box: Optional[torch.Tensor] = None, 
         do_atomic_virial: bool = False,
     ) -> Dict[str, torch.Tensor]:
-        model_ret = self.common_forward(coord, atype, box, do_atomic_virial)
+        model_ret = self.forward_common(coord, atype, box, do_atomic_virial)
         if self.fitting_net is not None:
             model_predict = {}
             model_predict["atom_energy"] = model_ret["energy"]
