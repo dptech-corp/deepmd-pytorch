@@ -3,6 +3,7 @@ from deepmd_utils.model_format.network import NativeNet
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from deepmd_pt.utils import env
 
 device = env.DEVICE
@@ -28,7 +29,7 @@ try:
     from deepmd_utils._version import version as __version__
 except ImportError:
     __version__ = "unknown"
-
+from IPython import embed
 
 def empty_t(shape, precision):
     return torch.empty(shape, dtype=precision, device=device)
@@ -177,6 +178,214 @@ class MLPLayer(nn.Module):
     obj.bias = check_load_param("bias")
     obj.idt = check_load_param("idt")
     return obj
+
+
+class EmbdLayer(nn.Module):
+    def __init__(
+            self,
+            num_channel,
+            num_out,
+            padding: bool = True,
+            stddev: float = 1.,
+            precision: str = DEFAULT_PRECISION,
+    ):
+        super(EmbdLayer, self).__init__()
+        self.precision = precision
+        self.prec = PRECISION_DICT[self.precision]
+        self.padding = padding
+        self.num_channel = num_channel + 1 if self.padding else num_channel
+        self.matrix = nn.Parameter(
+            data=empty_t((self.num_channel, num_out), self.prec)
+        )
+        nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(self.num_channel + num_out))
+        if self.padding:
+            nn.init.zeros_(self.matrix.data[-1])
+
+    def check_type_consistency(self):
+        precision = self.precision
+
+        def check_var(var):
+            if var is not None:
+                # assertion "float64" == "double" would fail
+                assert PRECISION_DICT[var.dtype.name] is PRECISION_DICT[precision]
+
+        check_var(self.matrix)
+
+    def dim_channel(self) -> int:
+        return self.matrix.shape[0]
+
+    def dim_out(self) -> int:
+        return self.matrix.shape[1]
+
+    def forward(
+            self,
+            xx: torch.Tensor,
+    ) -> torch.Tensor:
+        """One Embedding layer used by DP model.
+
+        Parameters
+        ----------
+        xx: torch.Tensor
+            The input of index.
+
+        Returns
+        -------
+        yy: torch.Tensor
+            The output.
+        """
+        yy = F.embedding(xx, self.matrix)
+        return yy
+
+    def serialize(self) -> dict:
+        """Serialize the layer to a dict.
+
+        Returns
+        -------
+        dict
+            The serialized layer.
+        """
+        nl = NativeLayer(
+            self.matrix.shape[0],
+            self.matrix.shape[1],
+            bias=False,
+            use_timestep=False,
+            activation_function=None,
+            resnet=False,
+            precision=self.precision,
+        )
+        nl.w = self.matrix.detach().cpu().numpy()
+        return nl.serialize() + {"padding": self.padding}
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "EmbdLayer":
+        """Deserialize the layer from a dict.
+
+        Parameters
+        ----------
+        data : dict
+            The dict to deserialize from.
+        """
+        nl = NativeLayer.deserialize(data)
+        obj = cls(
+            nl["matrix"].shape[0],
+            nl["matrix"].shape[1],
+            padding=False,
+            precision=nl["precision"],
+        )
+        obj.padding = data["padding"]
+        prec = PRECISION_DICT[obj.precision]
+        check_load_param = \
+            lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=prec, device=device)) \
+                if nl[ss] is not None else None
+        obj.matrix = check_load_param("matrix")
+        return obj
+
+
+class LayerNorm(nn.Module):
+    def __init__(
+            self,
+            num_in,
+            eps: float = 1e-5,
+            reset_para: bool = True,
+            bavg: float = 0.,
+            stddev: float = 1.,
+            precision: str = DEFAULT_PRECISION,
+    ):
+        super(LayerNorm, self).__init__()
+        self.precision = precision
+        self.prec = PRECISION_DICT[self.precision]
+        self.eps = eps
+        self.num_in = num_in
+        self.reset_para = reset_para
+        self.matrix = nn.Parameter(data=empty_t(self.num_channel, self.prec))
+        self.bias = nn.Parameter(data=empty_t(self.num_channel, self.prec))
+        if self.reset_para:
+            nn.init.ones_(self.matrix.data)
+            nn.init.zeros_(self.bias.data)
+        else:
+            nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(self.num_in))
+            nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
+
+    def check_type_consistency(self):
+        precision = self.precision
+
+        def check_var(var):
+            if var is not None:
+                # assertion "float64" == "double" would fail
+                assert PRECISION_DICT[var.dtype.name] is PRECISION_DICT[precision]
+
+        check_var(self.matrix)
+        check_var(self.bias)
+
+    def dim_in(self) -> int:
+        return self.matrix.shape[0]
+
+    def dim_out(self) -> int:
+        return self.matrix.shape[0]
+
+    def forward(
+            self,
+            xx: torch.Tensor,
+    ) -> torch.Tensor:
+        """One Layer Norm used by DP model.
+
+        Parameters
+        ----------
+        xx: torch.Tensor
+            The input of index.
+
+        Returns
+        -------
+        yy: torch.Tensor
+            The output.
+        """
+        yy = F.layer_norm(xx, tuple(self.num_in), self.matrix, self.bias, self.eps)
+        return yy
+
+    def serialize(self) -> dict:
+        """Serialize the layer to a dict.
+
+        Returns
+        -------
+        dict
+            The serialized layer.
+        """
+        nl = NativeLayer(
+            self.matrix.shape[0],
+            self.matrix.shape[0],
+            bias=True,
+            use_timestep=False,
+            activation_function=None,
+            resnet=False,
+            precision=self.precision,
+        )
+        nl.w = self.matrix.detach().cpu().numpy()
+        nl.b = self.bias.detach().cpu().numpy()
+        return nl.serialize() + {"eps": self.eps}
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "EmbdLayer":
+        """Deserialize the layer from a dict.
+
+        Parameters
+        ----------
+        data : dict
+            The dict to deserialize from.
+        """
+        nl = NativeLayer.deserialize(data)
+        obj = cls(
+            nl["matrix"].shape[0],
+            nl["matrix"].shape[1],
+            precision=nl["precision"],
+        )
+        obj.padding = data["padding"]
+        prec = PRECISION_DICT[obj.precision]
+        check_load_param = \
+            lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=prec, device=device)) \
+                if nl[ss] is not None else None
+        obj.matrix = check_load_param("matrix")
+        return obj
+
 
 
 MLP_ = make_multilayer_network(MLPLayer, nn.Module)
