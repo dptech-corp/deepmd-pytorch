@@ -31,6 +31,7 @@ def make_model(T_AtomicModel):
                 self.get_fitting_output_def() 
             )
 
+        # cannot use the name forward. torch script does not work
         def forward_common(
             self,
             coord,

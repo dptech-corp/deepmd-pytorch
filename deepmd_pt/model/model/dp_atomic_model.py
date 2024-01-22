@@ -52,12 +52,6 @@ class DPAtomicModel(BaseModel, AtomicModel):
       sampled=None,
       **kwargs,
   ):
-    """Based on components, construct a DPA-1 model for energy.
-
-    Args:
-    - model_params: The Dict-like configuration with model options.
-    - sampled: The sampled dataset for stat.
-    """
     super().__init__()
     # Descriptor + Type Embedding Net (Optional)
     ntypes = len(type_map)
@@ -113,7 +107,8 @@ class DPAtomicModel(BaseModel, AtomicModel):
             self.coord_denoise_net = DenoiseNet(self.descriptor.dim_out, self.ntypes - 1, self.descriptor.dim_emb)
 
 
-  def get_fitting_net(self):
+  def get_fitting_net(self)->Fitting:
+    """Get the fitting net."""
     return (
       self.fitting_net
       if self.fitting_net is not None
@@ -121,19 +116,23 @@ class DPAtomicModel(BaseModel, AtomicModel):
     )
 
   def get_fitting_output_def(self)->FittingOutputDef:
+    """Get the output def of the fitting net."""
     return (
       self.fitting_net.output_def() 
       if self.fitting_net is not None 
       else self.coord_denoise_net.output_def()
     )
 
-  def get_rcut(self):
+  def get_rcut(self)->float:
+    """Get the cut-off radius."""
     return self.rcut
 
-  def get_sel(self):
+  def get_sel(self)->List[int]:
+    """Get the neighbor selection."""
     return self.sel
 
-  def distinguish_types(self):
+  def distinguish_types(self)->bool:
+    """If distinguish different types by sorting."""
     return self.type_split
 
 
@@ -168,7 +167,7 @@ class DPAtomicModel(BaseModel, AtomicModel):
     """
     nframes, nloc, nnei = nlist.shape
     atype = extended_atype[:, :nloc]
-    if self.grad_force:
+    if self.do_grad():
       extended_coord.requires_grad_(True)
     descriptor, env_mat, diff, rot_mat, sw = \
       self.descriptor(

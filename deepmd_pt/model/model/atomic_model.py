@@ -5,6 +5,7 @@ import os
 from typing import (
   Optional,
   Dict,
+  List,
 )
 from deepmd_utils.model_format import FittingOutputDef
 from deepmd_pt.model.task import Fitting
@@ -25,7 +26,7 @@ class AtomicModel(ABC):
     raise NotImplementedError
 
   @abstractmethod
-  def get_sel(self)->int:
+  def get_sel(self)->List[int]:
     raise NotImplementedError
 
   @abstractmethod
@@ -43,4 +44,27 @@ class AtomicModel(ABC):
   ) -> Dict[str, torch.Tensor]:
     raise NotImplementedError
   
+  def do_grad(
+      self, 
+      var_name: Optional[str] = None,
+  )->bool:
+    """Tell if the output variable `var_name` is differentiable.
+    if var_name is None, returns if any of the variable is differentiable.
     
+    """
+    odef = self.get_fitting_output_def()
+    if var_name is None:
+      require: List[bool] = []
+      for vv in odef.keys():
+        require.append(self.do_grad_(vv))
+      return any(require)
+    else:
+      return self.do_grad_(var_name)
+
+  def do_grad_(
+      self,
+      var_name: str,
+  )->bool:
+    """Tell if the output variable `var_name` is differentiable."""
+    assert var_name is not None
+    return self.get_fitting_output_def()[var_name].differentiable
