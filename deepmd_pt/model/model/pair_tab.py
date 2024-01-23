@@ -93,8 +93,8 @@ class PairTabModel(AtomicModel):
         return self.sel
     
     def distinguish_types(self)->bool:
-        # this model has no descriptor, thus no type_split.
-        return
+        # to match DPA1 and DPA2.
+        return False
         
     def forward_atomic(
         self,
@@ -104,42 +104,39 @@ class PairTabModel(AtomicModel):
         mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
         ) -> Dict[str, torch.Tensor]:
-
-        #this should get atomic energy for all local atoms?
         
 
         nframes, nloc, nnei = nlist.shape
-        # atype = extended_atype[:, :nloc]
+        atype = extended_atype[:, :nloc] #this is the atype for local atoms, nframes * nloc
         pairwise_dr = self._get_pairwise_dist(extended_coord)
-        
-        """
-        below is the pseudocode, need to figure out how the index works.
+
+        self.tab_data = self.tab_data.reshape(self.tab.ntypes,self.tab.ntypes,self.tab.nspline,4)
 
         atomic_energy = torch.zeros(nloc)
-        for a_loc in range(nloc):
-            
-            for a_nei in range(nnei):
-                # there will be duplicated calculation (pairwise), maybe cache it somewhere.
-                # removing _pair_tab_jloop method, just unwrap here.
 
-                cur_table_data --> sub-table based on atype.
+        for atom_i in range(nloc):
+            i_type = atype[:,i_type] # not quite sure about this on frame dimension
+            for atom_j in range(nnei):
+                j_idx = nnei[atom_j]
+                j_type = extended_atype[:,j_idx] #same here
+                rr = pairwise_dr[atom_i][atom_j].pow(2).sum().sqrt()
 
-                rr = pairwise_dr[a_loc][a_nei].pow(2).sum().sqrt() # this is the salar distance.
-                
-                pairwise_ene = self._pair_tabulated_inter(cur_table_data, rr)
-                atomic_energy[a_loc] += pairwise_ene
-                
-        return {"atomic_energy": atomic_energy} --> convert to FittingOutputDef
+                # need to handle i_type and j_type frame dimension
+                pairwise_ene = self._pair_tabulated_inter(i_type,j_type,rr)
+                atomic_energy[atom_i] += pairwise_ene
+        
+        return {"atomic_energy": atomic_energy}
 
-        """
-
-    def _pair_tabulated_inter(self, cur_table_data: torch.Tensor, rr: torch.Tensor) -> torch.Tensor:
+    def _pair_tabulated_inter(self, i_type: int, j_type: int, rr: torch.Tensor) -> torch.Tensor:
         """Pairwise tabulated energy.
         
         Parameters
         ----------
-        cur_table_data : torch.Tensor
-            The tabulated cubic spline coefficients for the current atom types.
+        i_type : int
+            The integer representation of atom type for atom i.
+
+        j_type : int
+            The integer representation of atom type for atom j.
 
         rr : torch.Tensor
             The salar distance vector between two atoms.
@@ -165,8 +162,6 @@ class PairTabModel(AtomicModel):
         hi = 1. / hh
 
         nspline = int(self.tab_info[2] + 0.1)
-        # ndata = nspline * 4
-
 
         uu = (rr - rmin) * hi
 
@@ -182,10 +177,7 @@ class PairTabModel(AtomicModel):
 
         uu -= idx
 
-        a3 = cur_table_data[4 * idx + 0]
-        a2 = cur_table_data[4 * idx + 1] 
-        a1 = cur_table_data[4 * idx + 2]
-        a0 = cur_table_data[4 * idx + 3]
+        a3, a2, a1, a0 = self.tab_data[i_type][j_type][idx]
 
         etmp = (a3 * uu + a2) * uu + a1
         ener = etmp * uu + a0
@@ -207,7 +199,6 @@ class PairTabModel(AtomicModel):
         
         Examples
         --------
-
         coords = torch.tensor([
                 [0,0,0],
                 [1,3,5],
@@ -227,7 +218,6 @@ class PairTabModel(AtomicModel):
             [ 1,  1,  1],
             [ 0,  0,  0]]
             ])
-
         """
         return coords.unsqueeze(1) - coords.unsqueeze(0)
 
