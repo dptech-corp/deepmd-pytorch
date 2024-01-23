@@ -106,7 +106,7 @@ class PairTabModel(AtomicModel):
         pairwise_dr = self._get_pairwise_dist(extended_coord)
         
         """
-        below is the sudo code, need to figure out how the index works.
+        below is the pseudocode, need to figure out how the index works.
 
         atomic_energy = torch.zeros(nloc)
         for a_loc in range(nloc):
@@ -115,8 +115,8 @@ class PairTabModel(AtomicModel):
                 # there will be duplicated calculation (pairwise), maybe cache it somewhere.
                 # removing _pair_tab_jloop method, just unwrap here.
 
-                cur_table_data --> subtable based on atype.
-                
+                cur_table_data --> sub-table based on atype.
+
                 rr = pairwise_dr[a_loc][a_nei].pow(2).sum().sqrt() # this is the salar distance.
                 
                 pairwise_ene = self._pair_tabulated_inter(cur_table_data, rr)
