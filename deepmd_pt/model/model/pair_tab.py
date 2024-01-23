@@ -21,7 +21,7 @@ import torch
 import numpy as np
 from typing import Dict, List, Optional, Union
 
-from deepmd_utils.model_format import FittingOutputDef
+from deepmd_utils.model_format import FittingOutputDef, OutputVariableDef
 from deepmd_pt.model.task import Fitting
 
 class PairTabModel(AtomicModel):
@@ -77,7 +77,14 @@ class PairTabModel(AtomicModel):
         return
     
     def get_fitting_output_def(self)->FittingOutputDef:
-        pass #TODO
+        return FittingOutputDef(
+            [OutputVariableDef(
+                name="energy",
+                shape=[1],
+                reduciable=True,
+                differentiable=True
+            )]
+        )
 
     def get_rcut(self)->float:
         return self.rcut
@@ -158,7 +165,7 @@ class PairTabModel(AtomicModel):
         hi = 1. / hh
 
         nspline = int(self.tab_info[2] + 0.1)
-        ndata = nspline * 4
+        # ndata = nspline * 4
 
 
         uu = (rr - rmin) * hi
@@ -170,7 +177,7 @@ class PairTabModel(AtomicModel):
 
         if idx >= nspline:
             ener = 0
-            fscale = 0
+            # fscale = 0
             return
 
         uu -= idx
@@ -207,7 +214,8 @@ class PairTabModel(AtomicModel):
                 [2,4,6]
             ])
         
-        dist = tensor([[[ 0,  0,  0],
+        dist = tensor([
+            [[ 0,  0,  0],
             [-1, -3, -5],
             [-2, -4, -6]],
 
@@ -217,7 +225,8 @@ class PairTabModel(AtomicModel):
 
             [[ 2,  4,  6],
             [ 1,  1,  1],
-            [ 0,  0,  0]]])
+            [ 0,  0,  0]]
+            ])
 
         """
         return coords.unsqueeze(1) - coords.unsqueeze(0)
