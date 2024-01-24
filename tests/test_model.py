@@ -298,6 +298,7 @@ class TestEnergy(unittest.TestCase):
         batch['coord'].requires_grad_(True)
         batch['natoms'] = torch.tensor(batch['natoms_vec'], device=batch['coord'].device).unsqueeze(0)
         model_predict = my_model(batch['coord'], batch['atype'], batch['box'], do_atomic_virial=True)
+        model_predict_1 = my_model(batch['coord'], batch['atype'], batch['box'], do_atomic_virial=False)        
         p_energy, p_force, p_virial, p_atomic_virial = model_predict['energy'], model_predict['force'], model_predict['virial'], model_predict['atomic_virial']
         cur_lr = my_lr.value(self.wanted_step)
         model_pred = {'energy': p_energy,
@@ -313,6 +314,8 @@ class TestEnergy(unittest.TestCase):
         atol = 1e-8
         np.testing.assert_allclose(head_dict['loss'], loss.cpu().detach().numpy(), rtol=rtol, atol=atol)
         np.testing.assert_allclose(head_dict['virial'], p_virial.view(*head_dict['virial'].shape).cpu().detach().numpy())
+        np.testing.assert_allclose(head_dict['virial'], model_predict_1['virial'].view(*head_dict['virial'].shape).cpu().detach().numpy())
+        self.assertIsNone(model_predict_1.get('atomic_virial', None))
         np.testing.assert_allclose(head_dict['atomic_virial'], p_atomic_virial.view(*head_dict['atomic_virial'].shape).cpu().detach().numpy())
         optimizer = torch.optim.Adam(my_model.parameters(), lr=cur_lr)
         optimizer.zero_grad()

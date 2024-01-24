@@ -11,11 +11,27 @@ from typing import Optional, List, Dict, Tuple
 from deepmd_pt.model.network import ResidualDeep
 from deepmd_pt.model.task import Fitting
 
+from deepmd_utils.model_format import (
+  FittingOutputDef,
+  OutputVariableDef,
+  fitting_check_output,
+)
+
 
 @Fitting.register("ener")
+@fitting_check_output
 class EnergyFittingNet(Fitting):
 
-    def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, resnet_dt=True, use_tebd=True, **kwargs):
+    def __init__(
+        self, 
+        ntypes, 
+        embedding_width, 
+        neuron, 
+        bias_atom_e, 
+        resnet_dt=True, 
+        use_tebd=True,
+        **kwargs,
+    ):
         """Construct a fitting net for energy.
 
         Args:
@@ -25,7 +41,7 @@ class EnergyFittingNet(Fitting):
         - bias_atom_e: Average enery per atom for each element.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(EnergyFittingNet, self).__init__()
+        super().__init__()
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         self.use_tebd = use_tebd
@@ -44,6 +60,11 @@ class EnergyFittingNet(Fitting):
         if 'seed' in kwargs:
             logging.info('Set seed to %d in fitting net.', kwargs['seed'])
             torch.manual_seed(kwargs['seed'])
+
+    def output_def(self):
+        return FittingOutputDef([
+          OutputVariableDef("energy", [1], reduciable=True, differentiable=True),
+        ])
 
     def forward(self,
                 inputs: torch.Tensor,
@@ -72,11 +93,14 @@ class EnergyFittingNet(Fitting):
                 atom_energy = atom_energy + self.bias_atom_e[type_i]
                 atom_energy = atom_energy * mask.unsqueeze(-1)
                 outs = outs + atom_energy # Shape is [nframes, natoms[0], 1]
-        return outs.to(env.GLOBAL_PT_FLOAT_PRECISION), None
+        return {
+          "energy": outs.to(env.GLOBAL_PT_FLOAT_PRECISION)
+        }
 
 
 @Fitting.register("direct_force")
 @Fitting.register("direct_force_ener")
+@fitting_check_output
 class EnergyFittingNetDirect(Fitting):
 
     def __init__(self, ntypes, embedding_width, neuron, bias_atom_e, out_dim=1, resnet_dt=True, use_tebd=True, return_energy=False, **kwargs):
@@ -89,7 +113,7 @@ class EnergyFittingNetDirect(Fitting):
         - bias_atom_e: Average enery per atom for each element.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(EnergyFittingNetDirect, self).__init__()
+        super().__init__()
         self.ntypes = ntypes
         self.embedding_width = embedding_width
         self.use_tebd = use_tebd
@@ -117,6 +141,13 @@ class EnergyFittingNetDirect(Fitting):
         if 'seed' in kwargs:
             logging.info('Set seed to %d in fitting net.', kwargs['seed'])
             torch.manual_seed(kwargs['seed'])
+
+
+    def output_def(self):
+        return FittingOutputDef([
+          OutputVariableDef("energy", [1], reduciable=True, differentiable=False),
+          OutputVariableDef("dforce", [3], reduciable=False, differentiable=False),
+        ])
 
     def forward(self,
                 inputs: torch.Tensor,
@@ -162,4 +193,8 @@ class EnergyFittingNetDirect(Fitting):
                         atom_energy = atom_energy + self.bias_atom_e[type_i]
                     atom_energy = atom_energy * mask.unsqueeze(-1)
                     outs = outs + atom_energy # Shape is [nframes, natoms[0], 1]
-        return outs.to(env.GLOBAL_PT_FLOAT_PRECISION), vec_out
+        return {
+          "energy": outs.to(env.GLOBAL_PT_FLOAT_PRECISION), 
+          "dforce": vec_out,
+        }
+

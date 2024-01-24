@@ -13,7 +13,7 @@ class BaseModel(torch.nn.Module):
         """
         super(BaseModel, self).__init__()
 
-    def forward(self, **kwargs):
+    def forward(self, *args, **kwargs):
         """Model output.
         """
         raise NotImplementedError
