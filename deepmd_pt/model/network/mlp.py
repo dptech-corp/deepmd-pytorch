@@ -417,4 +417,4 @@ class NetworkCollection(DPNetworkCollection, nn.Module):
        # init both two base classes
         DPNetworkCollection.__init__(self, *args, **kwargs)
         nn.Module.__init__(self)
-        self.networks = self._networks = torch.nn.ModuleList(self._networks)
+        self._networks = torch.nn.ModuleList(self._networks)

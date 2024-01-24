@@ -130,7 +130,7 @@ class TestDescrptSeAtten(unittest.TestCase, TestCaseSingleFrameWithNlist):
                 dd3_state_dict_attn = dd3.se_atten.dpa1_attention.state_dict()
                 for i in dd3_state_dict:
                     dd3_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
-                        .replace('filter_layers_old.', 'filter_layers.networks.').replace('.attn_layer_norm.weight', '.attn_layer_norm.matrix')].detach().clone()
+                        .replace('filter_layers_old.', 'filter_layers._networks.').replace('.attn_layer_norm.weight', '.attn_layer_norm.matrix')].detach().clone()
                     if '.bias' in i and 'attn_layer_norm' not in i:
                         dd3_state_dict[i] = dd3_state_dict[i].unsqueeze(0)
                 dd3.se_atten.load_state_dict(dd3_state_dict)

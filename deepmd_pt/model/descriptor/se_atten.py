@@ -349,7 +349,7 @@ class DescrptBlockSeAtten(DescriptorBlock):
                 # nfnl x nnei x (1 + tebd_dim * 2)
                 ss = torch.concat([ss, nlist_tebd, atype_tebd], dim=2)
             # nfnl x nnei x ng
-            gg = self.filter_layers.networks[0](ss)
+            gg = self.filter_layers._networks[0](ss)
             input_r = torch.nn.functional.normalize(dmatrix.reshape(-1, self.nnei, 4)[:, :, 1:4], dim=-1)
             gg = self.dpa1_attention(gg, nlist_mask, input_r=input_r,
                                      sw=sw)  # shape is [nframes*nloc, self.neei, out_size]
