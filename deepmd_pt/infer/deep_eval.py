@@ -9,6 +9,7 @@ from deepmd_pt.utils.dataloader import collate_batch
 from typing import Callable, Optional, Tuple, Union, List
 from deepmd_pt.utils import env
 from deepmd_pt.utils.auto_batch_size import AutoBatchSize
+from deepmd_utils.infer.deep_pot import DeepPot as DeepPotBase
 
 
 class DeepEval:
@@ -53,7 +54,7 @@ class DeepEval:
         raise NotImplementedError
 
 
-class DeepPot(DeepEval):
+class DeepPot(DeepEval, DeepPotBase):
     def __init__(
         self,
         model_file: "Path",
@@ -176,6 +177,22 @@ class DeepPot(DeepEval):
             return energy_out, force_out, virial_out
         else:
             return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
+
+    def get_ntypes(self) -> int:
+        """Get the number of atom types of this model."""
+        return len(self.type_map)
+
+    def get_type_map(self) -> List[str]:
+        """Get the type map (element name of the atom types) of this model."""
+        return self.type_map
+
+    def get_dim_fparam(self) -> int:
+        """Get the number (dimension) of frame parameters of this DP."""
+        return 0
+
+    def get_dim_aparam(self) -> int:
+        """Get the number (dimension) of atomic parameters of this DP."""
+        return 0
 
 
 # For tests only
