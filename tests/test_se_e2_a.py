@@ -124,7 +124,7 @@ class TestDescrptSeA(unittest.TestCase, TestCaseSingleFrameWithNlist):
           dd3_state_dict = dd3.sea.state_dict()
           for i in dd3_state_dict:
               dd3_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
-                  .replace('filter_layers_old.', 'filter_layers.networks.')].detach().clone()
+                  .replace('filter_layers_old.', 'filter_layers._networks.')].detach().clone()
               if '.bias' in i:
                   dd3_state_dict[i] = dd3_state_dict[i].unsqueeze(0)
           dd3.sea.load_state_dict(dd3_state_dict)
