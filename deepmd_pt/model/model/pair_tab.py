@@ -14,7 +14,7 @@
 # 3. define a translation layer (dict map for user outputs)
 
 from .atomic_model import AtomicModel
-from deepmd.utils.pair_tab import (
+from deepmd_utils.pair_tab import (
     PairTab,
 )
 import torch
@@ -178,12 +178,10 @@ class PairTabModel(nn.Module, AtomicModel):
         cur_tab = self.tab_data[i_type.squeeze(),j_type.squeeze()] # this should have shape (nframes, nspline, 4)
         
 
-        # if idx >= nspline:
-        #     ener = 0
-        #     # fscale = 0
-        #     return
-        
-        final_coef = cur_tab[torch.arange(idx.shape[0]), idx.squeeze()] # this should have shape (nframes, 4)
+        # we need to check in the elements in the index tensor (nframes, 1) to see if they are beyond the table.
+        # when the spline idx is beyond the table, all spline coefficients are set to `0`, and the resulting ener corresponding to the idx is also `0`.
+        final_coef = self._extract_spline_coefficient(cur_tab, idx) # this should have shape (nframes, 4)
+
         a3, a2, a1, a0 = final_coef[:,0], final_coef[:,1], final_coef[:,2], final_coef[:,3] # the four coefficients should all be (nframes, 1)
 
         etmp = (a3 * uu + a2) * uu + a1 # this should be elementwise operations.
@@ -228,3 +226,64 @@ class PairTabModel(nn.Module, AtomicModel):
         """
         return coords.unsqueeze(2) - coords.unsqueeze(1)
 
+    @staticmethod
+    def _extract_spline_coefficient(cur_tab: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+        """Extract the spline coefficient from the table.
+
+        Parameters
+        ----------
+        cur_tab : torch.Tensor
+            The table containing the spline coefficients. (nframes, nspline, 4)
+
+        idx : torch.Tensor
+            The index of the spline coefficient. (nframes, 1)
+
+        Returns
+        -------
+        torch.Tensor
+            The spline coefficient. (nframes, 4)
+
+        Example
+        -------
+        cur_tab = tensor([[[0, 3, 1, 3],
+                         [1, 1, 2, 1],
+                         [3, 1, 3, 3]],
+
+                        [[3, 1, 3, 1],
+                         [2, 3, 1, 0],
+                         [2, 1, 3, 1]],
+
+                        [[3, 0, 2, 2],
+                         [2, 3, 1, 1],
+                         [1, 2, 3, 1]],
+
+                        [[0, 3, 3, 0],
+                         [1, 3, 0, 3],
+                         [3, 1, 2, 3]],
+
+                        [[3, 0, 3, 3],
+                         [1, 1, 1, 0],
+                         [3, 1, 2, 3]]])
+
+        idx = tensor([[1],
+                        [0],
+                        [2],
+                        [5],
+                        [1]])
+        
+
+        final_coef = tensor([[[1, 1, 2, 1]],
+
+                            [[3, 1, 3, 1]],
+
+                            [[1, 2, 3, 1]],
+
+                            [[0, 0, 0, 0]],
+
+                            [[1, 1, 1, 0]]])
+        """
+        clipped_indices = torch.clamp(idx, 0, cur_tab.shape[1] - 1)
+        final_coef = torch.gather(cur_tab, 1, clipped_indices.unsqueeze(-1).expand(-1, -1, cur_tab.shape[-1]))
+        final_coef[idx.squeeze() >= cur_tab.shape[1]] = 0
+
+        return final_coef
