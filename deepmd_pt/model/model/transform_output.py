@@ -44,6 +44,7 @@ def task_deriv_one(
     atom_energy: torch.Tensor,
     energy: torch.Tensor,
     extended_coord: torch.Tensor,
+    do_atomic_virial: bool = False,
 ):
   faked_grad = torch.ones_like(energy)
   lst = torch.jit.annotate(List[Optional[torch.Tensor]], [faked_grad])
@@ -52,8 +53,9 @@ def task_deriv_one(
   extended_force = -extended_force
   extended_virial = extended_force.unsqueeze(-1) @ extended_coord.unsqueeze(-2)
   # the correction sums to zero, which does not contribute to global virial
-  extended_virial_corr = atomic_virial_corr(extended_coord, atom_energy)
-  extended_virial = extended_virial + extended_virial_corr
+  if do_atomic_virial:
+    extended_virial_corr = atomic_virial_corr(extended_coord, atom_energy)
+    extended_virial = extended_virial + extended_virial_corr
   return extended_force, extended_virial
 
 
@@ -79,6 +81,7 @@ def take_deriv(
     svv: torch.Tensor,
     vdef: OutputVariableDef,
     coord_ext: torch.Tensor,
+    do_atomic_virial: bool = False,
 ):
   size = 1
   for ii in vdef.shape:
@@ -90,7 +93,7 @@ def take_deriv(
   split_ff, split_avir = [], []
   for vvi, svvi in zip(split_vv1, split_svv1):
     # nf x nloc x 3, nf x nloc x 3 x 3
-    ffi, aviri = task_deriv_one(vvi, svvi, coord_ext)
+    ffi, aviri = task_deriv_one(vvi, svvi, coord_ext, do_atomic_virial=do_atomic_virial)
     # nf x nloc x 1 x 3, nf x nloc x 1 x 3 x 3
     ffi = ffi.unsqueeze(-2)
     aviri = aviri.unsqueeze(-3)
@@ -106,6 +109,7 @@ def fit_output_to_model_output(
     fit_ret : Dict[str, torch.Tensor],
     fit_output_def: FittingOutputDef,
     coord_ext: torch.Tensor,
+    do_atomic_virial: bool = False,
 ) -> Dict[str, torch.Tensor]:
   """Transform the output of the fitting network to 
   the model output.
@@ -121,7 +125,8 @@ def fit_output_to_model_output(
       model_ret[kk_redu] = torch.sum(vv, dim=atom_axis)    
       if vdef.differentiable:
         kk_derv_r, kk_derv_c = get_deriv_name(kk)
-        dr, dc = take_deriv(vv, model_ret[kk_redu], vdef, coord_ext)
+        dr, dc = take_deriv(
+          vv, model_ret[kk_redu], vdef, coord_ext, do_atomic_virial=do_atomic_virial)
         model_ret[kk_derv_r] = dr
         model_ret[kk_derv_c] = dc
   return model_ret
@@ -131,6 +136,7 @@ def communicate_extended_output(
     model_ret: Dict[str, torch.Tensor],
     model_output_def: ModelOutputDef,
     mapping: torch.Tensor,                # nf x nloc
+    do_atomic_virial: bool = False,
 ) -> Dict[str, torch.Tensor]:
   """Transform the output of the model network defined on 
   local and ghost (extended) atoms to local atoms.
@@ -175,4 +181,7 @@ def communicate_extended_output(
           reduce='sum',
         )
         new_ret[kk_derv_c+'_redu'] = torch.sum(new_ret[kk_derv_c], dim=1)
+        if not do_atomic_virial:
+          # pop atomic virial, because it is not correctly calculated.
+          new_ret.pop(kk_derv_c)
   return new_ret

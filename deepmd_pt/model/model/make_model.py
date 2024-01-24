@@ -72,6 +72,7 @@ def make_model(T_AtomicModel):
               model_predict_lower,
               self.get_model_output_def(),
               mapping,
+              do_atomic_virial=do_atomic_virial,
             )
             return model_predict
 
@@ -84,17 +85,38 @@ def make_model(T_AtomicModel):
             mapping: Optional[torch.Tensor] = None,
             do_atomic_virial: bool = False,
         ):
+            """Return model prediction.
+
+            Parameters
+            ----------
+            extended_coord
+              coodinates in extended region
+            extended_atype
+              atomic type in extended region
+            nlist
+              neighbor list. nf x nloc x nsel
+            mapping
+              mapps the extended indices to local indices
+            do_atomic_virial
+              whether do atomic virial
+
+            Return
+            ------
+            result_dict
+              the result dict, defined by the fitting net output def.
+
+            """
             atomic_ret = self.forward_atomic(
               extended_coord,
               extended_atype,
               nlist,
               mapping=mapping,
-              do_atomic_virial=do_atomic_virial,
             )
             model_predict = fit_output_to_model_output(
               atomic_ret, 
               self.get_fitting_output_def(),
               extended_coord,
+              do_atomic_virial=do_atomic_virial,
             )
             return model_predict
 

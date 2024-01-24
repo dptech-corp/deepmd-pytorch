@@ -142,7 +142,6 @@ class DPAtomicModel(BaseModel, AtomicModel):
       extended_atype, 
       nlist,
       mapping: Optional[torch.Tensor] = None,
-      do_atomic_virial: bool = False,
   ) -> Dict[str, torch.Tensor]:
     """Return atomic prediction.
 
@@ -156,8 +155,6 @@ class DPAtomicModel(BaseModel, AtomicModel):
       neighbor list. nf x nloc x nsel
     mapping
       mapps the extended indices to local indices
-    do_atomic_virial
-      whether do atomic virial
 
     Return
     ------
