@@ -5,7 +5,7 @@ import numpy as np
 
 try:
     from deepmd_utils.model_format import (
-        # DescrptSeA as DPDescrptSeA,
+        DescrptSeAtten as DPDescrptSeAtten,
         PRECISION_DICT as DP_PRECISION_DICT,
     )
 
@@ -24,7 +24,6 @@ from deepmd_pt.utils.env import (
 )
 from deepmd_pt.utils import env
 from .test_mlp import get_tols
-from IPython import embed
 
 dtype = env.GLOBAL_PT_FLOAT_PRECISION
 
@@ -96,17 +95,17 @@ class TestDescrptSeAtten(unittest.TestCase, TestCaseSingleFrameWithNlist):
                 torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
                 torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
             )
-            # # serialization
-            # dd1 = DescrptDPA1.deserialize(dd0.serialize())
-            # rd1, _, _, _, _ = dd1(
-            #     torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
-            #     torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
-            #     torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
-            # )
-            # np.testing.assert_allclose(
-            #     rd0.detach().cpu().numpy(), rd1.detach().cpu().numpy(),
-            #     rtol=rtol, atol=atol, err_msg=err_msg,
-            # )
+            # serialization
+            dd1 = DescrptDPA1.deserialize(dd0.serialize())
+            rd1, _, _, _, _ = dd1(
+                torch.tensor(self.coord_ext, dtype=dtype, device=env.DEVICE),
+                torch.tensor(self.atype_ext, dtype=int, device=env.DEVICE),
+                torch.tensor(self.nlist, dtype=int, device=env.DEVICE),
+            )
+            np.testing.assert_allclose(
+                rd0.detach().cpu().numpy(), rd1.detach().cpu().numpy(),
+                rtol=rtol, atol=atol, err_msg=err_msg,
+            )
             # dp impl
             # dd2 = DPDescrptSeA.deserialize(dd0.serialize())
             # rd2 = dd2.call(
@@ -129,10 +128,9 @@ class TestDescrptSeAtten(unittest.TestCase, TestCaseSingleFrameWithNlist):
 
                 dd0_state_dict_attn = dd0.se_atten.dpa1_attention.state_dict()
                 dd3_state_dict_attn = dd3.se_atten.dpa1_attention.state_dict()
-                embed()
                 for i in dd3_state_dict:
                     dd3_state_dict[i] = dd0_state_dict[i.replace('.deep_layers.', '.layers.')
-                        .replace('filter_layers_old.', 'filter_layers.networks.')].detach().clone()
+                        .replace('filter_layers_old.', 'filter_layers.networks.').replace('.attn_layer_norm.weight', '.attn_layer_norm.matrix')].detach().clone()
                     if '.bias' in i and 'attn_layer_norm' not in i:
                         dd3_state_dict[i] = dd3_state_dict[i].unsqueeze(0)
                 dd3.se_atten.load_state_dict(dd3_state_dict)

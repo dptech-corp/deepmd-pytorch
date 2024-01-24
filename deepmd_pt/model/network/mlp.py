@@ -29,7 +29,6 @@ try:
     from deepmd_utils._version import version as __version__
 except ImportError:
     __version__ = "unknown"
-from IPython import embed
 
 def empty_t(shape, precision):
     return torch.empty(shape, dtype=precision, device=device)
@@ -254,7 +253,9 @@ class EmbdLayer(nn.Module):
             precision=self.precision,
         )
         nl.w = self.matrix.detach().cpu().numpy()
-        return nl.serialize() + {"padding": self.padding}
+        data = nl.serialize()
+        data["padding"] = self.padding
+        return  data
 
     @classmethod
     def deserialize(cls, data: dict) -> "EmbdLayer":
@@ -265,6 +266,7 @@ class EmbdLayer(nn.Module):
         data : dict
             The dict to deserialize from.
         """
+        padding = data.pop("padding")
         nl = NativeLayer.deserialize(data)
         obj = cls(
             nl["matrix"].shape[0],
@@ -272,7 +274,7 @@ class EmbdLayer(nn.Module):
             padding=False,
             precision=nl["precision"],
         )
-        obj.padding = data["padding"]
+        obj.padding = padding
         prec = PRECISION_DICT[obj.precision]
         check_load_param = \
             lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=prec, device=device)) \
@@ -297,8 +299,8 @@ class LayerNorm(nn.Module):
         self.eps = eps
         self.num_in = num_in
         self.reset_para = reset_para
-        self.matrix = nn.Parameter(data=empty_t(self.num_channel, self.prec))
-        self.bias = nn.Parameter(data=empty_t(self.num_channel, self.prec))
+        self.matrix = nn.Parameter(data=empty_t(self.num_in, self.prec))
+        self.bias = nn.Parameter(data=empty_t(self.num_in, self.prec))
         if self.reset_para:
             nn.init.ones_(self.matrix.data)
             nn.init.zeros_(self.bias.data)
@@ -339,7 +341,7 @@ class LayerNorm(nn.Module):
         yy: torch.Tensor
             The output.
         """
-        yy = F.layer_norm(xx, tuple(self.num_in), self.matrix, self.bias, self.eps)
+        yy = F.layer_norm(xx, tuple((self.num_in,)), self.matrix, self.bias, self.eps)
         return yy
 
     def serialize(self) -> dict:
@@ -351,7 +353,7 @@ class LayerNorm(nn.Module):
             The serialized layer.
         """
         nl = NativeLayer(
-            self.matrix.shape[0],
+            1,
             self.matrix.shape[0],
             bias=True,
             use_timestep=False,
@@ -359,12 +361,14 @@ class LayerNorm(nn.Module):
             resnet=False,
             precision=self.precision,
         )
-        nl.w = self.matrix.detach().cpu().numpy()
+        nl.w = self.matrix.unsqueeze(0).detach().cpu().numpy()
         nl.b = self.bias.detach().cpu().numpy()
-        return nl.serialize() + {"eps": self.eps}
+        data = nl.serialize()
+        data["eps"] = self.eps
+        return data
 
     @classmethod
-    def deserialize(cls, data: dict) -> "EmbdLayer":
+    def deserialize(cls, data: dict) -> "LayerNorm":
         """Deserialize the layer from a dict.
 
         Parameters
@@ -372,20 +376,20 @@ class LayerNorm(nn.Module):
         data : dict
             The dict to deserialize from.
         """
+        eps = data.pop("eps")
         nl = NativeLayer.deserialize(data)
         obj = cls(
-            nl["matrix"].shape[0],
             nl["matrix"].shape[1],
+            eps=eps,
             precision=nl["precision"],
         )
-        obj.padding = data["padding"]
         prec = PRECISION_DICT[obj.precision]
         check_load_param = \
-            lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=prec, device=device)) \
+            lambda ss: nn.Parameter(data=torch.tensor(nl[ss], dtype=prec, device=device).squeeze(0)) \
                 if nl[ss] is not None else None
         obj.matrix = check_load_param("matrix")
+        obj.bias = check_load_param("bias")
         return obj
-
 
 
 MLP_ = make_multilayer_network(MLPLayer, nn.Module)

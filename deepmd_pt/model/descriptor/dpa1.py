@@ -17,9 +17,11 @@ from deepmd_pt.model.network import (
 from deepmd_pt.utils.nlist import build_multiple_neighbor_list
 
 from .se_atten import analyze_descrpt
-from .se_atten import DescrptBlockSeAtten
-from deepmd_pt.model.network.mlp import EmbdLayer
-from IPython import embed
+from .se_atten import DescrptBlockSeAtten, NeighborGatedAttention
+from deepmd_pt.model.network.mlp import EmbdLayer, NetworkCollection
+from deepmd_utils.model_format import (
+    EnvMat as DPEnvMat,
+)
 
 @Descriptor.register("dpa1")
 @Descriptor.register("se_atten")
@@ -47,13 +49,12 @@ class DescrptDPA1(Descriptor):
       precision: str = "float64",
       resnet_dt: bool = False,
       scaling_factor=1.0,
-      head_num=1,
       normalize=True,
       temperature=None,
-      return_rot=False,
       concat_output_tebd: bool = True,
       type: Optional[str] = None,
       old_impl: bool = False,
+      **kwargs,
   ):
     super(DescrptDPA1, self).__init__()
     del type
@@ -72,11 +73,10 @@ class DescrptDPA1(Descriptor):
       precision=precision,
       resnet_dt=resnet_dt,
       scaling_factor=scaling_factor,
-      head_num=head_num,
       normalize=normalize,
       temperature=temperature,
-      return_rot=return_rot,
       old_impl=old_impl,
+      **kwargs,
     )
     self.type_embedding_old = None
     self.type_embedding = None
@@ -174,5 +174,67 @@ class DescrptDPA1(Descriptor):
     if self.concat_output_tebd:
       g1 = torch.cat([g1, g1_inp], dim=-1)
     return g1, env_mat, diff, rot_mat, sw
+
+  def set_stat_mean_and_stddev(
+        self,
+        mean: torch.Tensor,
+        stddev: torch.Tensor,
+    )->None:
+      self.se_atten.mean = mean
+      self.se_atten.stddev = stddev
+
+  def serialize(self) -> dict:
+    obj = self.se_atten
+    return {
+      "rcut": obj.rcut,
+      "rcut_smth": obj.rcut_smth,
+      "sel": obj.sel,
+      "ntypes": obj.ntypes,
+      "neuron": obj.neuron,
+      "axis_neuron": obj.axis_neuron,
+      "tebd_dim": obj.tebd_dim,
+      "tebd_input_mode": obj.tebd_input_mode,
+      "set_davg_zero": obj.set_davg_zero,
+      "attn": obj.attn_dim,
+      "attn_layer": obj.attn_layer,
+      "attn_dotr": obj.attn_dotr,
+      "attn_mask": obj.attn_mask,
+      "activation_function": obj.activation_function,
+      "precision": obj.precision,
+      "resnet_dt": obj.resnet_dt,
+      "scaling_factor": obj.scaling_factor,
+      "normalize": obj.normalize,
+      "temperature": obj.temperature,
+      "concat_output_tebd": self.concat_output_tebd,
+      "embeddings": obj.filter_layers.serialize(),
+      "attention_layers": obj.dpa1_attention.serialize(),
+      "env_mat": DPEnvMat(obj.rcut, obj.rcut_smth).serialize(),
+      "type_embedding": self.type_embedding.serialize(),
+      "@variables": {
+        "davg": obj["davg"].detach().cpu().numpy(),
+        "dstd": obj["dstd"].detach().cpu().numpy(),
+      },
+      ## to be updated when the options are supported.
+      "trainable": True,
+      "type_one_side": True,
+      "exclude_types": [],
+      "spin": None,
+    }
+
+  @classmethod
+  def deserialize(cls, data: dict) -> "DescrptDPA1":
+    variables = data.pop("@variables")
+    embeddings = data.pop("embeddings")
+    type_embedding = data.pop("type_embedding")
+    attention_layers = data.pop("attention_layers")
+    env_mat = data.pop("env_mat")
+    obj = cls(**data)
+    t_cvt = lambda xx: torch.tensor(xx, dtype=obj.se_atten.prec, device=env.DEVICE)
+    obj.type_embedding = EmbdLayer.deserialize(type_embedding)
+    obj.se_atten["davg"] = t_cvt(variables["davg"])
+    obj.se_atten["dstd"] = t_cvt(variables["dstd"])
+    obj.se_atten.filter_layers = NetworkCollection.deserialize(embeddings)
+    obj.se_atten.dpa1_attention = NeighborGatedAttention.deserialize(attention_layers)
+    return obj
     
     
