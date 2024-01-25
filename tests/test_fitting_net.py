@@ -8,7 +8,7 @@ import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd.fit.ener import EnerFitting
+from deepmd.tf.fit.ener import EnerFitting
 
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
 from deepmd_pt.model.task import EnergyFittingNet

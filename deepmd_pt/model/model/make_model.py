@@ -6,7 +6,7 @@ from deepmd_pt.model.model.transform_output import (
   fit_output_to_model_output,
   communicate_extended_output,
 )
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   model_check_output,
   ModelOutputDef,
 )

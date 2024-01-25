@@ -4,12 +4,12 @@ import torch
 import unittest
 import json
 
-from deepmd.descriptor.se_a import DescrptSeA as DescrptSeA_tf
-from deepmd.fit.ener import EnerFitting
-from deepmd.model.model_stat import make_stat_input as dp_make, merge_sys_stat as dp_merge
-from deepmd.utils.data_system import DeepmdDataSystem
-from deepmd.utils import random as tf_random
-from deepmd.common import expand_sys_str
+from deepmd.tf.descriptor.se_a import DescrptSeA as DescrptSeA_tf
+from deepmd.tf.fit.ener import EnerFitting
+from deepmd.tf.model.model_stat import make_stat_input as dp_make, merge_sys_stat as dp_merge
+from deepmd.tf.utils.data_system import DeepmdDataSystem
+from deepmd.tf.utils import random as tf_random
+from deepmd.tf.common import expand_sys_str
 
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.descriptor import DescrptSeA

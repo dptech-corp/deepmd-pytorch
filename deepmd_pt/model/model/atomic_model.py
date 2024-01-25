@@ -7,7 +7,7 @@ from typing import (
   Dict,
   List,
 )
-from deepmd_utils.model_format import FittingOutputDef
+from deepmd.model_format import FittingOutputDef
 from deepmd_pt.model.task import Fitting
 
 

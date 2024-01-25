@@ -9,7 +9,7 @@ from deepmd_pt.utils.dataloader import collate_batch
 from typing import Callable, Optional, Tuple, Union, List
 from deepmd_pt.utils import env
 from deepmd_pt.utils.auto_batch_size import AutoBatchSize
-from deepmd_utils.infer.deep_pot import DeepPot as DeepPotBase
+from deepmd.infer.deep_pot import DeepPot as DeepPotBase
 
 
 class DeepEval:

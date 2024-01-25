@@ -7,7 +7,7 @@ from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.model.task import TaskBaseMethod
 from deepmd_pt.utils.plugin import Plugin, PluginVariant
 from typing import Callable
-from deepmd_utils.model_format import FittingOutputDef, fitting_check_output
+from deepmd.model_format import FittingOutputDef, fitting_check_output
 
 
 class Fitting(TaskBaseMethod):

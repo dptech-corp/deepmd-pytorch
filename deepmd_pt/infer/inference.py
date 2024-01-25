@@ -15,7 +15,7 @@ from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
 from deepmd_pt.utils.env import DEVICE, JIT
 from deepmd_pt.utils.stat import make_stat_input
 from torch.utils.data import DataLoader, RandomSampler
-from deepmd.common import (
+from deepmd.tf.common import (
     expand_sys_str,
 )
 

@@ -12,7 +12,7 @@ except:
 from deepmd_pt.model.network import NonLinearHead, MaskLMHead
 from deepmd_pt.model.task import TaskBaseMethod
 
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   FittingOutputDef,
   OutputVariableDef,
   fitting_check_output,

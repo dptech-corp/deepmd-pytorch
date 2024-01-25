@@ -1,5 +1,5 @@
 from typing import ClassVar, Dict, Optional, List, Union
-from deepmd_utils.model_format.network import NativeNet
+from deepmd.model_format.network import NativeNet
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ from deepmd_pt.utils.env import (
   DEFAULT_PRECISION,
 )
 
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   NativeLayer,
   NativeNet,
   NetworkCollection as DPNetworkCollection,
@@ -25,7 +25,7 @@ from deepmd_utils.model_format import (
 
 from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
 try:
-    from deepmd_utils._version import version as __version__
+    from deepmd._version import version as __version__
 except ImportError:
     __version__ = "unknown"
 

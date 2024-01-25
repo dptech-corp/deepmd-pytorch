@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Tuple
 from deepmd_pt.model.network import ResidualDeep
 from deepmd_pt.model.task import Fitting
 
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   FittingOutputDef,
   OutputVariableDef,
   fitting_check_output,

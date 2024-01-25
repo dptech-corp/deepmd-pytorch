@@ -7,13 +7,13 @@ import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd.env import op_module
+from deepmd.tf.env import op_module
 
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.descriptor import prod_env_mat_se_a
 from deepmd_pt.utils.env import *
-from deepmd.common import expand_sys_str
+from deepmd.tf.common import expand_sys_str
 import json
 
 CUR_DIR = os.path.dirname(__file__)

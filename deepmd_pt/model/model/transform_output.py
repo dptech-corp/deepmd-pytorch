@@ -6,7 +6,7 @@ from typing import (
   Dict,
 )
 
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   get_reduce_name,
   get_deriv_name,
   OutputVariableDef,

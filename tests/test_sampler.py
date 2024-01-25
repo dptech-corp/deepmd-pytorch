@@ -3,9 +3,9 @@ import os
 import unittest
 import json
 
-from deepmd.utils.data_system import DeepmdDataSystem
-from deepmd.utils import random as tf_random
-from deepmd.common import expand_sys_str
+from deepmd.tf.utils.data_system import DeepmdDataSystem
+from deepmd.tf.utils import random as tf_random
+from deepmd.tf.common import expand_sys_str
 from torch.utils.data import DataLoader
 from deepmd_pt.utils.dataloader import DpLoaderSet, get_weighted_sampler
 from deepmd_pt.utils import env

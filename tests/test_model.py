@@ -7,13 +7,13 @@ import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
 from deepmd import op
-from deepmd.common import data_requirement, expand_sys_str
-from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
-from deepmd.fit import EnerFitting
-from deepmd.loss import EnerStdLoss
-from deepmd.model import EnerModel
-from deepmd.utils.data_system import DeepmdDataSystem
-from deepmd.utils.learning_rate import LearningRateExp
+from deepmd.tf.common import data_requirement, expand_sys_str
+from deepmd.tf.descriptor import DescrptSeA as DescrptSeA_tf
+from deepmd.tf.fit import EnerFitting
+from deepmd.tf.loss import EnerStdLoss
+from deepmd.tf.model import EnerModel
+from deepmd.tf.utils.data_system import DeepmdDataSystem
+from deepmd.tf.utils.learning_rate import LearningRateExp
 
 from deepmd_pt.utils.dataloader import DpLoaderSet
 from deepmd_pt.utils.learning_rate import LearningRateExp as MyLRExp

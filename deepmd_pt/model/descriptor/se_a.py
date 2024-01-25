@@ -17,7 +17,7 @@ except:
 from deepmd_pt.model.network import TypeFilter
 from deepmd_pt.model.network.mlp import EmbeddingNet, NetworkCollection
 
-from deepmd_utils.model_format import (
+from deepmd.model_format import (
   EnvMat as DPEnvMat,
 )
 

@@ -18,7 +18,7 @@ from deepmd_pt.model.descriptor import Descriptor
 from tqdm import tqdm
 import torch.multiprocessing
 
-from deepmd_utils.utils.data_system import (
+from deepmd.utils.data_system import (
     prob_sys_size_ext,
     process_sys_probs
 )

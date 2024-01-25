@@ -1,4 +1,4 @@
-from deepmd_utils.utils.random import (
+from deepmd.utils.random import (
     choice,
     random,
     seed,

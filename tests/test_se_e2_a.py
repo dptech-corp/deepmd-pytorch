@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 try :
-  from deepmd_utils.model_format import (
+  from deepmd.model_format import (
     DescrptSeA as DPDescrptSeA,
     PRECISION_DICT as DP_PRECISION_DICT,
   )

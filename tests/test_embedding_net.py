@@ -9,13 +9,13 @@ import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd.descriptor import DescrptSeA as DescrptSeA_tf
+from deepmd.tf.descriptor import DescrptSeA as DescrptSeA_tf
 
 from deepmd_pt.utils import dp_random
 from deepmd_pt.utils.dataset import DeepmdDataSet
 from deepmd_pt.model.descriptor import DescrptSeA
 from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, DEVICE, TEST_CONFIG
-from deepmd.common import expand_sys_str
+from deepmd.tf.common import expand_sys_str
 
 CUR_DIR = os.path.dirname(__file__)
 

@@ -7,8 +7,8 @@ import json
 import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
-from deepmd.loss.ener import EnerStdLoss
-from deepmd.common import expand_sys_str
+from deepmd.tf.loss.ener import EnerStdLoss
+from deepmd.tf.common import expand_sys_str
 
 from deepmd_pt.loss import EnergyStdLoss
 from deepmd_pt.utils.env import TEST_CONFIG

@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 try :
-  from deepmd_utils.model_format import (
+  from deepmd.model_format import (
     EnvMat,
   )
   support_env_mat = True

@@ -5,7 +5,7 @@ import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd.utils import learning_rate
+from deepmd.tf.utils import learning_rate
 
 from deepmd_pt.utils.learning_rate import LearningRateExp
 

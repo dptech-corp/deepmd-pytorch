@@ -6,7 +6,7 @@ import os
 
 from torch.utils.data import DataLoader
 from deepmd_pt.utils.dataloader import BufferedIterator, DpLoaderSet
-from deepmd.common import expand_sys_str
+from deepmd.tf.common import expand_sys_str
 from deepmd_pt.model.model import get_model
 from deepmd_pt.utils import env
 from deepmd_pt.utils.stat import make_stat_input
