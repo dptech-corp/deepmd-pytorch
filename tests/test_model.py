@@ -6,7 +6,6 @@ import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd import op
 from deepmd.tf.common import data_requirement, expand_sys_str
 from deepmd.tf.descriptor import DescrptSeA as DescrptSeA_tf
 from deepmd.tf.fit import EnerFitting
