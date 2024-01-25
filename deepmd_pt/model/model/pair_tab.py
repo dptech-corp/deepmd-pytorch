@@ -94,7 +94,8 @@ class PairTabModel(nn.Module, AtomicModel):
         nframes, nloc, nnei = nlist.shape
 
         #this will mask all -1 in the nlist
-        masked_n_list = torch.clamp(nlist,0)
+        masked_nlist = torch.clamp(nlist,0)
+
         atype = extended_atype[:, :nloc] #(nframes, nloc)
         pairwise_dr = self._get_pairwise_dist(extended_coord) # (nframes, nall, nall, 3)
         pairwise_rr = pairwise_dr.pow(2).sum(-1).sqrt() # (nframes, nall, nall)
@@ -104,10 +105,10 @@ class PairTabModel(nn.Module, AtomicModel):
         #to calculate the atomic_energy, we need 3 tensors, i_type, j_type, rr
         #i_type : (nframes, nloc), this is atype.
         #j_type : (nframes, nloc, nnei)
-        j_type = extended_atype[torch.arange(extended_atype.size(0))[:, None, None], masked_n_list]
+        j_type = extended_atype[torch.arange(extended_atype.size(0))[:, None, None], masked_nlist]
 
         #slice rr to get (nframes, nloc, nnei)
-        rr = torch.gather(pairwise_rr[:, :nloc, :],2, masked_n_list)
+        rr = torch.gather(pairwise_rr[:, :nloc, :],2, masked_nlist)
         
         raw_atomic_energy = self._pair_tabulated_inter(atype, j_type, rr)
 
@@ -115,11 +116,14 @@ class PairTabModel(nn.Module, AtomicModel):
 
         return {"atomic_energy": atomic_energy}
 
-    def _pair_tabulated_inter(self, i_type: torch.Tensor, j_type: torch.Tensor, rr: torch.Tensor) -> torch.Tensor:
+    def _pair_tabulated_inter(self, nlist: torch.Tensor,i_type: torch.Tensor, j_type: torch.Tensor, rr: torch.Tensor) -> torch.Tensor:
         """Pairwise tabulated energy.
         
         Parameters
         ----------
+        nlist : torch.Tensor
+            The unmasked neighbour list. (nframes, nloc)
+
         i_type : torch.Tensor
             The integer representation of atom type for all local atoms for all frames. (nframes, nloc)
 
@@ -152,6 +156,12 @@ class PairTabModel(nn.Module, AtomicModel):
         self.nspline = int(self.tab_info[2] + 0.1)
 
         uu = (rr - rmin) * hi # this is broadcasted to (nframes,nloc,nnei)
+
+        
+        # if nnei of atom 0 has -1 in the nlist, uu would be 0.
+        # this is to handel the nlist where the mask is set to 0.
+        # by replacing the values wiht nspline + 1, the energy contribution will be 0
+        uu = torch.where(nlist != -1, uu, self.nspline+1)
 
         if torch.any(uu < 0):
             raise Exception("coord go beyond table lower boundary")
