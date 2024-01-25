@@ -10,7 +10,7 @@ from deepmd.model_format import (
     FittingOutputDef,
 )
 
-from deepmd_pt.model.descriptor import (
+from deepmd_pt.model.descriptor.descriptor import (
     Descriptor,
 )
 from deepmd_pt.model.task import (

@@ -15,7 +15,7 @@ from deepmd.model_format import (
 from deepmd_pt.model.network.network import (
     ResidualDeep,
 )
-from deepmd_pt.model.task import (
+from deepmd_pt.model.task.fitting import (
     Fitting,
 )
 from deepmd_pt.utils import (

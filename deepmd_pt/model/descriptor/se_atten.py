@@ -7,9 +7,11 @@ from typing import (
 import numpy as np
 import torch
 
-from deepmd_pt.model.descriptor import (
+from deepmd_pt.model.descriptor.descriptor import (
     DescriptorBlock,
     compute_std,
+)
+from deepmd_pt.model.descriptor.env_mat import (
     prod_env_mat_se_a,
 )
 from deepmd_pt.model.network.network import (

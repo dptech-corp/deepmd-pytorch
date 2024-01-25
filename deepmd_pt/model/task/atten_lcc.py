@@ -6,7 +6,7 @@ from deepmd_pt.model.network.network import (
     EnergyHead,
     NodeTaskHead,
 )
-from deepmd_pt.model.task import (
+from deepmd_pt.model.task.task import (
     TaskBaseMethod,
 )
 from deepmd_pt.utils import (

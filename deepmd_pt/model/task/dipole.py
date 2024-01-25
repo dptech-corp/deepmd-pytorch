@@ -6,7 +6,7 @@ import torch
 from deepmd_pt.model.network.network import (
     ResidualDeep,
 )
-from deepmd_pt.model.task import (
+from deepmd_pt.model.task.task import (
     TaskBaseMethod,
 )
 

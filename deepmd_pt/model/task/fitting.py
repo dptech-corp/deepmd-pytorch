@@ -10,7 +10,7 @@ from deepmd.model_format import (
     FittingOutputDef,
 )
 
-from deepmd_pt.model.task import (
+from deepmd_pt.model.task.task import (
     TaskBaseMethod,
 )
 from deepmd_pt.utils.dataloader import (

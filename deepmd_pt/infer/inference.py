@@ -11,7 +11,7 @@ from pathlib import (
 
 import numpy as np
 import torch
-from deepmd.tf.common import (
+from deepmd.common import (
     expand_sys_str,
 )
 from torch.utils.data import (

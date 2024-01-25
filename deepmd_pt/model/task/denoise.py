@@ -14,7 +14,7 @@ from deepmd_pt.model.network.network import (
     MaskLMHead,
     NonLinearHead,
 )
-from deepmd_pt.model.task import (
+from deepmd_pt.model.task.task import (
     TaskBaseMethod,
 )
 from deepmd_pt.utils import (
