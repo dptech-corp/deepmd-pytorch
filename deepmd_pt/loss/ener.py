@@ -2,7 +2,7 @@
 import torch
 import torch.nn.functional as F
 
-from deepmd_pt.loss import (
+from deepmd_pt.loss.loss import (
     TaskLoss,
 )
 from deepmd_pt.utils import (
