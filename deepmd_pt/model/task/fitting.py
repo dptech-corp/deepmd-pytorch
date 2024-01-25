@@ -7,6 +7,7 @@ from deepmd_pt.utils.stat import make_stat_input
 from deepmd_pt.model.task import TaskBaseMethod
 from deepmd_pt.utils.plugin import Plugin, PluginVariant
 from typing import Callable
+from deepmd_utils.model_format import FittingOutputDef, fitting_check_output
 
 
 class Fitting(TaskBaseMethod):
@@ -46,6 +47,11 @@ class Fitting(TaskBaseMethod):
             else:
                 raise RuntimeError("Unknown descriptor type: " + fitting_type)
         return super().__new__(cls)
+
+    def output_def(self) -> FittingOutputDef:
+        """Definition for the task Output.
+        """
+        raise NotImplementedError
 
     def forward(self, **kwargs):
         """Task Output.

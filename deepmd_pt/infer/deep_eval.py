@@ -6,14 +6,17 @@ from deepmd_pt.model.model import get_model
 from deepmd_pt.train.wrapper import ModelWrapper
 from deepmd_pt.utils.preprocess import Region3D, normalize_coord, make_env_mat
 from deepmd_pt.utils.dataloader import collate_batch
-from typing import Optional, Union, List
+from typing import Callable, Optional, Tuple, Union, List
 from deepmd_pt.utils import env
+from deepmd_pt.utils.auto_batch_size import AutoBatchSize
+from deepmd_utils.infer.deep_pot import DeepPot as DeepPotBase
 
 
 class DeepEval:
     def __init__(
             self,
-            model_file: "Path"
+            model_file: "Path",
+            auto_batch_size: Union[bool, int, AutoBatchSize] = True,
     ):
         self.model_path = model_file
         state_dict = torch.load(model_file, map_location=env.DEVICE)
@@ -29,6 +32,17 @@ class DeepEval:
         self.dp.load_state_dict(state_dict)
         self.rcut = self.dp.model['Default'].descriptor.get_rcut()
         self.sec = np.cumsum(self.dp.model['Default'].descriptor.get_sel())
+        if isinstance(auto_batch_size, bool):
+            if auto_batch_size:
+                self.auto_batch_size = AutoBatchSize()
+            else:
+                self.auto_batch_size = None
+        elif isinstance(auto_batch_size, int):
+            self.auto_batch_size = AutoBatchSize(auto_batch_size)
+        elif isinstance(auto_batch_size, AutoBatchSize):
+            self.auto_batch_size = auto_batch_size
+        else:
+            raise TypeError("auto_batch_size should be bool, int, or AutoBatchSize")
 
     def eval(
             self,
@@ -36,29 +50,152 @@ class DeepEval:
             cells: Optional[Union[np.ndarray, torch.Tensor]],
             atom_types: Union[np.ndarray, torch.Tensor, List[int]],
             atomic: bool = False,
-            infer_batch_size: int = 2,
     ):
         raise NotImplementedError
 
 
-class DeepPot(DeepEval):
+class DeepPot(DeepEval, DeepPotBase):
     def __init__(
-            self,
-            model_file: "Path"
+        self,
+        model_file: "Path",
+        auto_batch_size: Union[bool, int, AutoBatchSize] = True,
+        neighbor_list=None,
     ):
-        super(DeepPot, self).__init__(model_file)
+        if neighbor_list is not None:
+            raise NotImplementedError
+        super(DeepPot, self).__init__(
+            model_file,
+            auto_batch_size=auto_batch_size,
+        )
 
     def eval(
-            self,
-            coords: Union[np.ndarray, torch.Tensor],
-            cells: Optional[Union[np.ndarray, torch.Tensor]],
-            atom_types: Union[np.ndarray, torch.Tensor, List[int]],
-            atomic: bool = False,
-            infer_batch_size: int = 2,
+        self,
+        coords: np.ndarray,
+        cells: np.ndarray,
+        atom_types: List[int],
+        atomic: bool = False,
+        fparam: Optional[np.ndarray] = None,
+        aparam: Optional[np.ndarray] = None,
+        efield: Optional[np.ndarray] = None,
+        mixed_type: bool = False,
     ):
-        return eval_model(self.dp, coords, cells, atom_types, atomic, infer_batch_size)
+        if fparam is not None or aparam is not None or efield is not None:
+            raise NotImplementedError
+        # convert all of the input to numpy array
+        atom_types = np.array(atom_types, dtype=np.int32)
+        coords = np.array(coords)
+        if cells is not None:
+            cells = np.array(cells)
+        natoms, numb_test = self._get_natoms_and_nframes(coords, atom_types, len(atom_types.shape) > 1)
+        return self._eval_func(self._eval_model, numb_test, natoms)(coords, cells, atom_types, atomic)
+
+    def _eval_func(self, inner_func: Callable, numb_test: int, natoms: int) -> Callable:
+        """Wrapper method with auto batch size.
+
+        Parameters
+        ----------
+        inner_func : Callable
+            the method to be wrapped
+        numb_test : int
+            number of tests
+        natoms : int
+            number of atoms
+
+        Returns
+        -------
+        Callable
+            the wrapper
+        """
+        if self.auto_batch_size is not None:
+
+            def eval_func(*args, **kwargs):
+                return self.auto_batch_size.execute_all(
+                    inner_func, numb_test, natoms, *args, **kwargs
+                )
+
+        else:
+            eval_func = inner_func
+        return eval_func
+
+    def _get_natoms_and_nframes(
+        self,
+        coords: np.ndarray,
+        atom_types: Union[List[int], np.ndarray],
+        mixed_type: bool = False,
+    ) -> Tuple[int, int]:
+        if mixed_type:
+            natoms = len(atom_types[0])
+        else:
+            natoms = len(atom_types)
+        if natoms == 0:
+            assert coords.size == 0
+        else:
+            coords = np.reshape(np.array(coords), [-1, natoms * 3])
+        nframes = coords.shape[0]
+        return natoms, nframes
+
+    def _eval_model(
+        self,
+        coords: np.ndarray,
+        cells: Optional[np.ndarray],
+        atom_types: np.ndarray,
+        atomic: bool = False,
+    ):
+        model = self.dp.to(DEVICE)
+        energy_out = None
+        atomic_energy_out = None
+        force_out = None
+        virial_out = None
+        atomic_virial_out = None
+
+        nframes = coords.shape[0]
+        if len(atom_types.shape) == 1:
+            natoms = len(atom_types)
+            atom_types = np.tile(atom_types, nframes).reshape(nframes, -1)
+        else:
+            natoms = len(atom_types[0])
+
+        coord_input = torch.tensor(coords.reshape([-1, natoms, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        type_input = torch.tensor(atom_types, dtype=torch.long).to(DEVICE)
+        if cells is not None:
+            box_input = torch.tensor(cells.reshape([-1, 3, 3]), dtype=GLOBAL_PT_FLOAT_PRECISION).to(DEVICE)
+        else:
+            box_input = None
+
+        batch_output = model(coord_input, type_input, box=box_input, do_atomic_virial=atomic)
+        if isinstance(batch_output, tuple):
+            batch_output = batch_output[0]
+        energy_out = batch_output['energy'].detach().cpu().numpy()
+        if 'atom_energy' in batch_output:
+            atomic_energy_out = batch_output['atom_energy'].detach().cpu().numpy()
+        force_out = batch_output['force'].detach().cpu().numpy()
+        virial_out = batch_output['virial'].detach().cpu().numpy()
+        if 'atomic_virial' in batch_output:
+            atomic_virial_out = batch_output['atomic_virial'].detach().cpu().numpy()
+
+        if not atomic:
+            return energy_out, force_out, virial_out
+        else:
+            return energy_out, force_out, virial_out, atomic_energy_out, atomic_virial_out
+
+    def get_ntypes(self) -> int:
+        """Get the number of atom types of this model."""
+        return len(self.type_map)
+
+    def get_type_map(self) -> List[str]:
+        """Get the type map (element name of the atom types) of this model."""
+        return self.type_map
+
+    def get_dim_fparam(self) -> int:
+        """Get the number (dimension) of frame parameters of this DP."""
+        return 0
+
+    def get_dim_aparam(self) -> int:
+        """Get the number (dimension) of atomic parameters of this DP."""
+        return 0
 
 
+# For tests only
 def eval_model(
     model,
     coords: Union[np.ndarray, torch.Tensor],
