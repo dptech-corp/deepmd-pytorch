@@ -95,6 +95,7 @@ class TestForceGrad(unittest.TestCase):
 
     def test_force_grad(self, threshold=1e-3, delta0=1e-6, seed=20):
         result0 = self.model(**get_data(self.origin_batch))
+        np.random.default_rng().seed(seed)
         errors = np.zeros((self.dpdatasystem._natoms, 3))
         for atom_index in range(self.dpdatasystem._natoms):
             for axis_index in range(3):
