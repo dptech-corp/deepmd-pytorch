@@ -92,22 +92,26 @@ class PairTabModel(nn.Module, AtomicModel):
         
 
         nframes, nloc, nnei = nlist.shape
-        atype = extended_atype[:, :nloc] #this is the atype for local atoms, (nframes, nloc)
+
+        #this will mask all -1 in the nlist
+        masked_n_list = torch.clamp(nlist,0)
+        atype = extended_atype[:, :nloc] #(nframes, nloc)
         pairwise_dr = self._get_pairwise_dist(extended_coord) # (nframes, nall, nall, 3)
-        pairwise_rr = pairwise_dr.pow(2).sum(-1).sqrt() # (nframes, nall, nall), this is the pairwise scalar distance for all atoms in all frames.
+        pairwise_rr = pairwise_dr.pow(2).sum(-1).sqrt() # (nframes, nall, nall)
 
         self.tab_data = self.tab_data.reshape(self.tab.ntypes,self.tab.ntypes,self.tab.nspline,4)
 
         #to calculate the atomic_energy, we need 3 tensors, i_type, j_type, rr
         #i_type : (nframes, nloc), this is atype.
         #j_type : (nframes, nloc, nnei)
-        j_type = extended_atype[torch.arange(extended_atype.size(0))[:, None, None], nlist]
+        j_type = extended_atype[torch.arange(extended_atype.size(0))[:, None, None], masked_n_list]
 
-        #sliced rr to get (nframes, nloc, nnei)
-        rr = torch.gather(pairwise_rr[:, :nloc, :],2, nlist)
+        #slice rr to get (nframes, nloc, nnei)
+        rr = torch.gather(pairwise_rr[:, :nloc, :],2, masked_n_list)
+        
+        raw_atomic_energy = self._pair_tabulated_inter(atype, j_type, rr)
 
-        #divied by half to cover pairwise effect.
-        atomic_energy = 0.5 * self._pair_tabulated_inter(atype, j_type, rr)
+        atomic_energy = 0.5 * torch.sum(torch.where(nlist != -1, raw_atomic_energy, torch.zeros_like(raw_atomic_energy)) ,dim=-1)
 
         return {"atomic_energy": atomic_energy}
 
@@ -128,7 +132,7 @@ class PairTabModel(nn.Module, AtomicModel):
         Returns
         -------
         torch.Tensor
-            The atomic energy for all local atoms for all frames. (nframes, nloc)
+            The masked atomic energy for all local atoms for all frames. (nframes, nloc, nnei)
         
         Raises
         ------
@@ -163,7 +167,7 @@ class PairTabModel(nn.Module, AtomicModel):
 
         etmp = (a3 * uu + a2) * uu + a1 # this should be elementwise operations.
         ener = etmp * uu + a0
-        return torch.sum(ener, dim=-1) #(nframes, nloc)
+        return ener
 
     @staticmethod
     def _get_pairwise_dist(coords: torch.Tensor) -> torch.Tensor:
