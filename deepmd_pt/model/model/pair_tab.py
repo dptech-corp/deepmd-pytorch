@@ -1,25 +1,9 @@
-
-
-# This Model will be a concrete class of AtomicModel
-# 1. to get python code from tensorflow (PairTabModel, PariTab)
-#       a) data process
-#       b) get cubic spline
-# 2. to translate c++ code, use cubic spline para to calculate energy
-#   overwrite foward_lower to excldue descriptor and fitting_net
-
-
-# This model will be used by an interface of HybridEnergyModel
-# 1. take a list of AtomicModels and a weightfunc to define hybird energy
-# 2. define the derivatives (force and virial)
-# 3. define a translation layer (dict map for user outputs)
-
-from .atomic_model import AtomicModel
+from atomic_model import AtomicModel
 from deepmd_utils.pair_tab import (
     PairTab,
 )
 import torch
 from torch import nn
-import numpy as np
 from typing import Dict, List, Optional, Union
 
 from deepmd_utils.model_format import FittingOutputDef, OutputVariableDef
@@ -114,21 +98,17 @@ class PairTabModel(nn.Module, AtomicModel):
 
         self.tab_data = self.tab_data.reshape(self.tab.ntypes,self.tab.ntypes,self.tab.nspline,4)
 
-        atomic_energy = torch.zeros(nframes, nloc)
+        #to calculate the atomic_energy, we need 3 tensors, i_type, j_type, rr
+        #i_type : (nframes, nloc), this is atype.
+        #j_type : (nframes, nloc, nnei)
+        j_type = extended_atype[torch.arange(extended_atype.size(0))[:, None, None], nlist]
 
-        for atom_i in range(nloc):
-            i_type = atype[:,atom_i] # (nframes, 1)
-            for atom_j in range(nnei):
-                j_idx = nnei[atom_j]
-                j_type = extended_atype[:,j_idx] # (nframes, 1)
-                
-                rr = pairwise_rr[:, atom_i, j_idx] # (nframes, 1)
+        #sliced rr to get (nframes, nloc, nnei)
+        rr = torch.gather(pairwise_rr[:, :nloc, :],2, nlist)
 
-                # the input shape is (nframes, 1), (nframes, 1), (nframes, 1),
-                # the expected output shape then becomes (nframes,1)
-                pairwise_ene = self._pair_tabulated_inter(i_type, j_type, rr)
-                atomic_energy[:, atom_i] += pairwise_ene
-        
+        #divied by half to cover pairwise effect.
+        atomic_energy = 0.5 * self._pair_tabulated_inter(atype, j_type, rr)
+
         return {"atomic_energy": atomic_energy}
 
     def _pair_tabulated_inter(self, i_type: torch.Tensor, j_type: torch.Tensor, rr: torch.Tensor) -> torch.Tensor:
@@ -137,18 +117,18 @@ class PairTabModel(nn.Module, AtomicModel):
         Parameters
         ----------
         i_type : torch.Tensor
-            The integer representation of atom type for atom i for all frames.
+            The integer representation of atom type for all local atoms for all frames. (nframes, nloc)
 
         j_type : torch.Tensor
-            The integer representation of atom type for atom j for all frames.
+            The integer representation of atom type for all neighbour atoms of all local atoms for all frames. (nframes, nloc, nnei)
 
         rr : torch.Tensor
-            The salar distance vector between two atoms  for all frames.
+            The salar distance vector between two atoms. (nframes, nloc, nnei)
         
         Returns
         -------
         torch.Tensor
-            The energy between two atoms for all frames.
+            The atomic energy for all local atoms for all frames. (nframes, nloc)
         
         Raises
         ------
@@ -165,28 +145,25 @@ class PairTabModel(nn.Module, AtomicModel):
         hh = self.tab_info[1]
         hi = 1. / hh
 
-        nspline = int(self.tab_info[2] + 0.1)
+        self.nspline = int(self.tab_info[2] + 0.1)
 
-        uu = (rr - rmin) * hi # this is broadcasted to (nframes,1)
+        uu = (rr - rmin) * hi # this is broadcasted to (nframes,nloc,nnei)
 
-        if any(uu < 0):
+        if torch.any(uu < 0):
             raise Exception("coord go beyond table lower boundary")
 
         idx = uu.to(torch.int)
 
         uu -= idx
-        cur_tab = self.tab_data[i_type.squeeze(),j_type.squeeze()] # this should have shape (nframes, nspline, 4)
         
+        
+        final_coef = self._extract_spline_coefficient(i_type, j_type, idx)
 
-        # we need to check in the elements in the index tensor (nframes, 1) to see if they are beyond the table.
-        # when the spline idx is beyond the table, all spline coefficients are set to `0`, and the resulting ener corresponding to the idx is also `0`.
-        final_coef = self._extract_spline_coefficient(cur_tab, idx) # this should have shape (nframes, 4)
-
-        a3, a2, a1, a0 = final_coef[:,0], final_coef[:,1], final_coef[:,2], final_coef[:,3] # the four coefficients should all be (nframes, 1)
+        a3, a2, a1, a0 = torch.unbind(final_coef, dim=-1) # 4 * (nframes, nloc, nnei)
 
         etmp = (a3 * uu + a2) * uu + a1 # this should be elementwise operations.
         ener = etmp * uu + a0
-        return ener
+        return torch.sum(ener, dim=-1) #(nframes, nloc)
 
     @staticmethod
     def _get_pairwise_dist(coords: torch.Tensor) -> torch.Tensor:
@@ -226,64 +203,46 @@ class PairTabModel(nn.Module, AtomicModel):
         """
         return coords.unsqueeze(2) - coords.unsqueeze(1)
 
-    @staticmethod
-    def _extract_spline_coefficient(cur_tab: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+    def _extract_spline_coefficient(self, i_type: torch.Tensor, j_type: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
         """Extract the spline coefficient from the table.
 
         Parameters
         ----------
-        cur_tab : torch.Tensor
-            The table containing the spline coefficients. (nframes, nspline, 4)
+        i_type : torch.Tensor
+            The integer representation of atom type for all local atoms for all frames. (nframes, nloc)
+
+        j_type : torch.Tensor
+            The integer representation of atom type for all neighbour atoms of all local atoms for all frames. (nframes, nloc, nnei)
 
         idx : torch.Tensor
-            The index of the spline coefficient. (nframes, 1)
+            The index of the spline coefficient. (nframes, nloc, nnei)
 
         Returns
         -------
         torch.Tensor
-            The spline coefficient. (nframes, 4)
+            The spline coefficient. (nframes, nloc, nnei, 4)
 
         Example
         -------
-        cur_tab = tensor([[[0, 3, 1, 3],
-                         [1, 1, 2, 1],
-                         [3, 1, 3, 3]],
 
-                        [[3, 1, 3, 1],
-                         [2, 3, 1, 0],
-                         [2, 1, 3, 1]],
-
-                        [[3, 0, 2, 2],
-                         [2, 3, 1, 1],
-                         [1, 2, 3, 1]],
-
-                        [[0, 3, 3, 0],
-                         [1, 3, 0, 3],
-                         [3, 1, 2, 3]],
-
-                        [[3, 0, 3, 3],
-                         [1, 1, 1, 0],
-                         [3, 1, 2, 3]]])
-
-        idx = tensor([[1],
-                        [0],
-                        [2],
-                        [5],
-                        [1]])
-        
-
-        final_coef = tensor([[[1, 1, 2, 1]],
-
-                            [[3, 1, 3, 1]],
-
-                            [[1, 2, 3, 1]],
-
-                            [[0, 0, 0, 0]],
-
-                            [[1, 1, 1, 0]]])
         """
-        clipped_indices = torch.clamp(idx, 0, cur_tab.shape[1] - 1)
-        final_coef = torch.gather(cur_tab, 1, clipped_indices.unsqueeze(-1).expand(-1, -1, cur_tab.shape[-1]))
-        final_coef[idx.squeeze() >= cur_tab.shape[1]] = 0
+
+        # (nframes, nloc, nnei)
+        expanded_i_type = i_type.unsqueeze(-1).expand(-1, -1, j_type.shape[-1])
+
+        # (nframes, nloc, nnei, nspline, 4)
+        expanded_tab_data = self.tab_data[expanded_i_type, j_type]
+
+        # (nframes, nloc, nnei, 1, 4)
+        expanded_idx = idx.unsqueeze(-1).unsqueeze(-1).expand(-1, -1,-1, -1, 4)
+        
+        #handle the case where idx is beyond the number of splines
+        clipped_indices = torch.clamp(expanded_idx, 0, self.nspline - 1).to(torch.int64)
+
+        # (nframes, nloc, nnei, 4)
+        final_coef = torch.gather(expanded_tab_data, 3, clipped_indices).squeeze()
+
+        # when the spline idx is beyond the table, all spline coefficients are set to `0`, and the resulting ener corresponding to the idx is also `0`.
+        final_coef[expanded_idx.squeeze() >= self.nspline] = 0
 
         return final_coef
