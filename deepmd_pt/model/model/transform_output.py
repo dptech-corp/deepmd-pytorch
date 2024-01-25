@@ -99,8 +99,8 @@ def take_deriv(
     size = 1
     for ii in vdef.shape:
         size *= ii
-    vv1 = vv.view([*get_leading_dims(vv, vdef), size])
-    svv1 = svv.view([*get_leading_dims(svv, vdef), size])
+    vv1 = vv.view(list(get_leading_dims(vv, vdef)) + [size])  # noqa: RUF005
+    svv1 = svv.view(list(get_leading_dims(svv, vdef)) + [size])  # noqa: RUF005
     split_vv1 = torch.split(vv1, [1] * size, dim=-1)
     split_svv1 = torch.split(svv1, [1] * size, dim=-1)
     split_ff, split_avir = [], []
@@ -177,7 +177,7 @@ def communicate_extended_output(
                 mldims = list(mapping.shape)
                 kk_derv_r, kk_derv_c = get_deriv_name(kk)
                 # vdim x 3
-                derv_r_ext_dims = [*vdef.shape, 3]
+                derv_r_ext_dims = list(vdef.shape) + [3]  # noqa:RUF005
                 mapping = mapping.view(mldims + [1] * len(derv_r_ext_dims)).expand(
                     [-1] * len(mldims) + derv_r_ext_dims
                 )
