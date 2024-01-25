@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 #include "pair_deepmd.h"
 
 #include <string.h>
@@ -43,19 +44,18 @@ static bool is_key(const string &input) {
   return false;
 }
 
-
-static void ana_st(double &max,
-                   double &min,
-                   double &sum,
-                   const vector<double> &vec,
-                   const int &nloc) {
-  if (nloc == 0) return;
+static void ana_st(double &max, double &min, double &sum,
+                   const vector<double> &vec, const int &nloc) {
+  if (nloc == 0)
+    return;
   max = vec[0];
   min = vec[0];
   sum = vec[0];
   for (unsigned ii = 1; ii < nloc; ++ii) {
-    if (vec[ii] > max) max = vec[ii];
-    if (vec[ii] < min) min = vec[ii];
+    if (vec[ii] > max)
+      max = vec[ii];
+    if (vec[ii] < min)
+      min = vec[ii];
     sum += vec[ii];
   }
 }
@@ -70,7 +70,6 @@ PairDeepMD::PairDeepMD(LAMMPS *lmp)
         "Pair deepmd requires metal unit, please set it by \"units metal\"");
   }
   numb_models = 0;
-
 }
 
 /* ---------------------------------------------------------------------- */
@@ -104,21 +103,18 @@ void PairDeepMD::settings(int narg, char **arg) {
   numb_models = models.size();
   if (numb_models == 1) {
     // try {
-      deep_pot.init<double>(std::string(arg[0]));
+    deep_pot.init<double>(std::string(arg[0]));
     // } catch (deepmd_compat::deepmd_exception &e) {
-      // error->one(FLERR, e.what());
+    // error->one(FLERR, e.what());
     // }
-  }
-  else {
+  } else {
     // try {
-      deep_pot.init<double>(std::string(arg[0]));
-      deep_pot_model_devi.init<double>(models);
+    deep_pot.init<double>(std::string(arg[0]));
+    deep_pot_model_devi.init<double>(models);
     // } catch (deepmd_compat::deepmd_exception &e) {
-      // error->one(FLERR, e.what());
+    // error->one(FLERR, e.what());
     // }
-
   }
-
 
   out_freq = 100;
   out_file = "model_devi.out";
@@ -133,11 +129,13 @@ void PairDeepMD::settings(int narg, char **arg) {
                  "Illegal pair_style command\nwrong number of parameters\n");
     }
     if (string(arg[iarg]) == string("out_freq")) {
-      if (iarg + 1 >= narg) error->all(FLERR, "Illegal out_freq, not provided");
+      if (iarg + 1 >= narg)
+        error->all(FLERR, "Illegal out_freq, not provided");
       out_freq = atoi(arg[iarg + 1]);
       iarg += 2;
     } else if (string(arg[iarg]) == string("out_file")) {
-      if (iarg + 1 >= narg) error->all(FLERR, "Illegal out_file, not provided");
+      if (iarg + 1 >= narg)
+        error->all(FLERR, "Illegal out_file, not provided");
       out_file = string(arg[iarg + 1]);
       iarg += 2;
     } else if (string(arg[iarg]) == string("fparam")) {
@@ -186,9 +184,8 @@ void PairDeepMD::settings(int narg, char **arg) {
     else if (string(arg[iarg]) == string("fparam_from_compute")) {
       for (int ii = 0; ii < 1; ++ii) {
         if (iarg + 1 + ii >= narg || is_key(arg[iarg + 1 + ii])) {
-          error->all(FLERR,
-                     "invalid fparam_from_compute key: should be "
-                     "fparam_from_compute compute_id(str)");
+          error->all(FLERR, "invalid fparam_from_compute key: should be "
+                            "fparam_from_compute compute_id(str)");
         }
       }
       do_compute = true;
@@ -222,7 +219,8 @@ void PairDeepMD::settings(int narg, char **arg) {
     }
   }
 
-  if (out_freq < 0) error->all(FLERR, "Illegal out_freq, should be >= 0");
+  if (out_freq < 0)
+    error->all(FLERR, "Illegal out_freq, should be >= 0");
   if (do_ttm && aparam.size() > 0) {
     error->all(FLERR, "aparam and ttm should NOT be set simultaneously");
   }
@@ -276,20 +274,20 @@ void PairDeepMD::compute(int eflag, int vflag) {
   vector<int> dtype(nlocal);
   vector<double> dbox(9, 0);
 
-  for (int ii=0; ii<nlocal; ii++) {
-    for (int jj=0; jj<3; jj++) {
-      dcoord[3*ii+jj] = x[ii][jj];
+  for (int ii = 0; ii < nlocal; ii++) {
+    for (int jj = 0; jj < 3; jj++) {
+      dcoord[3 * ii + jj] = x[ii][jj];
     }
-    dtype[ii] = type[ii]-1;
+    dtype[ii] = type[ii] - 1;
   }
 
   // get box
-  dbox[0] = domain->h[0];  // xx
-  dbox[4] = domain->h[1];  // yy
-  dbox[8] = domain->h[2];  // zz
-  dbox[7] = domain->h[3];  // zy
-  dbox[6] = domain->h[4];  // zx
-  dbox[3] = domain->h[5];  // yx
+  dbox[0] = domain->h[0]; // xx
+  dbox[4] = domain->h[1]; // yy
+  dbox[8] = domain->h[2]; // zz
+  dbox[7] = domain->h[3]; // zy
+  dbox[6] = domain->h[4]; // zx
+  dbox[3] = domain->h[5]; // yx
 
   // int ago = numb_models > 1 ? 0 : neighbor->ago;
   int ago = neighbor->ago;
@@ -310,12 +308,13 @@ void PairDeepMD::compute(int eflag, int vflag) {
       (numb_models > 1 && (out_freq > 0 && update->ntimestep % out_freq == 0));
 
   if (single_model || multi_models_no_mod_devi) {
-    deep_pot.compute<double, double>(dener, dforce, dvirial, dcoord, dtype, dbox);
-  }
-  else if (multi_models_mod_devi) {
+    deep_pot.compute<double, double>(dener, dforce, dvirial, dcoord, dtype,
+                                     dbox);
+  } else if (multi_models_mod_devi) {
     vector<vector<double>> all_virial;
     vector<double> all_energy;
-    deep_pot_model_devi.compute<double, double>(all_energy, all_force, all_virial, dcoord, dtype, dbox);
+    deep_pot_model_devi.compute<double, double>(
+        all_energy, all_force, all_virial, dcoord, dtype, dbox);
     dener = all_energy[0];
     dforce = all_force[0];
     dvirial = all_virial[0];
@@ -346,7 +345,7 @@ void PairDeepMD::compute(int eflag, int vflag) {
         }
       }
       MPI_Reduce(&send_v[0], &recv_v[0], 9 * numb_models, MPI_DOUBLE, MPI_SUM,
-                  0, world);
+                 0, world);
       std::vector<std::vector<double>> all_virial_1(numb_models);
       std::vector<double> avg_virial, std_virial;
       for (int kk = 0; kk < numb_models; ++kk) {
@@ -356,14 +355,14 @@ void PairDeepMD::compute(int eflag, int vflag) {
         }
       }
       double all_v_min = numeric_limits<double>::max(), all_v_max = 0,
-              all_v_avg = 0;
+             all_v_avg = 0;
       if (rank == 0) {
         deep_pot_model_devi.compute_avg(avg_virial, all_virial_1);
         deep_pot_model_devi.compute_std(std_virial, avg_virial, all_virial_1,
                                         1);
         if (out_rel_v == 1) {
           deep_pot_model_devi.compute_relative_std(std_virial, avg_virial,
-                                                    eps_v, 1);
+                                                   eps_v, 1);
         }
         for (int ii = 0; ii < 9; ++ii) {
           if (std_virial[ii] > all_v_max) {
@@ -378,9 +377,9 @@ void PairDeepMD::compute(int eflag, int vflag) {
       }
       if (rank == 0) {
         fp << setw(12) << update->ntimestep << " " << setw(18) << all_v_max
-            << " " << setw(18) << all_v_min << " " << setw(18) << all_v_avg
-            << " " << setw(18) << all_f_max << " " << setw(18) << all_f_min
-            << " " << setw(18) << all_f_avg;
+           << " " << setw(18) << all_v_min << " " << setw(18) << all_v_avg
+           << " " << setw(18) << all_f_max << " " << setw(18) << all_f_min
+           << " " << setw(18) << all_f_avg;
       }
       if (out_each == 1) {
         vector<double> std_f_all(all_nlocal);
@@ -414,10 +413,9 @@ void PairDeepMD::compute(int eflag, int vflag) {
     }
   }
 
-  
-  for (int ii=0; ii<nlocal; ii++) {
-    for (int jj=0; jj<3; jj++) {
-      f[ii][jj] = dforce[3*ii+jj];
+  for (int ii = 0; ii < nlocal; ii++) {
+    for (int jj = 0; jj < 3; jj++) {
+      f[ii][jj] = dforce[3 * ii + jj];
     }
   }
 
@@ -440,8 +438,10 @@ void PairDeepMD::compute(int eflag, int vflag) {
 ------------------------------------------------------------------------- */
 
 void PairDeepMD::coeff(int narg, char **arg) {
-  // if (narg < 4 || narg > 5) error->all(FLERR, "Incorrect args for pair coefficients");
-  if (!allocated) allocate();
+  // if (narg < 4 || narg > 5) error->all(FLERR, "Incorrect args for pair
+  // coefficients");
+  if (!allocated)
+    allocate();
 
   int ilo, ihi, jlo, jhi;
   utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
@@ -458,9 +458,9 @@ void PairDeepMD::coeff(int narg, char **arg) {
     }
   }
 
-  if (count == 0) error->all(FLERR, "Incorrect args for pair coefficients");
+  if (count == 0)
+    error->all(FLERR, "Incorrect args for pair coefficients");
 }
-
 
 /* ---------------------------------------------------------------------- */
 

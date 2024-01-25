@@ -1,16 +1,21 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import json
 import os
 import shutil
 import unittest
-from copy import deepcopy
+from copy import (
+    deepcopy,
+)
 
-import numpy as np
-from deepmd_pt.entrypoints.main import get_trainer
+from deepmd_pt.entrypoints.main import (
+    get_trainer,
+)
+
 from .test_permutation import (
-  model_se_e2_a,
-  model_dpa1,
-  model_dpa2,
-  model_hybrid,
+    model_dpa1,
+    model_dpa2,
+    model_hybrid,
+    model_se_e2_a,
 )
 
 
@@ -33,7 +38,7 @@ class TestDPTrain:
 class TestEnergyModelSeA(unittest.TestCase, TestDPTrain):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_se_e2_a)
         self.config["training"]["numb_steps"] = 1
@@ -43,7 +48,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestDPTrain):
 class TestEnergyModelDPA1(unittest.TestCase, TestDPTrain):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_dpa1)
         self.config["training"]["numb_steps"] = 1
@@ -53,12 +58,18 @@ class TestEnergyModelDPA1(unittest.TestCase, TestDPTrain):
 class TestEnergyModelDPA2(unittest.TestCase, TestDPTrain):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_dpa2)
-        self.config["model"]["descriptor"]["rcut"] = self.config["model"]["descriptor"]["repinit_rcut"]
-        self.config["model"]["descriptor"]["rcut_smth"] = self.config["model"]["descriptor"]["repinit_rcut_smth"]
-        self.config["model"]["descriptor"]["sel"] = self.config["model"]["descriptor"]["repinit_nsel"]
+        self.config["model"]["descriptor"]["rcut"] = self.config["model"]["descriptor"][
+            "repinit_rcut"
+        ]
+        self.config["model"]["descriptor"]["rcut_smth"] = self.config["model"][
+            "descriptor"
+        ]["repinit_rcut_smth"]
+        self.config["model"]["descriptor"]["sel"] = self.config["model"]["descriptor"][
+            "repinit_nsel"
+        ]
         self.config["training"]["numb_steps"] = 1
         self.config["training"]["save_freq"] = 1
 
@@ -67,12 +78,12 @@ class TestEnergyModelDPA2(unittest.TestCase, TestDPTrain):
 class TestEnergyModelHybrid(unittest.TestCase, TestDPTrain):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_hybrid)
         self.config["training"]["numb_steps"] = 1
         self.config["training"]["save_freq"] = 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

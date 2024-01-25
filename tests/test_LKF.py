@@ -1,6 +1,9 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import unittest
 
-from deepmd_pt.entrypoints.main import main
+from deepmd_pt.entrypoints.main import (
+    main,
+)
 
 
 class TestLKF(unittest.TestCase):
@@ -8,5 +11,5 @@ class TestLKF(unittest.TestCase):
         main(["train", "tests/water/lkf.json"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

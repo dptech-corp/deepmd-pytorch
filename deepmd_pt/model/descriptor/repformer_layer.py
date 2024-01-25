@@ -1,28 +1,31 @@
-import numpy as np
-import torch
-import logging
-
-try:
-    from typing import Final
-except:
-    from torch.jit import Final
+# SPDX-License-Identifier: LGPL-3.0-or-later
 from typing import (
-    List, Optional, Tuple, Callable
+    Callable,
+    List,
 )
-from deepmd_pt.utils import env
-from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
-from deepmd_pt.model.network import (
-    TypeEmbedNet, SimpleLinear
+
+import torch
+
+from deepmd_pt.model.network.network import (
+    SimpleLinear,
+)
+from deepmd_pt.utils import (
+    env,
+)
+from deepmd_pt.utils.utils import (
+    get_activation_fn,
 )
 
 
 def torch_linear(*args, **kwargs):
-    return torch.nn.Linear(*args, **kwargs, dtype= env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+    return torch.nn.Linear(
+        *args, **kwargs, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE
+    )
 
 
 def _make_nei_g1(
-        g1_ext: torch.Tensor,
-        nlist: torch.Tensor,
+    g1_ext: torch.Tensor,
+    nlist: torch.Tensor,
 ) -> torch.Tensor:
     # nlist: nb x nloc x nnei
     nb, nloc, nnei = nlist.shape
@@ -38,25 +41,22 @@ def _make_nei_g1(
 
 
 def _apply_nlist_mask(
-        gg: torch.Tensor,
-        nlist_mask: torch.Tensor,
+    gg: torch.Tensor,
+    nlist_mask: torch.Tensor,
 ) -> torch.Tensor:
     # gg:  nf x nloc x nnei x ng
     # msk: nf x nloc x nnei
-    return gg.masked_fill(~nlist_mask.unsqueeze(-1), float(0.))
+    return gg.masked_fill(~nlist_mask.unsqueeze(-1), 0.0)
 
 
-def _apply_switch(
-        gg: torch.Tensor,
-        sw: torch.Tensor
-) -> torch.Tensor:
+def _apply_switch(gg: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
     # gg:  nf x nloc x nnei x ng
     # sw:  nf x nloc x nnei
     return gg * sw.unsqueeze(-1)
 
 
 def _apply_h_norm(
-        hh: torch.Tensor,  # nf x nloc x nnei x 3
+    hh: torch.Tensor,  # nf x nloc x nnei x 3
 ) -> torch.Tensor:
     """Normalize h by the std of vector length.
     do not have an idea if this is a good way.
@@ -67,21 +67,21 @@ def _apply_h_norm(
     # nf x nloc
     std = torch.std(normh, dim=-1)
     # nf x nloc x nnei x 3
-    hh = hh[:, :, :, :] / (1. + std[:, :, None, None])
+    hh = hh[:, :, :, :] / (1.0 + std[:, :, None, None])
     return hh
 
 
 class Atten2Map(torch.nn.Module):
     def __init__(
-            self,
-            ni: int,
-            nd: int,
-            nh: int,
-            has_gate: bool = False,  # apply gate to attn map
-            smooth: bool = True,
-            attnw_shift: float = 20.0,
+        self,
+        ni: int,
+        nd: int,
+        nh: int,
+        has_gate: bool = False,  # apply gate to attn map
+        smooth: bool = True,
+        attnw_shift: float = 20.0,
     ):
-        super(Atten2Map, self).__init__()
+        super().__init__()
         self.ni = ni
         self.nd = nd
         self.nh = nh
@@ -91,13 +91,18 @@ class Atten2Map(torch.nn.Module):
         self.attnw_shift = attnw_shift
 
     def forward(
-            self,
-            g2: torch.Tensor,  # nb x nloc x nnei x ng2
-            h2: torch.Tensor,  # nb x nloc x nnei x 3
-            nlist_mask: torch.Tensor,  # nb x nloc x nnei
-            sw: torch.Tensor  # nb x nloc x nnei
+        self,
+        g2: torch.Tensor,  # nb x nloc x nnei x ng2
+        h2: torch.Tensor,  # nb x nloc x nnei x 3
+        nlist_mask: torch.Tensor,  # nb x nloc x nnei
+        sw: torch.Tensor,  # nb x nloc x nnei
     ) -> torch.Tensor:
-        nb, nloc, nnei, _, = g2.shape
+        (
+            nb,
+            nloc,
+            nnei,
+            _,
+        ) = g2.shape
         nd, nh = self.nd, self.nh
         # nb x nloc x nnei x nd x (nh x 2)
         g2qk = self.mapqk(g2).view(nb, nloc, nnei, nd, nh * 2)
@@ -108,7 +113,7 @@ class Atten2Map(torch.nn.Module):
         # g2q = torch.nn.functional.normalize(g2q, dim=-1)
         # g2k = torch.nn.functional.normalize(g2k, dim=-1)
         # nb x nloc x nh x nnei x nnei
-        attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd ** 0.5
+        attnw = torch.matmul(g2q, torch.transpose(g2k, -1, -2)) / nd**0.5
         if self.has_gate:
             gate = torch.matmul(h2, torch.transpose(h2, -1, -2)).unsqueeze(-3)
             attnw = attnw * gate
@@ -117,17 +122,28 @@ class Atten2Map(torch.nn.Module):
         # mask the attenmap, nb x nloc x 1 x nnei x 1
         attnw_mask_c = ~nlist_mask.unsqueeze(2).unsqueeze(-1)
         if self.smooth:
-            attnw = (attnw + self.attnw_shift) * sw[:,:,None,:,None] * sw[:,:,None,None,:] - self.attnw_shift
+            attnw = (attnw + self.attnw_shift) * sw[:, :, None, :, None] * sw[
+                :, :, None, None, :
+            ] - self.attnw_shift
         else:
-            attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
+            attnw = attnw.masked_fill(
+                attnw_mask,
+                float("-inf"),
+            )
         attnw = torch.softmax(attnw, dim=-1)
-        attnw = attnw.masked_fill(attnw_mask, float(0.0), )
+        attnw = attnw.masked_fill(
+            attnw_mask,
+            0.0,
+        )
         # nb x nloc x nh x nnei x nnei
-        attnw = attnw.masked_fill(attnw_mask_c, float(0.0), )
+        attnw = attnw.masked_fill(
+            attnw_mask_c,
+            0.0,
+        )
         if self.smooth:
-            attnw = attnw * sw[:,:,None,:,None] * sw[:,:,None,None,:]
+            attnw = attnw * sw[:, :, None, :, None] * sw[:, :, None, None, :]
         # nb x nloc x nnei x nnei
-        h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3. ** 0.5
+        h2h2t = torch.matmul(h2, torch.transpose(h2, -1, -2)) / 3.0**0.5
         # nb x nloc x nh x nnei x nnei
         ret = attnw * h2h2t[:, :, None, :, :]
         # ret = torch.softmax(g2qk, dim=-1)
@@ -138,20 +154,20 @@ class Atten2Map(torch.nn.Module):
 
 class Atten2MultiHeadApply(torch.nn.Module):
     def __init__(
-            self,
-            ni: int,
-            nh: int,
+        self,
+        ni: int,
+        nh: int,
     ):
-        super(Atten2MultiHeadApply, self).__init__()
+        super().__init__()
         self.ni = ni
         self.nh = nh
         self.mapv = SimpleLinear(ni, ni * nh, bias=False)
         self.head_map = SimpleLinear(ni * nh, ni)
 
     def forward(
-            self,
-            AA: torch.Tensor,  # nf x nloc x nnei x nnei x nh
-            g2: torch.Tensor,  # nf x nloc x nnei x ng2
+        self,
+        AA: torch.Tensor,  # nf x nloc x nnei x nnei x nh
+        g2: torch.Tensor,  # nf x nloc x nnei x ng2
     ) -> torch.Tensor:
         nf, nloc, nnei, ng2 = g2.shape
         nh = self.nh
@@ -172,19 +188,19 @@ class Atten2MultiHeadApply(torch.nn.Module):
 
 class Atten2EquiVarApply(torch.nn.Module):
     def __init__(
-            self,
-            ni: int,
-            nh: int,
+        self,
+        ni: int,
+        nh: int,
     ):
-        super(Atten2EquiVarApply, self).__init__()
+        super().__init__()
         self.ni = ni
         self.nh = nh
         self.head_map = SimpleLinear(nh, 1, bias=False)
 
     def forward(
-            self,
-            AA: torch.Tensor,  # nf x nloc x nnei x nnei x nh
-            h2: torch.Tensor,  # nf x nloc x nnei x 3
+        self,
+        AA: torch.Tensor,  # nf x nloc x nnei x nnei x nh
+        h2: torch.Tensor,  # nf x nloc x nnei x 3
     ) -> torch.Tensor:
         nf, nloc, nnei, _ = h2.shape
         nh = self.nh
@@ -203,14 +219,14 @@ class Atten2EquiVarApply(torch.nn.Module):
 
 class LocalAtten(torch.nn.Module):
     def __init__(
-            self,
-            ni: int,
-            nd: int,
-            nh: int,
-            smooth: bool = True,
-            attnw_shift: float = 20.0,
+        self,
+        ni: int,
+        nd: int,
+        nh: int,
+        smooth: bool = True,
+        attnw_shift: float = 20.0,
     ):
-        super(LocalAtten, self).__init__()
+        super().__init__()
         self.ni = ni
         self.nd = nd
         self.nh = nh
@@ -221,11 +237,11 @@ class LocalAtten(torch.nn.Module):
         self.attnw_shift = attnw_shift
 
     def forward(
-            self,
-            g1: torch.Tensor,  # nb x nloc x ng1
-            gg1: torch.Tensor,  # nb x nloc x nnei x ng1
-            nlist_mask: torch.Tensor,  # nb x nloc x nnei
-            sw: torch.Tensor,  # nb x nloc x nnei
+        self,
+        g1: torch.Tensor,  # nb x nloc x ng1
+        gg1: torch.Tensor,  # nb x nloc x nnei x ng1
+        nlist_mask: torch.Tensor,  # nb x nloc x nnei
+        sw: torch.Tensor,  # nb x nloc x nnei
     ) -> torch.Tensor:
         nb, nloc, nnei = nlist_mask.shape
         ni, nd, nh = self.ni, self.nd, self.nh
@@ -242,9 +258,7 @@ class LocalAtten(torch.nn.Module):
         gg1k, gg1v = torch.split(gg1kv, [nd, ni], dim=-1)
 
         # nb x nloc x nh x 1 x nnei
-        attnw = torch.matmul(
-            g1q.unsqueeze(-2),
-            torch.transpose(gg1k, -1, -2)) / nd ** 0.5
+        attnw = torch.matmul(g1q.unsqueeze(-2), torch.transpose(gg1k, -1, -2)) / nd**0.5
         # nb x nloc x nh x nnei
         attnw = attnw.squeeze(-2)
         # mask the attenmap, nb x nloc x 1 x nnei
@@ -253,16 +267,22 @@ class LocalAtten(torch.nn.Module):
         if self.smooth:
             attnw = (attnw + self.attnw_shift) * sw.unsqueeze(-2) - self.attnw_shift
         else:
-            attnw = attnw.masked_fill(attnw_mask, float("-inf"), )
+            attnw = attnw.masked_fill(
+                attnw_mask,
+                float("-inf"),
+            )
         attnw = torch.softmax(attnw, dim=-1)
-        attnw = attnw.masked_fill(attnw_mask, float(0.0), )
+        attnw = attnw.masked_fill(
+            attnw_mask,
+            0.0,
+        )
         if self.smooth:
             attnw = attnw * sw.unsqueeze(-2)
 
         # nb x nloc x nh x ng1
-        ret = torch.matmul(attnw.unsqueeze(-2), gg1v) \
-            .squeeze(-2) \
-            .view(nb, nloc, nh * ni)
+        ret = (
+            torch.matmul(attnw.unsqueeze(-2), gg1v).squeeze(-2).view(nb, nloc, nh * ni)
+        )
         # nb x nloc x ng1
         ret = self.head_map(ret)
         return ret
@@ -270,35 +290,35 @@ class LocalAtten(torch.nn.Module):
 
 class RepformerLayer(torch.nn.Module):
     def __init__(
-            self,
-            rcut,
-            rcut_smth,
-            sel: int,
-            ntypes: int,
-            g1_dim=128,
-            g2_dim=16,
-            axis_dim: int = 4,
-            update_chnnl_2: bool = True,
-            do_bn_mode: str = 'no',
-            bn_momentum: float = 0.1,
-            update_g1_has_conv: bool = True,
-            update_g1_has_drrd: bool = True,
-            update_g1_has_grrg: bool = True,
-            update_g1_has_attn: bool = True,
-            update_g2_has_g1g1: bool = True,
-            update_g2_has_attn: bool = True,
-            update_h2: bool = False,
-            attn1_hidden: int = 64,
-            attn1_nhead: int = 4,
-            attn2_hidden: int = 16,
-            attn2_nhead: int = 4,
-            attn2_has_gate: bool = False,
-            activation: str = "tanh",
-            update_style: str = "res_avg",
-            set_davg_zero: bool = True,  # TODO
-            smooth: bool = True,
+        self,
+        rcut,
+        rcut_smth,
+        sel: int,
+        ntypes: int,
+        g1_dim=128,
+        g2_dim=16,
+        axis_dim: int = 4,
+        update_chnnl_2: bool = True,
+        do_bn_mode: str = "no",
+        bn_momentum: float = 0.1,
+        update_g1_has_conv: bool = True,
+        update_g1_has_drrd: bool = True,
+        update_g1_has_grrg: bool = True,
+        update_g1_has_attn: bool = True,
+        update_g2_has_g1g1: bool = True,
+        update_g2_has_attn: bool = True,
+        update_h2: bool = False,
+        attn1_hidden: int = 64,
+        attn1_nhead: int = 4,
+        attn2_hidden: int = 16,
+        attn2_nhead: int = 4,
+        attn2_has_gate: bool = False,
+        activation: str = "tanh",
+        update_style: str = "res_avg",
+        set_davg_zero: bool = True,  # TODO
+        smooth: bool = True,
     ):
-        super(RepformerLayer, self).__init__()
+        super().__init__()
         self.epsilon = 1e-4  # protection of 1./nnei
         self.rcut = rcut
         self.rcut_smth = rcut_smth
@@ -346,33 +366,36 @@ class RepformerLayer(torch.nn.Module):
         if self.update_g2_has_g1g1:
             self.proj_g1g1g2 = SimpleLinear(g1_dim, g2_dim, bias=False)
         if self.update_g2_has_attn:
-            self.attn2g_map = Atten2Map(g2_dim, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth)
+            self.attn2g_map = Atten2Map(
+                g2_dim, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth
+            )
             self.attn2_mh_apply = Atten2MultiHeadApply(g2_dim, attn2_nhead)
             self.attn2_lm = torch.nn.LayerNorm(
-                g2_dim, elementwise_affine=True, device=env.DEVICE, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+                g2_dim,
+                elementwise_affine=True,
+                device=env.DEVICE,
+                dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+            )
         if self.update_h2:
-            self.attn2h_map = Atten2Map(g2_dim, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth)
+            self.attn2h_map = Atten2Map(
+                g2_dim, attn2_hidden, attn2_nhead, attn2_has_gate, self.smooth
+            )
             self.attn2_ev_apply = Atten2EquiVarApply(g2_dim, attn2_nhead)
         if self.update_g1_has_attn:
             self.loc_attn = LocalAtten(g1_dim, attn1_hidden, attn1_nhead, self.smooth)
 
-        if self.do_bn_mode == 'uniform':
+        if self.do_bn_mode == "uniform":
             self.bn1 = self._bn_layer()
             self.bn2 = self._bn_layer()
-        elif self.do_bn_mode == 'component':
+        elif self.do_bn_mode == "component":
             self.bn1 = self._bn_layer(nf=g1_dim)
             self.bn2 = self._bn_layer(nf=g2_dim)
-        elif self.do_bn_mode == 'no':
+        elif self.do_bn_mode == "no":
             self.bn1, self.bn2 = None, None
         else:
             raise RuntimeError(f"unknown bn_mode {self.do_bn_mode}")
 
-    def cal_1_dim(
-            self,
-            g1d: int,
-            g2d: int,
-            ax: int
-    ) -> int:
+    def cal_1_dim(self, g1d: int, g2d: int, ax: int) -> int:
         ret = g1d
         if self.update_g1_has_grrg:
             ret += g2d * ax
@@ -383,11 +406,11 @@ class RepformerLayer(torch.nn.Module):
         return ret
 
     def _update_h2(
-            self,
-            g2: torch.Tensor,
-            h2: torch.Tensor,
-            nlist_mask: torch.Tensor,
-            sw: torch.Tensor
+        self,
+        g2: torch.Tensor,
+        h2: torch.Tensor,
+        nlist_mask: torch.Tensor,
+        sw: torch.Tensor,
     ) -> torch.Tensor:
         assert self.attn2h_map is not None
         assert self.attn2_ev_apply is not None
@@ -402,11 +425,11 @@ class RepformerLayer(torch.nn.Module):
         return h2_1
 
     def _update_g1_conv(
-            self,
-            gg1: torch.Tensor,
-            g2: torch.Tensor,
-            nlist_mask: torch.Tensor,
-            sw: torch.Tensor
+        self,
+        gg1: torch.Tensor,
+        g2: torch.Tensor,
+        nlist_mask: torch.Tensor,
+        sw: torch.Tensor,
     ) -> torch.Tensor:
         assert self.proj_g1g2 is not None
         nb, nloc, nnei, _ = g2.shape
@@ -419,20 +442,22 @@ class RepformerLayer(torch.nn.Module):
         if not self.smooth:
             # normalized by number of neighbors, not smooth
             # nb x nloc x 1
-            invnnei = 1. / (self.epsilon + torch.sum(nlist_mask, dim=-1)).unsqueeze(-1)
+            invnnei = 1.0 / (self.epsilon + torch.sum(nlist_mask, dim=-1)).unsqueeze(-1)
         else:
             gg1 = _apply_switch(gg1, sw)
-            invnnei = (1. / float(nnei)) * torch.ones((nb, nloc, 1), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+            invnnei = (1.0 / float(nnei)) * torch.ones(
+                (nb, nloc, 1), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE
+            )
         # nb x nloc x ng2
         g1_11 = torch.sum(g2 * gg1, dim=2) * invnnei
         return g1_11
 
     def _cal_h2g2(
-            self,
-            g2: torch.Tensor,
-            h2: torch.Tensor,
-            nlist_mask: torch.Tensor,
-            sw: torch.Tensor
+        self,
+        g2: torch.Tensor,
+        h2: torch.Tensor,
+        nlist_mask: torch.Tensor,
+        sw: torch.Tensor,
     ) -> torch.Tensor:
         # g2:  nf x nloc x nnei x ng2
         # h2:  nf x nloc x nnei x 3
@@ -443,38 +468,35 @@ class RepformerLayer(torch.nn.Module):
         g2 = _apply_nlist_mask(g2, nlist_mask)
         if not self.smooth:
             # nb x nloc
-            invnnei = 1. / (self.epsilon + torch.sum(nlist_mask, dim=-1))
+            invnnei = 1.0 / (self.epsilon + torch.sum(nlist_mask, dim=-1))
             # nb x nloc x 1 x 1
             invnnei = invnnei.unsqueeze(-1).unsqueeze(-1)
         else:
             g2 = _apply_switch(g2, sw)
-            invnnei = (1. / float(nnei)) * torch.ones((nb, nloc, 1, 1), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+            invnnei = (1.0 / float(nnei)) * torch.ones(
+                (nb, nloc, 1, 1), dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE
+            )
         # nb x nloc x 3 x ng2
-        h2g2 = torch.matmul(
-            torch.transpose(h2, -1, -2), g2) * invnnei
+        h2g2 = torch.matmul(torch.transpose(h2, -1, -2), g2) * invnnei
         return h2g2
 
-    def _cal_grrg(
-            self,
-            h2g2: torch.Tensor
-    ) -> torch.Tensor:
+    def _cal_grrg(self, h2g2: torch.Tensor) -> torch.Tensor:
         # nb x nloc x 3 x ng2
         nb, nloc, _, ng2 = h2g2.shape
         # nb x nloc x 3 x axis
         h2g2m = torch.split(h2g2, self.axis_dim, dim=-1)[0]
         # nb x nloc x axis x ng2
-        g1_13 = torch.matmul(
-            torch.transpose(h2g2m, -1, -2), h2g2) / (float(3.) ** 1)
+        g1_13 = torch.matmul(torch.transpose(h2g2m, -1, -2), h2g2) / (3.0**1)
         # nb x nloc x (axisxng2)
         g1_13 = g1_13.view(nb, nloc, self.axis_dim * ng2)
         return g1_13
 
     def _update_g1_grrg(
-            self,
-            g2: torch.Tensor,
-            h2: torch.Tensor,
-            nlist_mask: torch.Tensor,
-            sw: torch.Tensor
+        self,
+        g2: torch.Tensor,
+        h2: torch.Tensor,
+        nlist_mask: torch.Tensor,
+        sw: torch.Tensor,
     ) -> torch.Tensor:
         # g2:  nf x nloc x nnei x ng2
         # h2:  nf x nloc x nnei x 3
@@ -488,11 +510,11 @@ class RepformerLayer(torch.nn.Module):
         return g1_13
 
     def _update_g2_g1g1(
-            self,
-            g1: torch.Tensor,  # nb x nloc x ng1
-            gg1: torch.Tensor,  # nb x nloc x nnei x ng1
-            nlist_mask: torch.Tensor,  # nb x nloc x nnei
-            sw: torch.Tensor,  # nb x nloc x nnei
+        self,
+        g1: torch.Tensor,  # nb x nloc x ng1
+        gg1: torch.Tensor,  # nb x nloc x nnei x ng1
+        nlist_mask: torch.Tensor,  # nb x nloc x nnei
+        sw: torch.Tensor,  # nb x nloc x nnei
     ) -> torch.Tensor:
         ret = g1.unsqueeze(-2) * gg1
         # nb x nloc x nnei x ng1
@@ -502,22 +524,18 @@ class RepformerLayer(torch.nn.Module):
         return ret
 
     def _apply_bn(
-            self,
-            bn_number: int,
-            gg: torch.Tensor,
+        self,
+        bn_number: int,
+        gg: torch.Tensor,
     ):
-        if self.do_bn_mode == 'uniform':
+        if self.do_bn_mode == "uniform":
             return self._apply_bn_uni(bn_number, gg)
-        elif self.do_bn_mode == 'component':
+        elif self.do_bn_mode == "component":
             return self._apply_bn_comp(bn_number, gg)
         else:
             return gg
 
-    def _apply_nb_1(
-            self,
-            bn_number: int,
-            gg: torch.Tensor
-    ) -> torch.Tensor:
+    def _apply_nb_1(self, bn_number: int, gg: torch.Tensor) -> torch.Tensor:
         nb, nl, nf = gg.shape
         gg = gg.view([nb, 1, nl * nf])
         if bn_number == 1:
@@ -529,9 +547,9 @@ class RepformerLayer(torch.nn.Module):
         return gg.view([nb, nl, nf])
 
     def _apply_nb_2(
-            self,
-            bn_number: int,
-            gg: torch.Tensor,
+        self,
+        bn_number: int,
+        gg: torch.Tensor,
     ) -> torch.Tensor:
         nb, nl, nnei, nf = gg.shape
         gg = gg.view([nb, 1, nl * nnei * nf])
@@ -544,22 +562,22 @@ class RepformerLayer(torch.nn.Module):
         return gg.view([nb, nl, nnei, nf])
 
     def _apply_bn_uni(
-            self,
-            bn_number: int,
-            gg: torch.Tensor,
-            mode: str = '1',
+        self,
+        bn_number: int,
+        gg: torch.Tensor,
+        mode: str = "1",
     ) -> torch.Tensor:
         if len(gg.shape) == 3:
             return self._apply_nb_1(bn_number, gg)
         elif len(gg.shape) == 4:
             return self._apply_nb_2(bn_number, gg)
         else:
-            raise RuntimeError(f'unsupported input shape {gg.shape}')
+            raise RuntimeError(f"unsupported input shape {gg.shape}")
 
     def _apply_bn_comp(
-            self,
-            bn_number: int,
-            gg: torch.Tensor,
+        self,
+        bn_number: int,
+        gg: torch.Tensor,
     ) -> torch.Tensor:
         ss = gg.shape
         nf = ss[-1]
@@ -573,33 +591,40 @@ class RepformerLayer(torch.nn.Module):
         return gg
 
     def forward(
-            self,
-            g1_ext: torch.Tensor,  # nf x nall x ng1
-            g2: torch.Tensor,  # nf x nloc x nnei x ng2
-            h2: torch.Tensor,  # nf x nloc x nnei x 3
-            nlist: torch.Tensor,  # nf x nloc x nnei
-            nlist_mask: torch.Tensor,  # nf x nloc x nnei
-            sw: torch.Tensor,  # switch func, nf x nloc x nnei
+        self,
+        g1_ext: torch.Tensor,  # nf x nall x ng1
+        g2: torch.Tensor,  # nf x nloc x nnei x ng2
+        h2: torch.Tensor,  # nf x nloc x nnei x 3
+        nlist: torch.Tensor,  # nf x nloc x nnei
+        nlist_mask: torch.Tensor,  # nf x nloc x nnei
+        sw: torch.Tensor,  # switch func, nf x nloc x nnei
     ):
         """
-        Parameters:
-        g1_ext: nf x nall x ng1         extended single-atom chanel
-        g2:     nf x nloc x nnei x ng2  pair-atom channel, invariant
-        h2:     nf x nloc x nnei x 3    pair-atom channel, equivariant
-        nlist:  nf x nloc x nnei        neighbor list (padded neis are set to 0)
-        nlist_mask:  nf x nloc x nnei   masks of the neighbor list. real nei 1 otherwise 0
-        sw:     nf x nloc x nnei        switch function
+        Parameters
+        ----------
+        g1_ext : nf x nall x ng1         extended single-atom chanel
+        g2 : nf x nloc x nnei x ng2  pair-atom channel, invariant
+        h2 : nf x nloc x nnei x 3    pair-atom channel, equivariant
+        nlist : nf x nloc x nnei        neighbor list (padded neis are set to 0)
+        nlist_mask : nf x nloc x nnei   masks of the neighbor list. real nei 1 otherwise 0
+        sw : nf x nloc x nnei        switch function
 
-        Returns:
+        Returns
+        -------
         g1:     nf x nloc x ng1         updated single-atom chanel
         g2:     nf x nloc x nnei x ng2  updated pair-atom channel, invariant
         h2:     nf x nloc x nnei x 3    updated pair-atom channel, equivariant
         """
-        cal_gg1 = self.update_g1_has_drrd or self.update_g1_has_conv or self.update_g1_has_attn or self.update_g2_has_g1g1
+        cal_gg1 = (
+            self.update_g1_has_drrd
+            or self.update_g1_has_conv
+            or self.update_g1_has_attn
+            or self.update_g2_has_g1g1
+        )
 
         nb, nloc, nnei, _ = g2.shape
         nall = g1_ext.shape[1]
-        g1,_ = torch.split(g1_ext, [nloc,nall-nloc], dim=1)
+        g1, _ = torch.split(g1_ext, [nloc, nall - nloc], dim=1)
         assert (nb, nloc) == g1.shape[:2]
         assert (nb, nloc, nnei) == h2.shape[:3]
         ng1 = g1.shape[-1]
@@ -632,8 +657,9 @@ class RepformerLayer(torch.nn.Module):
             if self.update_g2_has_g1g1:
                 assert gg1 is not None
                 assert self.proj_g1g1g2 is not None
-                g2_update.append(self.proj_g1g1g2(
-                    self._update_g2_g1g1(g1, gg1, nlist_mask, sw)))
+                g2_update.append(
+                    self.proj_g1g1g2(self._update_g2_g1g1(g1, gg1, nlist_mask, sw))
+                )
 
             if self.update_g2_has_attn:
                 assert self.attn2g_map is not None
@@ -662,9 +688,7 @@ class RepformerLayer(torch.nn.Module):
 
         # nb x nloc x [ng1+ng2+(axisxng2)+(axisxng1)]
         #                  conv   grrg      drrd
-        g1_1 = self.act(self.linear1(
-            torch.cat(g1_mlp, dim=-1)
-        ))
+        g1_1 = self.act(self.linear1(torch.cat(g1_mlp, dim=-1)))
         g1_update.append(g1_1)
 
         if self.update_g1_has_attn:
@@ -683,9 +707,9 @@ class RepformerLayer(torch.nn.Module):
 
     @torch.jit.export
     def list_update_res_avg(
-            self,
-            update_list: List[torch.Tensor],
-    )-> torch.Tensor:
+        self,
+        update_list: List[torch.Tensor],
+    ) -> torch.Tensor:
         nitem = len(update_list)
         uu = update_list[0]
         for ii in range(1, nitem):
@@ -693,22 +717,16 @@ class RepformerLayer(torch.nn.Module):
         return uu / (float(nitem) ** 0.5)
 
     @torch.jit.export
-    def list_update_res_incr(
-            self,
-            update_list: List[torch.Tensor]
-    ) -> torch.Tensor:
+    def list_update_res_incr(self, update_list: List[torch.Tensor]) -> torch.Tensor:
         nitem = len(update_list)
         uu = update_list[0]
-        scale = 1. / (float(nitem - 1) ** 0.5) if nitem > 1 else 0.
+        scale = 1.0 / (float(nitem - 1) ** 0.5) if nitem > 1 else 0.0
         for ii in range(1, nitem):
             uu = uu + scale * update_list[ii]
         return uu
 
     @torch.jit.export
-    def list_update(
-            self,
-            update_list: List[torch.Tensor]
-    ) -> torch.Tensor:
+    def list_update(self, update_list: List[torch.Tensor]) -> torch.Tensor:
         if self.update_style == "res_avg":
             return self.list_update_res_avg(update_list)
         elif self.update_style == "res_incr":
@@ -717,9 +735,15 @@ class RepformerLayer(torch.nn.Module):
             raise RuntimeError(f"unknown update style {self.update_style}")
 
     def _bn_layer(
-            self,
-            nf: int = 1,
+        self,
+        nf: int = 1,
     ) -> Callable:
         return torch.nn.BatchNorm1d(
-            nf, eps=1e-5, momentum=self.bn_momentum, affine=False,
-            track_running_stats=True, device=env.DEVICE, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            nf,
+            eps=1e-5,
+            momentum=self.bn_momentum,
+            affine=False,
+            track_running_stats=True,
+            device=env.DEVICE,
+            dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+        )

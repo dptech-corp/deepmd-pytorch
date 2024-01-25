@@ -1,25 +1,30 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import torch
-
-from deepmd_pt.utils.env import GLOBAL_PT_FLOAT_PRECISION
-from deepmd_pt.loss import TaskLoss
 import torch.nn.functional as F
-from deepmd_pt.utils import env
+
+from deepmd_pt.loss import (
+    TaskLoss,
+)
+from deepmd_pt.utils import (
+    env,
+)
 
 
 class DenoiseLoss(TaskLoss):
-
-    def __init__(self,
-                 ntypes,
-                 masked_token_loss=1.0,
-                 masked_coord_loss=1.0,
-                 norm_loss=0.01,
-                 use_l1=True,
-                 beta=1.00,
-                 mask_loss_coord=True,
-                 mask_loss_token=True,
-                 **kwargs):
+    def __init__(
+        self,
+        ntypes,
+        masked_token_loss=1.0,
+        masked_coord_loss=1.0,
+        norm_loss=0.01,
+        use_l1=True,
+        beta=1.00,
+        mask_loss_coord=True,
+        mask_loss_token=True,
+        **kwargs,
+    ):
         """Construct a layer to compute loss on coord, and type reconstruction."""
-        super(DenoiseLoss, self).__init__()
+        super().__init__()
         self.ntypes = ntypes
         self.masked_token_loss = masked_token_loss
         self.masked_coord_loss = masked_coord_loss
@@ -36,15 +41,16 @@ class DenoiseLoss(TaskLoss):
     def forward(self, model_pred, label, natoms, learning_rate, mae=False):
         """Return loss on coord and type denoise.
 
-        Returns:
+        Returns
+        -------
         - loss: Loss to minimize.
         """
         updated_coord = model_pred["updated_coord"]
         logits = model_pred["logits"]
         clean_coord = label["clean_coord"]
         clean_type = label["clean_type"]
-        coord_mask = label['coord_mask']
-        type_mask = label['type_mask']
+        coord_mask = label["coord_mask"]
+        type_mask = label["type_mask"]
 
         loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
         more_loss = {}
@@ -60,7 +66,9 @@ class DenoiseLoss(TaskLoss):
                         beta=self.beta,
                     )
                 else:
-                    coord_loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+                    coord_loss = torch.tensor(
+                        0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE
+                    )
             else:
                 coord_loss = F.smooth_l1_loss(
                     updated_coord.view(-1, 3),
@@ -69,7 +77,7 @@ class DenoiseLoss(TaskLoss):
                     beta=self.beta,
                 )
             loss += self.masked_coord_loss * coord_loss
-            more_loss['coord_l1_error'] = coord_loss.detach()
+            more_loss["coord_l1_error"] = coord_loss.detach()
         if self.has_token:
             if self.mask_loss_token:
                 masked_logits = logits[type_mask]
@@ -81,7 +89,9 @@ class DenoiseLoss(TaskLoss):
                         reduction="mean",
                     )
                 else:
-                    token_loss = torch.tensor(0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE)
+                    token_loss = torch.tensor(
+                        0.0, dtype=env.GLOBAL_PT_FLOAT_PRECISION, device=env.DEVICE
+                    )
             else:
                 token_loss = F.nll_loss(
                     F.log_softmax(logits.view(-1, self.ntypes - 1), dim=-1),
@@ -89,11 +99,11 @@ class DenoiseLoss(TaskLoss):
                     reduction="mean",
                 )
             loss += self.masked_token_loss * token_loss
-            more_loss['token_error'] = token_loss.detach()
+            more_loss["token_error"] = token_loss.detach()
         if self.has_norm:
             norm_x = model_pred["norm_x"]
             norm_delta_pair_rep = model_pred["norm_delta_pair_rep"]
             loss += self.norm_loss * (norm_x + norm_delta_pair_rep)
-            more_loss['norm_loss'] = norm_x.detach() + norm_delta_pair_rep.detach()
+            more_loss["norm_loss"] = norm_x.detach() + norm_delta_pair_rep.detach()
 
         return loss, more_loss

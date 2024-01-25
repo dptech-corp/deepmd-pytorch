@@ -1,16 +1,24 @@
-import torch, copy
+# SPDX-License-Identifier: LGPL-3.0-or-later
+import copy
 import unittest
-from deepmd_pt.utils import env
-from deepmd_pt.model.model import get_model
-from deepmd_pt.utils.dataloader import DpLoaderSet
-from deepmd_pt.utils.stat import make_stat_input
-from deepmd_pt.infer.deep_eval import eval_model
-from .test_permutation import (
-  make_sample,
-  model_dpa1,
-  model_dpa2,
-  # model_dpau,
-  model_hybrid,
+
+import torch
+
+from deepmd_pt.infer.deep_eval import (
+    eval_model,
+)
+from deepmd_pt.model.model import (
+    get_model,
+)
+from deepmd_pt.utils import (
+    env,
+)
+
+from .test_permutation import (  # model_dpau,
+    make_sample,
+    model_dpa1,
+    model_dpa2,
+    model_hybrid,
 )
 
 dtype = torch.float64
@@ -25,49 +33,70 @@ model_dpa2.pop("fitting_net")
 model_hybrid["type_map"] = ["O", "H", "B", "MASKED_TOKEN"]
 model_hybrid.pop("fitting_net")
 
+
 class TestPermutationDenoise:
-  def test(
-      self,
-  ):
-    natoms = 5
-    cell = torch.rand([3, 3], dtype=dtype).to(env.DEVICE)
-    cell = (cell + cell.T) + 5. * torch.eye(3).to(env.DEVICE)
-    coord = torch.rand([natoms, 3], dtype=dtype).to(env.DEVICE)
-    coord = torch.matmul(coord, cell)
-    atype = torch.IntTensor([0, 0, 0, 1, 1]).to(env.DEVICE)
-    idx_perm = [1, 0, 4, 3, 2]
-    updated_c0, logits0 = eval_model(self.model, coord.unsqueeze(0), cell.unsqueeze(0), atype, denoise=True)
-    ret0 = {'updated_coord': updated_c0.squeeze(0), 'logits': logits0.squeeze(0)}
-    updated_c1, logits1 = eval_model(self.model, coord[idx_perm].unsqueeze(0), cell.unsqueeze(0), atype[idx_perm], denoise=True)
-    ret1 = {'updated_coord': updated_c1.squeeze(0), 'logits': logits1.squeeze(0)}
-    prec = 1e-10
-    torch.testing.assert_close(ret0['updated_coord'][idx_perm], ret1['updated_coord'], rtol=prec, atol=prec)
-    torch.testing.assert_close(ret0['logits'][idx_perm], ret1['logits'], rtol=prec, atol=prec)
+    def test(
+        self,
+    ):
+        natoms = 5
+        cell = torch.rand([3, 3], dtype=dtype).to(env.DEVICE)
+        cell = (cell + cell.T) + 5.0 * torch.eye(3).to(env.DEVICE)
+        coord = torch.rand([natoms, 3], dtype=dtype).to(env.DEVICE)
+        coord = torch.matmul(coord, cell)
+        atype = torch.IntTensor([0, 0, 0, 1, 1]).to(env.DEVICE)
+        idx_perm = [1, 0, 4, 3, 2]
+        updated_c0, logits0 = eval_model(
+            self.model, coord.unsqueeze(0), cell.unsqueeze(0), atype, denoise=True
+        )
+        ret0 = {"updated_coord": updated_c0.squeeze(0), "logits": logits0.squeeze(0)}
+        updated_c1, logits1 = eval_model(
+            self.model,
+            coord[idx_perm].unsqueeze(0),
+            cell.unsqueeze(0),
+            atype[idx_perm],
+            denoise=True,
+        )
+        ret1 = {"updated_coord": updated_c1.squeeze(0), "logits": logits1.squeeze(0)}
+        prec = 1e-10
+        torch.testing.assert_close(
+            ret0["updated_coord"][idx_perm], ret1["updated_coord"], rtol=prec, atol=prec
+        )
+        torch.testing.assert_close(
+            ret0["logits"][idx_perm], ret1["logits"], rtol=prec, atol=prec
+        )
+
 
 class TestDenoiseModelDPA1(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_dpa1)
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    def setUp(self):
+        model_params = copy.deepcopy(model_dpa1)
+        sampled = make_sample(model_params)
+        self.type_split = True
+        self.model = get_model(model_params, sampled).to(env.DEVICE)
+
 
 class TestDenoiseModelDPA2(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params_sample = copy.deepcopy(model_dpa2)
-    model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"]["repinit_rcut"]
-    model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"]["repinit_nsel"]
-    sampled = make_sample(model_params_sample)
-    model_params = copy.deepcopy(model_dpa2)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
+    def setUp(self):
+        model_params_sample = copy.deepcopy(model_dpa2)
+        model_params_sample["descriptor"]["rcut"] = model_params_sample["descriptor"][
+            "repinit_rcut"
+        ]
+        model_params_sample["descriptor"]["sel"] = model_params_sample["descriptor"][
+            "repinit_nsel"
+        ]
+        sampled = make_sample(model_params_sample)
+        model_params = copy.deepcopy(model_dpa2)
+        self.type_split = True
+        self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-@unittest.skip("hybrid not supported at the moment")
-class TestDenoiseModelHybrid(unittest.TestCase, TestPermutationDenoise):
-  def setUp(self):
-    model_params = copy.deepcopy(model_hybrid_denoise)
-    sampled = make_sample(model_params)
-    self.type_split = True
-    self.model = get_model(model_params, sampled).to(env.DEVICE)
 
-if __name__ == '__main__':
-  unittest.main()
+# @unittest.skip("hybrid not supported at the moment")
+# class TestDenoiseModelHybrid(unittest.TestCase, TestPermutationDenoise):
+#     def setUp(self):
+#         model_params = copy.deepcopy(model_hybrid_denoise)
+#         sampled = make_sample(model_params)
+#         self.type_split = True
+#         self.model = get_model(model_params, sampled).to(env.DEVICE)
+
+
+if __name__ == "__main__":
+    unittest.main()

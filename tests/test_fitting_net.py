@@ -1,21 +1,26 @@
-import numpy as np
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import re
-import torch
 import unittest
-import json
 
+import numpy as np
 import tensorflow.compat.v1 as tf
+import torch
 
 tf.disable_eager_execution()
 
-from deepmd.tf.fit.ener import EnerFitting
+from deepmd.tf.fit.ener import (
+    EnerFitting,
+)
 
-from deepmd_pt.utils.env import GLOBAL_NP_FLOAT_PRECISION, TEST_CONFIG
-from deepmd_pt.model.task import EnergyFittingNet
+from deepmd_pt.model.task import (
+    EnergyFittingNet,
+)
+from deepmd_pt.utils.env import (
+    GLOBAL_NP_FLOAT_PRECISION,
+)
 
 
-class FakeDescriptor(object):
-
+class FakeDescriptor:
     def __init__(self, ntypes, embedding_width):
         self._ntypes = ntypes
         self._dim_out = embedding_width
@@ -37,62 +42,85 @@ def base_fitting_net(dp_fn, embedding, natoms, atype):
         t_embedding = tf.placeholder(GLOBAL_NP_FLOAT_PRECISION, [None, None])
         t_natoms = tf.placeholder(tf.int32, [None])
         t_atype = tf.placeholder(tf.int32, [None, None])
-        t_energy = dp_fn.build(t_embedding, t_natoms, {'atype': t_atype})
+        t_energy = dp_fn.build(t_embedding, t_natoms, {"atype": t_atype})
         init_op = tf.global_variables_initializer()
         t_vars = {}
         for var in tf.global_variables():
             key = None
-            matched = re.match(r'layer_(\d)_type_(\d)/([a-z]+)', var.name)
+            matched = re.match(r"layer_(\d)_type_(\d)/([a-z]+)", var.name)
             if matched:
-                key = gen_key(type_id=matched.group(2), layer_id=matched.group(1), w_or_b=matched.group(3))
+                key = gen_key(
+                    type_id=matched.group(2),
+                    layer_id=matched.group(1),
+                    w_or_b=matched.group(3),
+                )
             else:
-                matched = re.match(r'final_layer_type_(\d)/([a-z]+)', var.name)
+                matched = re.match(r"final_layer_type_(\d)/([a-z]+)", var.name)
                 if matched:
-                    key = gen_key(type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2))
+                    key = gen_key(
+                        type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2)
+                    )
             if key is not None:
                 t_vars[key] = var
 
     with tf.Session(graph=g) as sess:
         sess.run(init_op)
-        energy, values = sess.run([t_energy, t_vars], feed_dict={
-            t_embedding: embedding,
-            t_natoms: natoms,
-            t_atype: atype,
-        })
+        energy, values = sess.run(
+            [t_energy, t_vars],
+            feed_dict={
+                t_embedding: embedding,
+                t_natoms: natoms,
+                t_atype: atype,
+            },
+        )
         return energy, values
 
 
 class TestFittingNet(unittest.TestCase):
-
     def setUp(self):
         nloc = 7
         self.embedding_width = 30
         self.natoms = np.array([nloc, nloc, 2, 5], dtype=np.int32)
-        self.embedding = np.random.uniform(size=[4, nloc * self.embedding_width])
+        rng = np.random.default_rng()
+        self.embedding = rng.uniform(size=[4, nloc * self.embedding_width])
         self.ntypes = self.natoms.size - 2
         self.n_neuron = [32, 32, 32]
         self.atype = np.zeros([4, nloc], dtype=np.int32)
         cnt = 0
         for i in range(self.ntypes):
-            self.atype[:, cnt:cnt + self.natoms[i + 2]] = i
+            self.atype[:, cnt : cnt + self.natoms[i + 2]] = i
             cnt += self.natoms[i + 2]
 
         fake_d = FakeDescriptor(2, 30)
         self.dp_fn = EnerFitting(fake_d, self.n_neuron)
-        self.dp_fn.bias_atom_e = np.random.uniform(size=[self.ntypes])
+        self.dp_fn.bias_atom_e = rng.uniform(size=[self.ntypes])
 
     def test_consistency(self):
-        dp_energy, values = base_fitting_net(self.dp_fn, self.embedding, self.natoms, self.atype)
-        my_fn = EnergyFittingNet(self.ntypes, self.embedding_width, self.n_neuron, self.dp_fn.bias_atom_e, use_tebd=False)
+        dp_energy, values = base_fitting_net(
+            self.dp_fn, self.embedding, self.natoms, self.atype
+        )
+        my_fn = EnergyFittingNet(
+            self.ntypes,
+            self.embedding_width,
+            self.n_neuron,
+            self.dp_fn.bias_atom_e,
+            use_tebd=False,
+        )
         for name, param in my_fn.named_parameters():
-            matched = re.match('filter_layers\.(\d).deep_layers\.(\d)\.([a-z]+)', name)
+            matched = re.match("filter_layers\.(\d).deep_layers\.(\d)\.([a-z]+)", name)
             key = None
             if matched:
-                key = gen_key(type_id=matched.group(1), layer_id=matched.group(2), w_or_b=matched.group(3))
+                key = gen_key(
+                    type_id=matched.group(1),
+                    layer_id=matched.group(2),
+                    w_or_b=matched.group(3),
+                )
             else:
-                matched = re.match('filter_layers\.(\d).final_layer\.([a-z]+)', name)
+                matched = re.match("filter_layers\.(\d).final_layer\.([a-z]+)", name)
                 if matched:
-                    key = gen_key(type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2))
+                    key = gen_key(
+                        type_id=matched.group(1), layer_id=-1, w_or_b=matched.group(2)
+                    )
             assert key is not None
             var = values[key]
             with torch.no_grad():
@@ -107,5 +135,5 @@ class TestFittingNet(unittest.TestCase):
         self.assertTrue(np.allclose(dp_energy, my_energy.numpy().reshape([-1])))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

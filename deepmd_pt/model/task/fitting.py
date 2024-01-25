@@ -1,17 +1,33 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import logging
+from typing import (
+    Callable,
+)
+
 import numpy as np
 import torch
-from deepmd_pt.utils.env import DEVICE
-from deepmd_pt.utils.dataloader import DpLoaderSet
-from deepmd_pt.utils.stat import make_stat_input
-from deepmd_pt.model.task import TaskBaseMethod
-from deepmd_pt.utils.plugin import Plugin, PluginVariant
-from typing import Callable
-from deepmd.model_format import FittingOutputDef, fitting_check_output
+from deepmd.model_format import (
+    FittingOutputDef,
+)
+
+from deepmd_pt.model.task import (
+    TaskBaseMethod,
+)
+from deepmd_pt.utils.dataloader import (
+    DpLoaderSet,
+)
+from deepmd_pt.utils.env import (
+    DEVICE,
+)
+from deepmd_pt.utils.plugin import (
+    Plugin,
+)
+from deepmd_pt.utils.stat import (
+    make_stat_input,
+)
 
 
 class Fitting(TaskBaseMethod):
-
     __plugins = Plugin()
 
     @staticmethod
@@ -49,20 +65,20 @@ class Fitting(TaskBaseMethod):
         return super().__new__(cls)
 
     def output_def(self) -> FittingOutputDef:
-        """Definition for the task Output.
-        """
+        """Definition for the task Output."""
         raise NotImplementedError
 
     def forward(self, **kwargs):
-        """Task Output.
-        """
+        """Task Output."""
         raise NotImplementedError
 
     def share_params(self, base_class, shared_level, resume=False):
-        assert self.__class__ == base_class.__class__, "Only fitting nets of the same type can share params!"
+        assert (
+            self.__class__ == base_class.__class__
+        ), "Only fitting nets of the same type can share params!"
         if shared_level == 0:
             # link buffers
-            if hasattr(self, 'bias_atom_e'):
+            if hasattr(self, "bias_atom_e"):
                 self.bias_atom_e = base_class.bias_atom_e
             # the following will successfully link all the params except buffers, which need manually link.
             for item in self._modules:
@@ -75,15 +91,21 @@ class Fitting(TaskBaseMethod):
         elif shared_level == 2:
             # share all the layers before final layer
             # the following will successfully link all the params except buffers, which need manually link.
-            self._modules['filter_layers'][0].deep_layers = base_class._modules['filter_layers'][0].deep_layers
+            self._modules["filter_layers"][0].deep_layers = base_class._modules[
+                "filter_layers"
+            ][0].deep_layers
         elif shared_level == 3:
             # share the first layers
             # the following will successfully link all the params except buffers, which need manually link.
-            self._modules['filter_layers'][0].deep_layers[0] = base_class._modules['filter_layers'][0].deep_layers[0]
+            self._modules["filter_layers"][0].deep_layers[0] = base_class._modules[
+                "filter_layers"
+            ][0].deep_layers[0]
         else:
             raise NotImplementedError
 
-    def change_energy_bias(self, config, model, old_type_map, new_type_map, bias_shift='delta', ntest=10):
+    def change_energy_bias(
+        self, config, model, old_type_map, new_type_map, bias_shift="delta", ntest=10
+    ):
         """Change the energy bias according to the input data and the pretrained model.
 
         Parameters
@@ -109,8 +131,10 @@ class Fitting(TaskBaseMethod):
             "(this step may take long time)".format(str(new_type_map))
         )
         # data
-        systems = config['training']['training_data']['systems']
-        finetune_data = DpLoaderSet(systems, ntest, config["model"], type_split=False, noise_settings=None)
+        systems = config["training"]["training_data"]["systems"]
+        finetune_data = DpLoaderSet(
+            systems, ntest, config["model"], type_split=False, noise_settings=None
+        )
         sampled = make_stat_input(finetune_data.systems, finetune_data.dataloaders, 1)
         # map
         sorter = np.argsort(old_type_map)
@@ -121,7 +145,7 @@ class Fitting(TaskBaseMethod):
         numb_type = len(old_type_map)
         type_numbs, energy_ground_truth, energy_predict = [], [], []
         for test_data in sampled:
-            nframes = test_data['energy'].shape[0]
+            nframes = test_data["energy"].shape[0]
             if mixed_type:
                 atype = test_data["atype"].detach().cpu().numpy()
             else:
@@ -129,9 +153,7 @@ class Fitting(TaskBaseMethod):
             assert np.array(
                 [i.item() in idx_type_map for i in list(set(atype.reshape(-1)))]
             ).all(), "Some types are not in 'type_map'!"
-            energy_ground_truth.append(
-                test_data["energy"].cpu().numpy()
-            )
+            energy_ground_truth.append(test_data["energy"].cpu().numpy())
             if mixed_type:
                 type_numbs.append(
                     np.array(
@@ -148,10 +170,16 @@ class Fitting(TaskBaseMethod):
                 )
             if bias_shift == "delta":
                 coord = test_data["coord"].to(DEVICE)
-                atype = test_data['atype'].to(DEVICE)
-                box = test_data['box'].to(DEVICE) if test_data['box'] is not None else None
+                atype = test_data["atype"].to(DEVICE)
+                box = (
+                    test_data["box"].to(DEVICE)
+                    if test_data["box"] is not None
+                    else None
+                )
                 ret = model(coord, atype, box)
-                energy_predict.append(ret['energy'].reshape([nframes, 1]).detach().cpu().numpy())
+                energy_predict.append(
+                    ret["energy"].reshape([nframes, 1]).detach().cpu().numpy()
+                )
         type_numbs = np.concatenate(type_numbs)
         energy_ground_truth = np.concatenate(energy_ground_truth)
         old_bias = self.bias_atom_e[idx_type_map]
@@ -168,22 +196,28 @@ class Fitting(TaskBaseMethod):
                     )
                 )
             )
-            self.bias_atom_e[idx_type_map] += torch.from_numpy(delta_bias.reshape(-1)).to(DEVICE)
+            self.bias_atom_e[idx_type_map] += torch.from_numpy(
+                delta_bias.reshape(-1)
+            ).to(DEVICE)
             logging.info(
-                "RMSE of atomic energy after linear regression is: {:10.5e} eV/atom.".format(
-                    rmse_ae
-                )
+                f"RMSE of atomic energy after linear regression is: {rmse_ae:10.5e} eV/atom."
             )
         elif bias_shift == "statistic":
             statistic_bias = np.linalg.lstsq(
                 type_numbs, energy_ground_truth, rcond=None
             )[0]
-            self.bias_atom_e[idx_type_map] = torch.from_numpy(statistic_bias.reshape(-1)).type_as(self.bias_atom_e[idx_type_map]).to(DEVICE)
+            self.bias_atom_e[idx_type_map] = (
+                torch.from_numpy(statistic_bias.reshape(-1))
+                .type_as(self.bias_atom_e[idx_type_map])
+                .to(DEVICE)
+            )
         else:
             raise RuntimeError("Unknown bias_shift mode: " + bias_shift)
         logging.info(
             "Change energy bias of {} from {} to {}.".format(
-                str(new_type_map), str(old_bias.detach().cpu().numpy()), str(self.bias_atom_e[idx_type_map].detach().cpu().numpy())
+                str(new_type_map),
+                str(old_bias.detach().cpu().numpy()),
+                str(self.bias_atom_e[idx_type_map].detach().cpu().numpy()),
             )
         )
         return None
