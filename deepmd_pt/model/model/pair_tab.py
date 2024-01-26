@@ -46,9 +46,11 @@ class PairTabModel(nn.Module, AtomicModel):
         self.tab_info = torch.from_numpy(tab_info) 
         self.tab_data = torch.from_numpy(tab_data)
 
+        if self.tab_info[1] < rcut:
+            raise ValueError("The tabulation file does not have enough data to cover the cutoff radius.")
+
         # self.model_type = "ener"
         # self.model_version = MODEL_VERSION ## this shoud be in the parent class
-
 
         if isinstance(sel, int):
             self.sel = sel
@@ -114,7 +116,7 @@ class PairTabModel(nn.Module, AtomicModel):
 
         atomic_energy = 0.5 * torch.sum(torch.where(nlist != -1, raw_atomic_energy, torch.zeros_like(raw_atomic_energy)) ,dim=-1)
 
-        return {"atomic_energy": atomic_energy}
+        return {"energy": atomic_energy}
 
     def _pair_tabulated_inter(self, nlist: torch.Tensor,i_type: torch.Tensor, j_type: torch.Tensor, rr: torch.Tensor) -> torch.Tensor:
         """Pairwise tabulated energy.
