@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 import torch
-
-from deepmd_utils.utils.batch_size import AutoBatchSize as AutoBatchSizeBase
+from deepmd.utils.batch_size import AutoBatchSize as AutoBatchSizeBase
 
 
 class AutoBatchSize(AutoBatchSizeBase):

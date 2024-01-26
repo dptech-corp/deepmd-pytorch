@@ -1,19 +1,34 @@
-from typing import Optional
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from typing import (
+    Optional,
+)
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from deepmd_pt.utils import env
+from deepmd_pt.utils import (
+    env,
+)
 
 try:
-    from typing import Final
-except:
+    from typing import (
+        Final,
+    )
+except ImportError:
     from torch.jit import Final
 
-from deepmd_pt.utils.utils import get_activation_fn, ActivationFn
+from functools import (
+    partial,
+)
+
 import torch.utils.checkpoint
-from functools import partial
+
+from deepmd_pt.utils.utils import (
+    ActivationFn,
+    get_activation_fn,
+)
 
 
 def Tensor(*shape):
@@ -44,7 +59,7 @@ class DropPath(torch.nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
 
     def __init__(self, prob=None):
-        super(DropPath, self).__init__()
+        super().__init__()
         self.drop_prob = prob
 
     def forward(self, x):
@@ -52,7 +67,7 @@ class DropPath(torch.nn.Module):
             return x
         keep_prob = 1 - self.drop_prob
         shape = (x.shape[0],) + (1,) * (
-                x.ndim - 1
+            x.ndim - 1
         )  # work with diff dim tensors, not just 2D ConvNets
         random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
         random_tensor.floor_()  # binarize
@@ -63,7 +78,9 @@ class DropPath(torch.nn.Module):
         return f"prob={self.drop_prob}"
 
 
-def softmax_dropout(input_x, dropout_prob, is_training=True, mask=None, bias=None, inplace=True):
+def softmax_dropout(
+    input_x, dropout_prob, is_training=True, mask=None, bias=None, inplace=True
+):
     input_x = input_x.contiguous()
     if not inplace:
         input_x = input_x.clone()
@@ -107,7 +124,7 @@ def checkpoint_sequential(
 class ResidualLinear(nn.Module):
     resnet: Final[int]
 
-    def __init__(self, num_in, num_out, bavg=0., stddev=1., resnet_dt=False):
+    def __init__(self, num_in, num_out, bavg=0.0, stddev=1.0, resnet_dt=False):
         """Construct a residual linear layer.
 
         Args:
@@ -115,7 +132,7 @@ class ResidualLinear(nn.Module):
         - num_out: Width of output tensor.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(ResidualLinear, self).__init__()
+        super().__init__()
         self.num_in = num_in
         self.num_out = num_out
         self.resnet = resnet_dt
@@ -126,7 +143,7 @@ class ResidualLinear(nn.Module):
         nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
         if self.resnet:
             self.idt = nn.Parameter(data=Tensor(1, num_out))
-            nn.init.normal_(self.idt.data, mean=1., std=0.001)
+            nn.init.normal_(self.idt.data, mean=1.0, std=0.001)
 
     def forward(self, inputs):
         """Return X ?+ X*W+b."""
@@ -146,7 +163,16 @@ class TypeFilter(nn.Module):
     use_tebd: Final[bool]
     tebd_mode: Final[str]
 
-    def __init__(self, offset, length, neuron, return_G=False, tebd_dim=0, use_tebd=False, tebd_mode='concat'):
+    def __init__(
+        self,
+        offset,
+        length,
+        neuron,
+        return_G=False,
+        tebd_dim=0,
+        use_tebd=False,
+        tebd_mode="concat",
+    ):
         """Construct a filter on the given element as neighbor.
 
         Args:
@@ -154,18 +180,20 @@ class TypeFilter(nn.Module):
         - length: Atom count of this element.
         - neuron: Number of neurons in each hidden layers of the embedding net.
         """
-        super(TypeFilter, self).__init__()
+        super().__init__()
         self.offset = offset
         self.length = length
         self.tebd_dim = tebd_dim
         self.use_tebd = use_tebd
         self.tebd_mode = tebd_mode
-        supported_tebd_mode = ['concat', 'dot', 'dot_residual_s', 'dot_residual_t']
-        assert tebd_mode in supported_tebd_mode, f'Unknown tebd_mode {tebd_mode}! Supported are {supported_tebd_mode}.'
-        if use_tebd and tebd_mode == 'concat':
-            self.neuron = [1 + tebd_dim * 2] + neuron
+        supported_tebd_mode = ["concat", "dot", "dot_residual_s", "dot_residual_t"]
+        assert (
+            tebd_mode in supported_tebd_mode
+        ), f"Unknown tebd_mode {tebd_mode}! Supported are {supported_tebd_mode}."
+        if use_tebd and tebd_mode == "concat":
+            self.neuron = [1 + tebd_dim * 2, *neuron]
         else:
-            self.neuron = [1] + neuron
+            self.neuron = [1, *neuron]
 
         deep_layers = []
         for ii in range(1, len(self.neuron)):
@@ -174,8 +202,8 @@ class TypeFilter(nn.Module):
         self.deep_layers = nn.ModuleList(deep_layers)
 
         deep_layers_t = []
-        if use_tebd and tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
-            self.neuron_t = [tebd_dim * 2] + neuron
+        if use_tebd and tebd_mode in ["dot", "dot_residual_s", "dot_residual_t"]:
+            self.neuron_t = [tebd_dim * 2, *neuron]
             for ii in range(1, len(self.neuron_t)):
                 one = ResidualLinear(self.neuron_t[ii - 1], self.neuron_t[ii])
                 deep_layers_t.append(one)
@@ -183,21 +211,29 @@ class TypeFilter(nn.Module):
 
         self.return_G = return_G
 
-    def forward(self, inputs, atype_tebd: Optional[torch.Tensor]=None, nlist_tebd: Optional[torch.Tensor]=None):
+    def forward(
+        self,
+        inputs,
+        atype_tebd: Optional[torch.Tensor] = None,
+        nlist_tebd: Optional[torch.Tensor] = None,
+    ):
         """Calculate decoded embedding for each atom.
 
         Args:
         - inputs: Descriptor matrix. Its shape is [nframes*natoms[0], len_descriptor].
 
-        Returns:
+        Returns
+        -------
         - `torch.Tensor`: Embedding contributed by me. Its shape is [nframes*natoms[0], 4, self.neuron[-1]].
         """
-        inputs_i = inputs[:, self.offset * 4:(self.offset + self.length) * 4]
-        inputs_reshape = inputs_i.reshape(-1, 4)  # shape is [nframes*natoms[0]*self.length, 4]
+        inputs_i = inputs[:, self.offset * 4 : (self.offset + self.length) * 4]
+        inputs_reshape = inputs_i.reshape(
+            -1, 4
+        )  # shape is [nframes*natoms[0]*self.length, 4]
         xyz_scatter = inputs_reshape[:, 0:1]
 
         # concat the tebd as input
-        if self.use_tebd and self.tebd_mode == 'concat':
+        if self.use_tebd and self.tebd_mode == "concat":
             assert nlist_tebd is not None and atype_tebd is not None
             nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
             atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
@@ -209,7 +245,11 @@ class TypeFilter(nn.Module):
             # [nframes * nloc * nnei, out_size]
 
         # dot the tebd output
-        if self.use_tebd and self.tebd_mode in ['dot', 'dot_residual_s', 'dot_residual_t']:
+        if self.use_tebd and self.tebd_mode in [
+            "dot",
+            "dot_residual_s",
+            "dot_residual_t",
+        ]:
             assert nlist_tebd is not None and atype_tebd is not None
             nlist_tebd = nlist_tebd.reshape(-1, self.tebd_dim)
             atype_tebd = atype_tebd.reshape(-1, self.tebd_dim)
@@ -218,15 +258,16 @@ class TypeFilter(nn.Module):
             for linear in self.deep_layers_t:
                 two_side_tebd = linear(two_side_tebd)
                 # [nframes * nloc * nnei, out_size]
-            if self.tebd_mode == 'dot':
+            if self.tebd_mode == "dot":
                 xyz_scatter = xyz_scatter * two_side_tebd
-            elif self.tebd_mode == 'dot_residual_s':
+            elif self.tebd_mode == "dot_residual_s":
                 xyz_scatter = xyz_scatter * two_side_tebd + xyz_scatter
-            elif self.tebd_mode == 'dot_residual_t':
+            elif self.tebd_mode == "dot_residual_t":
                 xyz_scatter = xyz_scatter * two_side_tebd + two_side_tebd
 
-        xyz_scatter = xyz_scatter.view(-1, self.length,
-                                       self.neuron[-1])  # shape is [nframes*natoms[0], self.length, self.neuron[-1]]
+        xyz_scatter = xyz_scatter.view(
+            -1, self.length, self.neuron[-1]
+        )  # shape is [nframes*natoms[0], self.length, self.neuron[-1]]
         if self.return_G:
             return xyz_scatter
         else:
@@ -238,15 +279,16 @@ class TypeFilter(nn.Module):
 class SimpleLinear(nn.Module):
     use_timestep: Final[bool]
 
-    def __init__(self,
-                 num_in,
-                 num_out,
-                 bavg=0.,
-                 stddev=1.,
-                 use_timestep=False,
-                 activate=None,
-                 bias: bool = True,
-                 ):
+    def __init__(
+        self,
+        num_in,
+        num_out,
+        bavg=0.0,
+        stddev=1.0,
+        use_timestep=False,
+        activate=None,
+        bias: bool = True,
+    ):
         """Construct a linear layer.
 
         Args:
@@ -255,7 +297,7 @@ class SimpleLinear(nn.Module):
         - use_timestep: Apply time-step to weight.
         - activate: type of activate func.
         """
-        super(SimpleLinear, self).__init__()
+        super().__init__()
         self.num_in = num_in
         self.num_out = num_out
         self.use_timestep = use_timestep
@@ -264,16 +306,16 @@ class SimpleLinear(nn.Module):
         self.matrix = nn.Parameter(data=Tensor(num_in, num_out))
         nn.init.normal_(self.matrix.data, std=stddev / np.sqrt(num_out + num_in))
         if bias:
-          self.bias = nn.Parameter(data=Tensor(1, num_out))
-          nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
+            self.bias = nn.Parameter(data=Tensor(1, num_out))
+            nn.init.normal_(self.bias.data, mean=bavg, std=stddev)
         else:
-          self.bias = None
+            self.bias = None
         if self.use_timestep:
             self.idt = nn.Parameter(data=Tensor(1, num_out))
             nn.init.normal_(self.idt.data, mean=0.1, std=0.001)
 
     def forward(self, inputs):
-        """Return X*W+b."""        
+        """Return X*W+b."""
         xw = torch.matmul(inputs, self.matrix)
         hidden = xw + self.bias if self.bias is not None else xw
         hidden = self.activate(hidden)
@@ -284,13 +326,13 @@ class SimpleLinear(nn.Module):
 
 class Linear(nn.Linear):
     def __init__(
-            self,
-            d_in: int,
-            d_out: int,
-            bias: bool = True,
-            init: str = "default",
+        self,
+        d_in: int,
+        d_out: int,
+        bias: bool = True,
+        init: str = "default",
     ):
-        super(Linear, self).__init__(d_in, d_out, bias=bias, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        super().__init__(d_in, d_out, bias=bias, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
         self.use_bias = bias
 
@@ -318,7 +360,7 @@ class Linear(nn.Linear):
         TRUNCATED_NORMAL_STDDEV_FACTOR = 0.87962566103423978
         _, fan_in = self.weight.shape
         scale = scale / max(1, fan_in)
-        std = (scale ** 0.5) / TRUNCATED_NORMAL_STDDEV_FACTOR
+        std = (scale**0.5) / TRUNCATED_NORMAL_STDDEV_FACTOR
         nn.init.trunc_normal_(self.weight, mean=0.0, std=std)
 
     def _glorot_uniform_init(self):
@@ -337,8 +379,7 @@ class Linear(nn.Linear):
 
 class Transition(nn.Module):
     def __init__(self, d_in, n, dropout=0.0):
-
-        super(Transition, self).__init__()
+        super().__init__()
 
         self.d_in = d_in
         self.n = n
@@ -359,20 +400,19 @@ class Transition(nn.Module):
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
-
         x = self._transition(x=x)
         return x
 
 
 class Embedding(nn.Embedding):
     def __init__(
-            self,
-            num_embeddings: int,
-            embedding_dim: int,
-            padding_idx: int = None,
-            dtype=torch.float64,
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        padding_idx: Optional[int] = None,
+        dtype=torch.float64,
     ):
-        super(Embedding, self).__init__(
+        super().__init__(
             num_embeddings, embedding_dim, padding_idx=padding_idx, dtype=dtype
         )
         self._normal_init()
@@ -385,12 +425,8 @@ class Embedding(nn.Embedding):
 
 
 class NonLinearHead(nn.Module):
-    def __init__(self,
-                 input_dim,
-                 out_dim,
-                 activation_fn,
-                 hidden=None):
-        super(NonLinearHead, self).__init__()
+    def __init__(self, input_dim, out_dim, activation_fn, hidden=None):
+        super().__init__()
         hidden = input_dim if not hidden else hidden
         self.linear1 = SimpleLinear(input_dim, hidden, activate=activation_fn)
         self.linear2 = SimpleLinear(hidden, out_dim)
@@ -403,7 +439,7 @@ class NonLinearHead(nn.Module):
 
 class NonLinear(nn.Module):
     def __init__(self, input, output_size, hidden=None):
-        super(NonLinear, self).__init__()
+        super().__init__()
 
         if hidden is None:
             hidden = input
@@ -432,11 +468,15 @@ class MaskLMHead(nn.Module):
         self.layer_norm = nn.LayerNorm(embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
 
         if weight is None:
-            weight = nn.Linear(embed_dim, output_dim, bias=False, dtype=env.GLOBAL_PT_FLOAT_PRECISION).weight
+            weight = nn.Linear(
+                embed_dim, output_dim, bias=False, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            ).weight
         self.weight = weight
-        self.bias = nn.Parameter(torch.zeros(output_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION))
+        self.bias = nn.Parameter(
+            torch.zeros(output_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        )
 
-    def forward(self, features, masked_tokens: Optional[torch.Tensor]=None, **kwargs):
+    def forward(self, features, masked_tokens: Optional[torch.Tensor] = None, **kwargs):
         # Only project the masked tokens while training,
         # saves both memory and computation
         if masked_tokens is not None:
@@ -451,8 +491,9 @@ class MaskLMHead(nn.Module):
 
 
 class ResidualDeep(nn.Module):
-
-    def __init__(self, type_id, embedding_width, neuron, bias_atom_e, out_dim=1, resnet_dt=False):
+    def __init__(
+        self, type_id, embedding_width, neuron, bias_atom_e, out_dim=1, resnet_dt=False
+    ):
         """Construct a filter on the given element as neighbor.
 
         Args:
@@ -461,9 +502,9 @@ class ResidualDeep(nn.Module):
         - neuron: Number of neurons in each hidden layers of the embedding net.
         - resnet_dt: Using time-step in the ResNet construction.
         """
-        super(ResidualDeep, self).__init__()
+        super().__init__()
         self.type_id = type_id
-        self.neuron = [embedding_width] + neuron
+        self.neuron = [embedding_width, *neuron]
         self.out_dim = out_dim
 
         deep_layers = []
@@ -471,7 +512,9 @@ class ResidualDeep(nn.Module):
             one = SimpleLinear(
                 num_in=self.neuron[ii - 1],
                 num_out=self.neuron[ii],
-                use_timestep=(resnet_dt and ii > 1 and self.neuron[ii - 1] == self.neuron[ii]),
+                use_timestep=(
+                    resnet_dt and ii > 1 and self.neuron[ii - 1] == self.neuron[ii]
+                ),
                 activate="tanh",
             )
             deep_layers.append(one)
@@ -486,7 +529,8 @@ class ResidualDeep(nn.Module):
         Args:
         - inputs: Embedding net output per atom. Its shape is [nframes*nloc, self.embedding_width].
 
-        Returns:
+        Returns
+        -------
         - `torch.Tensor`: Output layer with shape [nframes*nloc, self.neuron[-1]].
         """
         outputs = inputs
@@ -500,29 +544,33 @@ class ResidualDeep(nn.Module):
 
 
 class TypeEmbedNet(nn.Module):
-
     def __init__(self, type_nums, embed_dim, bavg=0.0, stddev=1.0):
-        """Construct a type embedding net.
-        """
-        super(TypeEmbedNet, self).__init__()
-        self.embedding = nn.Embedding(type_nums + 1, embed_dim, padding_idx=type_nums,
-                                            dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        """Construct a type embedding net."""
+        super().__init__()
+        self.embedding = nn.Embedding(
+            type_nums + 1,
+            embed_dim,
+            padding_idx=type_nums,
+            dtype=env.GLOBAL_PT_FLOAT_PRECISION,
+        )
         # nn.init.normal_(self.embedding.weight[:-1], mean=bavg, std=stddev)
 
     def forward(self, atype):
         """
-
         Args:
-            atype: Type of each input, [nframes, nloc] or [nframes, nloc, nnei]
+            atype: Type of each input, [nframes, nloc] or [nframes, nloc, nnei].
 
-        Returns:
-            type_embedding:
+        Returns
+        -------
+        type_embedding:
 
         """
         return self.embedding(atype)
 
     def share_params(self, base_class, shared_level, resume=False):
-        assert self.__class__ == base_class.__class__, "Only TypeEmbedNet of the same type can share params!"
+        assert (
+            self.__class__ == base_class.__class__
+        ), "Only TypeEmbedNet of the same type can share params!"
         if shared_level == 0:
             # the following will successfully link all the params except buffers, which need manually link.
             for item in self._modules:
@@ -548,8 +596,12 @@ class GaussianKernel(nn.Module):
         mean = torch.linspace(start, stop, K, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
         self.std = (std_width * (mean[1] - mean[0])).item()
         self.register_buffer("mean", mean)
-        self.mul = Embedding(num_pair + 1, 1, padding_idx=num_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.bias = Embedding(num_pair + 1, 1, padding_idx=num_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.mul = Embedding(
+            num_pair + 1, 1, padding_idx=num_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
+        self.bias = Embedding(
+            num_pair + 1, 1, padding_idx=num_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         nn.init.constant_(self.bias.weight, 0)
         nn.init.constant_(self.mul.weight, 1.0)
 
@@ -564,7 +616,17 @@ class GaussianKernel(nn.Module):
 
 
 class GaussianEmbedding(nn.Module):
-    def __init__(self, rcut, kernel_num, num_pair, embed_dim, pair_embed_dim, sel, ntypes, atomic_sum_gbf):
+    def __init__(
+        self,
+        rcut,
+        kernel_num,
+        num_pair,
+        embed_dim,
+        pair_embed_dim,
+        sel,
+        ntypes,
+        atomic_sum_gbf,
+    ):
         """Construct a gaussian kernel based embedding of pair representation.
 
         Args:
@@ -576,7 +638,7 @@ class GaussianEmbedding(nn.Module):
             sel: Number of neighbors.
             ntypes: Number of atom types.
         """
-        super(GaussianEmbedding, self).__init__()
+        super().__init__()
         self.gbf = GaussianKernel(K=kernel_num, num_pair=num_pair, stop=rcut)
         self.gbf_proj = NonLinear(kernel_num, pair_embed_dim)
         self.embed_dim = embed_dim
@@ -584,7 +646,9 @@ class GaussianEmbedding(nn.Module):
         self.atomic_sum_gbf = atomic_sum_gbf
         if self.atomic_sum_gbf:
             if kernel_num != self.embed_dim:
-                self.edge_proj = torch.nn.Linear(kernel_num, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+                self.edge_proj = torch.nn.Linear(
+                    kernel_num, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+                )
             else:
                 self.edge_proj = None
         self.ntypes = ntypes
@@ -599,10 +663,11 @@ class GaussianEmbedding(nn.Module):
             edge_type_2dim: Edge index for gbf calculation with shape [nframes*nloc, natoms, natoms, 2].
             edge_feature: Previous calculated edge features with shape [nframes*nloc, natoms, natoms, pair_dim].
 
-        Returns:
-            atom_feature: Updated atomic features with shape [nframes*nloc, natoms, embed_dim].
-            attn_bias: Updated edge features as attention bias with shape [nframes*nloc, natoms, natoms, pair_dim].
-            delta_pos: Delta position for force/vector prediction with shape [nframes*nloc, natoms, natoms, 3].
+        Returns
+        -------
+        atom_feature: Updated atomic features with shape [nframes*nloc, natoms, embed_dim].
+        attn_bias: Updated edge features as attention bias with shape [nframes*nloc, natoms, natoms, pair_dim].
+        delta_pos: Delta position for force/vector prediction with shape [nframes*nloc, natoms, natoms, 3].
         """
         ncluster, natoms, _ = coord_selected.shape
         # ncluster x natoms x natoms x 3
@@ -628,42 +693,63 @@ class GaussianEmbedding(nn.Module):
 
 
 class NeighborWiseAttention(nn.Module):
-    def __init__(self, layer_num, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, post_ln=True,
-                 ffn=False, ffn_embed_dim=1024, activation="tanh", scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None):
-        """Construct a neighbor-wise attention net.
-        """
-        super(NeighborWiseAttention, self).__init__()
+    def __init__(
+        self,
+        layer_num,
+        nnei,
+        embed_dim,
+        hidden_dim,
+        dotr=False,
+        do_mask=False,
+        post_ln=True,
+        ffn=False,
+        ffn_embed_dim=1024,
+        activation="tanh",
+        scaling_factor=1.0,
+        head_num=1,
+        normalize=True,
+        temperature=None,
+    ):
+        """Construct a neighbor-wise attention net."""
+        super().__init__()
         self.layer_num = layer_num
         attention_layers = []
         for i in range(self.layer_num):
-            attention_layers.append(NeighborWiseAttentionLayer(nnei, embed_dim, hidden_dim,
-                                                               dotr=dotr, do_mask=do_mask,
-                                                               post_ln=post_ln, ffn=ffn,
-                                                               ffn_embed_dim=ffn_embed_dim,
-                                                               activation=activation,
-                                                               scaling_factor=scaling_factor,
-                                                               head_num=head_num,
-                                                               normalize=normalize,
-                                                               temperature=temperature))
+            attention_layers.append(
+                NeighborWiseAttentionLayer(
+                    nnei,
+                    embed_dim,
+                    hidden_dim,
+                    dotr=dotr,
+                    do_mask=do_mask,
+                    post_ln=post_ln,
+                    ffn=ffn,
+                    ffn_embed_dim=ffn_embed_dim,
+                    activation=activation,
+                    scaling_factor=scaling_factor,
+                    head_num=head_num,
+                    normalize=normalize,
+                    temperature=temperature,
+                )
+            )
         self.attention_layers = nn.ModuleList(attention_layers)
 
     def forward(
-        self, 
+        self,
         input_G,
         nei_mask,
-        input_r: Optional[torch.Tensor]=None,
-        sw: Optional[torch.Tensor]=None,
+        input_r: Optional[torch.Tensor] = None,
+        sw: Optional[torch.Tensor] = None,
     ):
         """
-
         Args:
-            input_G: Input G, [nframes * nloc, nnei, embed_dim]
-            nei_mask: neighbor mask, [nframes * nloc, nnei]
-            input_r: normalized radial, [nframes, nloc, nei, 3]
+            input_G: Input G, [nframes * nloc, nnei, embed_dim].
+            nei_mask: neighbor mask, [nframes * nloc, nnei].
+            input_r: normalized radial, [nframes, nloc, nei, 3].
 
-        Returns:
-            out: Output G, [nframes * nloc, nnei, embed_dim]
+        Returns
+        -------
+        out: Output G, [nframes * nloc, nnei, embed_dim]
 
         """
         out = input_G
@@ -676,12 +762,24 @@ class NeighborWiseAttention(nn.Module):
 class NeighborWiseAttentionLayer(nn.Module):
     ffn: Final[bool]
 
-    def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, post_ln=True,
-                 ffn=False, ffn_embed_dim=1024, activation="tanh", scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None):
-        """Construct a neighbor-wise attention layer.
-        """
-        super(NeighborWiseAttentionLayer, self).__init__()
+    def __init__(
+        self,
+        nnei,
+        embed_dim,
+        hidden_dim,
+        dotr=False,
+        do_mask=False,
+        post_ln=True,
+        ffn=False,
+        ffn_embed_dim=1024,
+        activation="tanh",
+        scaling_factor=1.0,
+        head_num=1,
+        normalize=True,
+        temperature=None,
+    ):
+        """Construct a neighbor-wise attention layer."""
+        super().__init__()
         self.nnei = nnei
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
@@ -689,23 +787,39 @@ class NeighborWiseAttentionLayer(nn.Module):
         self.do_mask = do_mask
         self.post_ln = post_ln
         self.ffn = ffn
-        self.attention_layer = GatedSelfAttetion(nnei, embed_dim, hidden_dim, dotr=dotr, do_mask=do_mask,
-                                                 scaling_factor=scaling_factor, head_num=head_num, normalize=normalize,
-                                                 temperature=temperature)
-        self.attn_layer_norm = nn.LayerNorm(self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.attention_layer = GatedSelfAttetion(
+            nnei,
+            embed_dim,
+            hidden_dim,
+            dotr=dotr,
+            do_mask=do_mask,
+            scaling_factor=scaling_factor,
+            head_num=head_num,
+            normalize=normalize,
+            temperature=temperature,
+        )
+        self.attn_layer_norm = nn.LayerNorm(
+            self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         if self.ffn:
             self.ffn_embed_dim = ffn_embed_dim
-            self.fc1 = nn.Linear(self.embed_dim, self.ffn_embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.fc1 = nn.Linear(
+                self.embed_dim, self.ffn_embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
             self.activation_fn = get_activation_fn(activation)
-            self.fc2 = nn.Linear(self.ffn_embed_dim, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-            self.final_layer_norm = nn.LayerNorm(self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.fc2 = nn.Linear(
+                self.ffn_embed_dim, self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
+            self.final_layer_norm = nn.LayerNorm(
+                self.embed_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
 
     def forward(
         self,
         x,
         nei_mask,
-        input_r: Optional[torch.Tensor]=None,
-        sw: Optional[torch.Tensor]=None,
+        input_r: Optional[torch.Tensor] = None,
+        sw: Optional[torch.Tensor] = None,
     ):
         residual = x
         if not self.post_ln:
@@ -728,11 +842,22 @@ class NeighborWiseAttentionLayer(nn.Module):
 
 
 class GatedSelfAttetion(nn.Module):
-    def __init__(self, nnei, embed_dim, hidden_dim, dotr=False, do_mask=False, scaling_factor=1.0,
-                 head_num=1, normalize=True, temperature=None, bias=True, smooth=True):
-        """Construct a neighbor-wise attention net.
-        """
-        super(GatedSelfAttetion, self).__init__()
+    def __init__(
+        self,
+        nnei,
+        embed_dim,
+        hidden_dim,
+        dotr=False,
+        do_mask=False,
+        scaling_factor=1.0,
+        head_num=1,
+        normalize=True,
+        temperature=None,
+        bias=True,
+        smooth=True,
+    ):
+        """Construct a neighbor-wise attention net."""
+        super().__init__()
         self.nnei = nnei
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
@@ -744,27 +869,36 @@ class GatedSelfAttetion(nn.Module):
         else:
             self.scaling = temperature
         self.normalize = normalize
-        self.in_proj = SimpleLinear(embed_dim, hidden_dim * 3, bavg=0., stddev=1., use_timestep=False, bias=bias)
-        self.out_proj = SimpleLinear(hidden_dim, embed_dim, bavg=0., stddev=1., use_timestep=False, bias=bias)
+        self.in_proj = SimpleLinear(
+            embed_dim,
+            hidden_dim * 3,
+            bavg=0.0,
+            stddev=1.0,
+            use_timestep=False,
+            bias=bias,
+        )
+        self.out_proj = SimpleLinear(
+            hidden_dim, embed_dim, bavg=0.0, stddev=1.0, use_timestep=False, bias=bias
+        )
         self.smooth = smooth
 
     def forward(
         self,
         query,
         nei_mask,
-        input_r: Optional[torch.Tensor]=None,
-        sw: Optional[torch.Tensor]=None,
+        input_r: Optional[torch.Tensor] = None,
+        sw: Optional[torch.Tensor] = None,
         attnw_shift: float = 20.0,
     ):
         """
-
         Args:
-            query: input G, [nframes * nloc, nnei, embed_dim]
-            nei_mask: neighbor mask, [nframes * nloc, nnei]
-            input_r: normalized radial, [nframes, nloc, nei, 3]
+            query: input G, [nframes * nloc, nnei, embed_dim].
+            nei_mask: neighbor mask, [nframes * nloc, nnei].
+            input_r: normalized radial, [nframes, nloc, nei, 3].
 
-        Returns:
-            type_embedding:
+        Returns
+        -------
+        type_embedding:
 
         """
         q, k, v = self.in_proj(query).chunk(3, dim=-1)
@@ -786,14 +920,18 @@ class GatedSelfAttetion(nn.Module):
             # [nframes * nloc, nnei]
             assert sw is not None
             sw = sw.view([-1, self.nnei])
-            attn_weights = (attn_weights + attnw_shift) * sw[:,:,None] * sw[:,None,:] - attnw_shift
+            attn_weights = (attn_weights + attnw_shift) * sw[:, :, None] * sw[
+                :, None, :
+            ] - attnw_shift
         else:
-            attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(1), float("-inf"))
+            attn_weights = attn_weights.masked_fill(
+                ~nei_mask.unsqueeze(1), float("-inf")
+            )
         attn_weights = F.softmax(attn_weights, dim=-1)
-        attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(-1), float(0.0))
-        if self.smooth: 
+        attn_weights = attn_weights.masked_fill(~nei_mask.unsqueeze(-1), 0.0)
+        if self.smooth:
             assert sw is not None
-            attn_weights = attn_weights * sw[:,:,None] * sw[:,None,:]
+            attn_weights = attn_weights * sw[:, :, None] * sw[:, None, :]
         if self.dotr:
             assert input_r is not None, "input_r must be provided when dotr is True!"
             angular_weight = torch.bmm(input_r, input_r.transpose(1, 2))
@@ -805,29 +943,39 @@ class GatedSelfAttetion(nn.Module):
 
 class LocalSelfMultiheadAttention(nn.Module):
     def __init__(self, feature_dim, attn_head, scaling_factor=1.0):
-        super(LocalSelfMultiheadAttention, self).__init__()
+        super().__init__()
         self.feature_dim = feature_dim
         self.attn_head = attn_head
         self.head_dim = feature_dim // attn_head
-        assert feature_dim % attn_head == 0, f"feature_dim {feature_dim} must be divided by attn_head {attn_head}!"
+        assert (
+            feature_dim % attn_head == 0
+        ), f"feature_dim {feature_dim} must be divided by attn_head {attn_head}!"
         self.scaling = (self.head_dim * scaling_factor) ** -0.5
         self.in_proj = SimpleLinear(self.feature_dim, self.feature_dim * 3)
         # TODO debug
         # self.out_proj = SimpleLinear(self.feature_dim, self.feature_dim)
 
-    def forward(self, query, attn_bias: Optional[torch.Tensor]=None, nlist_mask: Optional[torch.Tensor]=None, nlist: Optional[torch.Tensor]=None, return_attn=True):
+    def forward(
+        self,
+        query,
+        attn_bias: Optional[torch.Tensor] = None,
+        nlist_mask: Optional[torch.Tensor] = None,
+        nlist: Optional[torch.Tensor] = None,
+        return_attn=True,
+    ):
         nframes, nloc, feature_dim = query.size()
         _, _, nnei = nlist.size()
         assert feature_dim == self.feature_dim
         # [nframes, nloc, feature_dim]
         q, k, v = self.in_proj(query).chunk(3, dim=-1)
         # [nframes * attn_head * nloc, 1, head_dim]
-        q = (q.view(nframes, nloc, self.attn_head, self.head_dim)
-             .transpose(1, 2)
-             .contiguous()
-             .view(nframes * self.attn_head * nloc, 1, self.head_dim)
-             * self.scaling
-             )
+        q = (
+            q.view(nframes, nloc, self.attn_head, self.head_dim)
+            .transpose(1, 2)
+            .contiguous()
+            .view(nframes * self.attn_head * nloc, 1, self.head_dim)
+            * self.scaling
+        )
         # [nframes, nloc, feature_dim] --> [nframes, nloc + 1, feature_dim]
         # with nlist [nframes, nloc, nnei] --> [nframes, nloc, nnei, feature_dim]
         # padding = torch.zeros(feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION).to(k.device)
@@ -840,36 +988,44 @@ class LocalSelfMultiheadAttention(nn.Module):
         # [nframes, nloc * nnei, feature_dim]
         v = torch.gather(v, dim=1, index=index)
         # [nframes * attn_head * nloc, nnei, head_dim]
-        k = (k.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
-             .permute(0, 3, 1, 2, 4)
-             .contiguous()
-             .view(nframes * self.attn_head * nloc, nnei, self.head_dim))
-        v = (v.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
-             .permute(0, 3, 1, 2, 4)
-             .contiguous()
-             .view(nframes * self.attn_head * nloc, nnei, self.head_dim))
+        k = (
+            k.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
+            .permute(0, 3, 1, 2, 4)
+            .contiguous()
+            .view(nframes * self.attn_head * nloc, nnei, self.head_dim)
+        )
+        v = (
+            v.view(nframes, nloc, nnei, self.attn_head, self.head_dim)
+            .permute(0, 3, 1, 2, 4)
+            .contiguous()
+            .view(nframes * self.attn_head * nloc, nnei, self.head_dim)
+        )
         # [nframes * attn_head * nloc, 1, nnei]
         attn_weights = torch.bmm(q, k.transpose(1, 2))
         # maskfill
         # [nframes, attn_head, nloc, nnei]
-        attn_weights = (attn_weights.view(nframes, self.attn_head, nloc, nnei)
-                        .masked_fill(~nlist_mask.unsqueeze(1), float("-inf")))
+        attn_weights = attn_weights.view(
+            nframes, self.attn_head, nloc, nnei
+        ).masked_fill(~nlist_mask.unsqueeze(1), float("-inf"))
         # add bias
         if return_attn:
             attn_weights = attn_weights + attn_bias
         # softmax
         # [nframes * attn_head * nloc, 1, nnei]
-        attn = F.softmax(attn_weights, dim=-1).view(nframes * self.attn_head * nloc, 1, nnei)
+        attn = F.softmax(attn_weights, dim=-1).view(
+            nframes * self.attn_head * nloc, 1, nnei
+        )
         # bmm
         # [nframes * attn_head * nloc, 1, head_dim]
         o = torch.bmm(attn, v)
         assert list(o.size()) == [nframes * self.attn_head * nloc, 1, self.head_dim]
         # [nframes, nloc, feature_dim]
-        o = (o.view(nframes, self.attn_head, nloc, self.head_dim)
-             .transpose(1, 2)
-             .contiguous()
-             .view(nframes, nloc, self.feature_dim)
-             )
+        o = (
+            o.view(nframes, self.attn_head, nloc, self.head_dim)
+            .transpose(1, 2)
+            .contiguous()
+            .view(nframes, nloc, self.feature_dim)
+        )
         # out
         ## TODO debug:
         # o = self.out_proj(o)
@@ -895,7 +1051,7 @@ class NodeTaskHead(nn.Module):
         self.v_proj = Linear(embed_dim, embed_dim, bias=False, init="glorot")
         self.num_heads = num_head
         self.head_dim = embed_dim // num_head
-        self.scaling = self.head_dim ** -0.5
+        self.scaling = self.head_dim**-0.5
         self.force_proj = Linear(embed_dim, 1, init="final", bias=False)
         self.linear_bias = Linear(pair_dim, num_head)
         self.dropout = 0.1
@@ -917,12 +1073,22 @@ class NodeTaskHead(nn.Module):
 
         # [ncluster, attn_head, natoms, head_dim]
         q = (
-            self.q_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
+            self.q_proj(query)
+            .view(ncluster, natoms, self.num_heads, -1)
+            .transpose(1, 2)
             * self.scaling
         )
         # [ncluster, attn_head, natoms, head_dim]
-        k = self.k_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
-        v = self.v_proj(query).view(ncluster, natoms, self.num_heads, -1).transpose(1, 2)
+        k = (
+            self.k_proj(query)
+            .view(ncluster, natoms, self.num_heads, -1)
+            .transpose(1, 2)
+        )
+        v = (
+            self.v_proj(query)
+            .view(ncluster, natoms, self.num_heads, -1)
+            .transpose(1, 2)
+        )
         # [ncluster, attn_head, natoms, natoms]
         attn = q @ k.transpose(-1, -2)
         del q, k
@@ -974,14 +1140,18 @@ class EnergyHead(nn.Module):
 
 class OuterProduct(nn.Module):
     def __init__(self, d_atom, d_pair, d_hid=32):
-        super(OuterProduct, self).__init__()
+        super().__init__()
 
         self.d_atom = d_atom
         self.d_pair = d_pair
         self.d_hid = d_hid
 
-        self.linear_in = nn.Linear(d_atom, d_hid*2, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.linear_out = nn.Linear(d_hid**2, d_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.linear_in = nn.Linear(
+            d_atom, d_hid * 2, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
+        self.linear_out = nn.Linear(
+            d_hid**2, d_pair, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         self.act = nn.GELU()
 
     def _opm(self, a, b):
@@ -1013,16 +1183,16 @@ class OuterProduct(nn.Module):
 
 class Attention(nn.Module):
     def __init__(
-            self,
-            q_dim: int,
-            k_dim: int,
-            v_dim: int,
-            head_dim: int,
-            num_heads: int,
-            gating: bool = False,
-            dropout: float = 0.0,
+        self,
+        q_dim: int,
+        k_dim: int,
+        v_dim: int,
+        head_dim: int,
+        num_heads: int,
+        gating: bool = False,
+        dropout: float = 0.0,
     ):
-        super(Attention, self).__init__()
+        super().__init__()
 
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -1038,16 +1208,16 @@ class Attention(nn.Module):
         if self.gating:
             self.linear_g = Linear(q_dim, total_dim, init="gating")
         # precompute the 1/sqrt(head_dim)
-        self.norm = head_dim ** -0.5
+        self.norm = head_dim**-0.5
         self.dropout = dropout
 
     def forward(
-            self,
-            q: torch.Tensor,
-            k: torch.Tensor,
-            v: torch.Tensor,
-            bias: torch.Tensor,
-            mask: torch.Tensor = None,
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        bias: torch.Tensor,
+        mask: torch.Tensor = None,
     ) -> torch.Tensor:
         nframes, nloc, embed_dim = q.size()
         g = None
@@ -1104,17 +1274,17 @@ class Attention(nn.Module):
 
 class AtomAttention(nn.Module):
     def __init__(
-            self,
-            q_dim: int,
-            k_dim: int,
-            v_dim: int,
-            pair_dim: int,
-            head_dim: int,
-            num_heads: int,
-            gating: bool = False,
-            dropout: float = 0.0,
+        self,
+        q_dim: int,
+        k_dim: int,
+        v_dim: int,
+        pair_dim: int,
+        head_dim: int,
+        num_heads: int,
+        gating: bool = False,
+        dropout: float = 0.0,
     ):
-        super(AtomAttention, self).__init__()
+        super().__init__()
 
         self.mha = Attention(
             q_dim, k_dim, v_dim, head_dim, num_heads, gating=gating, dropout=dropout
@@ -1123,13 +1293,13 @@ class AtomAttention(nn.Module):
         self.linear_bias = Linear(pair_dim, num_heads)
 
     def forward(
-            self,
-            q: torch.Tensor,
-            k: torch.Tensor,
-            v: torch.Tensor,
-            nlist: torch.Tensor,
-            pair: torch.Tensor,
-            mask: torch.Tensor = None,
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        nlist: torch.Tensor,
+        pair: torch.Tensor,
+        mask: torch.Tensor = None,
     ) -> torch.Tensor:
         pair = self.layer_norm(pair)
         bias = self.linear_bias(pair).permute(0, 3, 1, 2).contiguous()
@@ -1138,7 +1308,7 @@ class AtomAttention(nn.Module):
 
 class TriangleMultiplication(nn.Module):
     def __init__(self, d_pair, d_hid):
-        super(TriangleMultiplication, self).__init__()
+        super().__init__()
 
         self.linear_ab_p = Linear(d_pair, d_hid * 2)
         self.linear_ab_g = Linear(d_pair, d_hid * 2, init="gating")
@@ -1153,7 +1323,6 @@ class TriangleMultiplication(nn.Module):
         z: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-
         # z : [nframes, nloc, nloc, pair_dim]
 
         # [nframes, nloc, nloc, pair_dim]
@@ -1193,29 +1362,44 @@ class TriangleMultiplication(nn.Module):
 
 
 class EvoformerEncoderLayer(nn.Module):
-    def __init__(self,
-                 feature_dim: int = 768,
-                 ffn_dim: int = 2048,
-                 attn_head: int = 8,
-                 activation_fn: str = "gelu",
-                 post_ln: bool = False):
-        super(EvoformerEncoderLayer, self).__init__()
+    def __init__(
+        self,
+        feature_dim: int = 768,
+        ffn_dim: int = 2048,
+        attn_head: int = 8,
+        activation_fn: str = "gelu",
+        post_ln: bool = False,
+    ):
+        super().__init__()
         self.feature_dim = feature_dim
         self.ffn_dim = ffn_dim
         self.attn_head = attn_head
-        self.activation_fn = get_activation_fn(activation_fn) if activation_fn is not None else None
+        self.activation_fn = (
+            get_activation_fn(activation_fn) if activation_fn is not None else None
+        )
         self.post_ln = post_ln
-        self.self_attn_layer_norm = nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.self_attn_layer_norm = nn.LayerNorm(
+            self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
 
         self.self_attn = LocalSelfMultiheadAttention(
             self.feature_dim,
             self.attn_head,
         )
-        self.final_layer_norm = nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.final_layer_norm = nn.LayerNorm(
+            self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         self.fc1 = SimpleLinear(self.feature_dim, self.ffn_dim)
         self.fc2 = SimpleLinear(self.ffn_dim, self.feature_dim)
 
-    def forward(self, x, attn_bias: Optional[torch.Tensor]=None, nlist_mask: Optional[torch.Tensor]=None, nlist: Optional[torch.Tensor]=None, return_attn=True):
+    def forward(
+        self,
+        x,
+        attn_bias: Optional[torch.Tensor] = None,
+        nlist_mask: Optional[torch.Tensor] = None,
+        nlist: Optional[torch.Tensor] = None,
+        return_attn=True,
+    ):
         residual = x
         if not self.post_ln:
             x = self.self_attn_layer_norm(x)
@@ -1249,23 +1433,25 @@ class EvoformerEncoderLayer(nn.Module):
 
 # output: atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep,
 class Evoformer2bEncoder(nn.Module):
-    def __init__(self,
-                 nnei: int,
-                 layer_num: int = 6,
-                 attn_head: int = 8,
-                 atomic_dim: int = 1024,
-                 pair_dim: int = 100,
-                 feature_dim: int = 1024,
-                 ffn_dim: int = 2048,
-                 post_ln: bool = False,
-                 final_layer_norm: bool = True,
-                 final_head_layer_norm: bool = False,
-                 emb_layer_norm: bool = False,
-                 atomic_residual: bool = False,
-                 evo_residual: bool = False,
-                 residual_factor: float = 1.0,
-                 activation_function: str = "gelu"):
-        super(Evoformer2bEncoder, self).__init__()
+    def __init__(
+        self,
+        nnei: int,
+        layer_num: int = 6,
+        attn_head: int = 8,
+        atomic_dim: int = 1024,
+        pair_dim: int = 100,
+        feature_dim: int = 1024,
+        ffn_dim: int = 2048,
+        post_ln: bool = False,
+        final_layer_norm: bool = True,
+        final_head_layer_norm: bool = False,
+        emb_layer_norm: bool = False,
+        atomic_residual: bool = False,
+        evo_residual: bool = False,
+        residual_factor: float = 1.0,
+        activation_function: str = "gelu",
+    ):
+        super().__init__()
         self.nnei = nnei
         self.layer_num = layer_num
         self.attn_head = attn_head
@@ -1284,29 +1470,49 @@ class Evoformer2bEncoder(nn.Module):
             self.atomic_residual = True
         else:
             self.atomic_residual = False
-        self.in_proj = SimpleLinear(self.atomic_dim, self.feature_dim, bavg=0., stddev=1., use_timestep=False,
-                                    activate='tanh')  # TODO
-        self.out_proj = SimpleLinear(self.feature_dim, self.atomic_dim, bavg=0., stddev=1., use_timestep=False,
-                                     activate='tanh')
+        self.in_proj = SimpleLinear(
+            self.atomic_dim,
+            self.feature_dim,
+            bavg=0.0,
+            stddev=1.0,
+            use_timestep=False,
+            activate="tanh",
+        )  # TODO
+        self.out_proj = SimpleLinear(
+            self.feature_dim,
+            self.atomic_dim,
+            bavg=0.0,
+            stddev=1.0,
+            use_timestep=False,
+            activate="tanh",
+        )
         if self._emb_layer_norm:
-            self.emb_layer_norm = nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.emb_layer_norm = nn.LayerNorm(
+                self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
 
         ## TODO debug : self.in_proj_pair = NonLinearHead(self.pair_dim, self.attn_head, activation_fn=None)
         self.in_proj_pair = SimpleLinear(self.pair_dim, self.attn_head, activate=None)
         evoformer_encoder_layers = []
         for i in range(self.layer_num):
-            evoformer_encoder_layers.append(EvoformerEncoderLayer(
-                feature_dim=self.feature_dim,
-                ffn_dim=self.ffn_dim,
-                attn_head=self.attn_head,
-                activation_fn=self.activation_function,
-                post_ln=self.post_ln)
+            evoformer_encoder_layers.append(
+                EvoformerEncoderLayer(
+                    feature_dim=self.feature_dim,
+                    ffn_dim=self.ffn_dim,
+                    attn_head=self.attn_head,
+                    activation_fn=self.activation_function,
+                    post_ln=self.post_ln,
+                )
             )
         self.evoformer_encoder_layers = nn.ModuleList(evoformer_encoder_layers)
         if self._final_layer_norm:
-            self.final_layer_norm = nn.LayerNorm(self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.final_layer_norm = nn.LayerNorm(
+                self.feature_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
         if self._final_head_layer_norm:
-            self.final_head_layer_norm = nn.LayerNorm(self.attn_head, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.final_head_layer_norm = nn.LayerNorm(
+                self.attn_head, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
 
     def forward(self, atomic_rep, pair_rep, nlist, nlist_type, nlist_mask):
         """Encoder the atomic and pair representations.
@@ -1318,7 +1524,8 @@ class Evoformer2bEncoder(nn.Module):
         - nlist_type: Neighbor types with shape [nframes, nloc, nnei].
         - nlist_mask: Neighbor mask with shape [nframes, nloc, nnei], `False` if blank.
 
-        Returns:
+        Returns
+        -------
         - atomic_rep: Atomic representation after encoder with shape [nframes, nloc, feature_dim].
         - transformed_atomic_rep: Transformed atomic representation after encoder with shape [nframes, nloc, atomic_dim].
         - pair_rep: Pair representation after encoder with shape [nframes, nloc, nnei, attn_head].
@@ -1349,19 +1556,23 @@ class Evoformer2bEncoder(nn.Module):
 
         for i in range(self.layer_num):
             atomic_rep, pair_rep, _ = self.evoformer_encoder_layers[i](
-                atomic_rep, attn_bias=pair_rep, nlist_mask=nlist_mask, nlist=nlist, return_attn=True
+                atomic_rep,
+                attn_bias=pair_rep,
+                nlist_mask=nlist_mask,
+                nlist=nlist,
+                return_attn=True,
             )
 
         def norm_loss(x, eps=1e-10, tolerance=1.0):
             # x = x.float()
             max_norm = x.shape[-1] ** 0.5
-            norm = torch.sqrt(torch.sum(x ** 2, dim=-1) + eps)
+            norm = torch.sqrt(torch.sum(x**2, dim=-1) + eps)
             error = F.relu((norm - max_norm).abs() - tolerance)
             return error
 
         def masked_mean(mask, value, dim=-1, eps=1e-10):
             return (
-                    torch.sum(mask * value, dim=dim) / (eps + torch.sum(mask, dim=dim))
+                torch.sum(mask * value, dim=dim) / (eps + torch.sum(mask, dim=dim))
             ).mean()
 
         # atomic_rep shape: [nframes, nloc, feature_dim]
@@ -1374,9 +1585,11 @@ class Evoformer2bEncoder(nn.Module):
         delta_pair_rep = pair_rep - input_pair_rep
         delta_pair_rep = delta_pair_rep.masked_fill(~nlist_mask.unsqueeze(1), 0)
         # [nframes, nloc, nnei, attn_head]
-        delta_pair_rep = (delta_pair_rep.view(nframes, self.attn_head, nloc, nnei)
-                          .permute(0, 2, 3, 1)
-                          .contiguous())
+        delta_pair_rep = (
+            delta_pair_rep.view(nframes, self.attn_head, nloc, nnei)
+            .permute(0, 2, 3, 1)
+            .contiguous()
+        )
 
         # [nframes, nloc, nnei]
         norm_delta_pair_rep = norm_loss(delta_pair_rep)
@@ -1390,28 +1603,38 @@ class Evoformer2bEncoder(nn.Module):
             transformed_atomic_rep = self.out_proj(atomic_rep)
 
         if self.evo_residual:
-            transformed_atomic_rep = (self.residual_factor * transformed_atomic_rep + input_atomic_rep) * (1/np.sqrt(2))
+            transformed_atomic_rep = (
+                self.residual_factor * transformed_atomic_rep + input_atomic_rep
+            ) * (1 / np.sqrt(2))
 
-        return atomic_rep, transformed_atomic_rep, pair_rep, delta_pair_rep, norm_x, norm_delta_pair_rep
+        return (
+            atomic_rep,
+            transformed_atomic_rep,
+            pair_rep,
+            delta_pair_rep,
+            norm_x,
+            norm_delta_pair_rep,
+        )
 
 
 class Evoformer3bEncoderLayer(nn.Module):
-    def __init__(self,
-                 nnei,
-                 embedding_dim: int = 768,
-                 pair_dim: int = 64,
-                 pair_hidden_dim: int = 32,
-                 ffn_embedding_dim: int = 3072,
-                 num_attention_heads: int = 8,
-                 dropout: float = 0.1,
-                 droppath_prob: float = 0.0,
-                 pair_dropout: float = 0.25,
-                 attention_dropout: float = 0.1,
-                 activation_dropout: float = 0.1,
-                 pre_ln: bool = True,
-                 tri_update: bool = True
-                 ):
-        super(Evoformer3bEncoderLayer, self).__init__()
+    def __init__(
+        self,
+        nnei,
+        embedding_dim: int = 768,
+        pair_dim: int = 64,
+        pair_hidden_dim: int = 32,
+        ffn_embedding_dim: int = 3072,
+        num_attention_heads: int = 8,
+        dropout: float = 0.1,
+        droppath_prob: float = 0.0,
+        pair_dropout: float = 0.25,
+        attention_dropout: float = 0.1,
+        activation_dropout: float = 0.1,
+        pre_ln: bool = True,
+        tri_update: bool = True,
+    ):
+        super().__init__()
         # Initialize parameters
         self.nnei = nnei
         self.embedding_dim = embedding_dim
@@ -1429,21 +1652,40 @@ class Evoformer3bEncoderLayer(nn.Module):
         # self.self_attn = AtomAttentionLocal(embedding_dim, embedding_dim, embedding_dim, pair_dim,
         #                                     embedding_dim // num_attention_heads, num_attention_heads,
         #                                     gating=False, dropout=attention_dropout)
-        self.self_attn = AtomAttention(embedding_dim, embedding_dim, embedding_dim, pair_dim,
-                                       embedding_dim // num_attention_heads, num_attention_heads,
-                                       gating=False, dropout=attention_dropout)
+        self.self_attn = AtomAttention(
+            embedding_dim,
+            embedding_dim,
+            embedding_dim,
+            pair_dim,
+            embedding_dim // num_attention_heads,
+            num_attention_heads,
+            gating=False,
+            dropout=attention_dropout,
+        )
         # layer norm associated with the self attention layer
         self.pre_ln = pre_ln
-        self.self_attn_layer_norm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.fc1 = nn.Linear(self.embedding_dim, ffn_embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.fc2 = nn.Linear(ffn_embedding_dim, self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.final_layer_norm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.self_attn_layer_norm = nn.LayerNorm(
+            self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
+        self.fc1 = nn.Linear(
+            self.embedding_dim, ffn_embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
+        self.fc2 = nn.Linear(
+            ffn_embedding_dim, self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
+        self.final_layer_norm = nn.LayerNorm(
+            self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
 
-        self.x_layer_norm_opm = nn.LayerNorm(self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.x_layer_norm_opm = nn.LayerNorm(
+            self.embedding_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         # self.opm = OuterProductLocal(self.embedding_dim, pair_dim, d_hid=pair_hidden_dim)
         self.opm = OuterProduct(self.embedding_dim, pair_dim, d_hid=pair_hidden_dim)
         # self.pair_layer_norm_opm = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
-        self.pair_layer_norm_ffn = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+        self.pair_layer_norm_ffn = nn.LayerNorm(
+            pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+        )
         self.pair_ffn = Transition(
             pair_dim,
             1,
@@ -1452,7 +1694,9 @@ class Evoformer3bEncoderLayer(nn.Module):
         self.pair_dropout = pair_dropout
         self.tri_update = tri_update
         if self.tri_update:
-            self.pair_layer_norm_trimul = nn.LayerNorm(pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION)
+            self.pair_layer_norm_trimul = nn.LayerNorm(
+                pair_dim, dtype=env.GLOBAL_PT_FLOAT_PRECISION
+            )
             self.pair_tri_mul = TriangleMultiplication(pair_dim, pair_hidden_dim)
 
     def update_pair(
@@ -1467,7 +1711,9 @@ class Evoformer3bEncoderLayer(nn.Module):
         # [nframes, nloc, nnei, pair_dim]
         # global:
         # [nframes, nloc, nloc, pair_dim]
-        pair = pair + self.dropout_module(self.opm(self.x_layer_norm_opm(x), nlist, op_mask, op_norm))
+        pair = pair + self.dropout_module(
+            self.opm(self.x_layer_norm_opm(x), nlist, op_mask, op_norm)
+        )
         if not self.pre_ln:
             pair = self.pair_layer_norm_opm(pair)
         return x, pair
@@ -1479,15 +1725,16 @@ class Evoformer3bEncoderLayer(nn.Module):
             mask = x.new_ones(shape)
         return F.dropout(mask, p=dropout, training=self.training) * x
 
-    def forward(self,
-                x: torch.Tensor,
-                pair: torch.Tensor,
-                nlist: torch.Tensor = None,
-                attn_mask: Optional[torch.Tensor] = None,
-                pair_mask: Optional[torch.Tensor] = None,
-                op_mask: float = 1.0,
-                op_norm: float = 1.0,
-                ):
+    def forward(
+        self,
+        x: torch.Tensor,
+        pair: torch.Tensor,
+        nlist: torch.Tensor = None,
+        attn_mask: Optional[torch.Tensor] = None,
+        pair_mask: Optional[torch.Tensor] = None,
+        op_mask: float = 1.0,
+        op_norm: float = 1.0,
+    ):
         """Encoder the atomic and pair representations.
 
         Args:
@@ -1496,7 +1743,6 @@ class Evoformer3bEncoderLayer(nn.Module):
         - attn_mask: Attention mask with shape [ncluster, head, natoms, natoms].
         - pair_mask: Neighbor mask with shape [ncluster, natoms, natoms].
 
-        Returns:
         """
         # [ncluster, natoms, embed_dim]
         residual = x
@@ -1533,11 +1779,11 @@ class Evoformer3bEncoderLayer(nn.Module):
 
         block = [
             partial(
-                    self.update_pair,
-                    nlist=nlist,
-                    op_mask=op_mask,
-                    op_norm=op_norm,
-                )
+                self.update_pair,
+                nlist=nlist,
+                op_mask=op_mask,
+                op_norm=op_norm,
+            )
         ]
 
         x, pair = checkpoint_sequential(
@@ -1568,24 +1814,25 @@ class Evoformer3bEncoderLayer(nn.Module):
 
 
 class Evoformer3bEncoder(nn.Module):
-    def __init__(self,
-                 nnei,
-                 layer_num=6,
-                 attn_head=8,
-                 atomic_dim=768,
-                 pair_dim=64,
-                 pair_hidden_dim=32,
-                 ffn_embedding_dim=3072,
-                 dropout: float = 0.1,
-                 droppath_prob: float = 0.0,
-                 pair_dropout: float = 0.25,
-                 attention_dropout: float = 0.1,
-                 activation_dropout: float = 0.1,
-                 pre_ln: bool = True,
-                 tri_update: bool = True,
-                 **kwargs,
-                 ):
-        super(Evoformer3bEncoder, self).__init__()
+    def __init__(
+        self,
+        nnei,
+        layer_num=6,
+        attn_head=8,
+        atomic_dim=768,
+        pair_dim=64,
+        pair_hidden_dim=32,
+        ffn_embedding_dim=3072,
+        dropout: float = 0.1,
+        droppath_prob: float = 0.0,
+        pair_dropout: float = 0.25,
+        attention_dropout: float = 0.1,
+        activation_dropout: float = 0.1,
+        pre_ln: bool = True,
+        tri_update: bool = True,
+        **kwargs,
+    ):
+        super().__init__()
         self.nnei = nnei
         if droppath_prob > 0:
             droppath_probs = [
@@ -1596,20 +1843,26 @@ class Evoformer3bEncoder(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                Evoformer3bEncoderLayer(nnei, atomic_dim, pair_dim, pair_hidden_dim, ffn_embedding_dim,
-                                        num_attention_heads=attn_head,
-                                        dropout=dropout, droppath_prob=droppath_probs[_], pair_dropout=pair_dropout,
-                                        attention_dropout=attention_dropout, activation_dropout=activation_dropout,
-                                        pre_ln=pre_ln, tri_update=tri_update)
+                Evoformer3bEncoderLayer(
+                    nnei,
+                    atomic_dim,
+                    pair_dim,
+                    pair_hidden_dim,
+                    ffn_embedding_dim,
+                    num_attention_heads=attn_head,
+                    dropout=dropout,
+                    droppath_prob=droppath_probs[_],
+                    pair_dropout=pair_dropout,
+                    attention_dropout=attention_dropout,
+                    activation_dropout=activation_dropout,
+                    pre_ln=pre_ln,
+                    tri_update=tri_update,
+                )
                 for _ in range(layer_num)
             ]
         )
 
-    def forward(
-            self,
-            x,
-            pair, attn_mask=None, pair_mask=None, atom_mask=None
-    ):
+    def forward(self, x, pair, attn_mask=None, pair_mask=None, atom_mask=None):
         """Encoder the atomic and pair representations.
 
         Args:
@@ -1619,9 +1872,10 @@ class Evoformer3bEncoder(nn.Module):
             pair_mask: Pair mask (with 1 for real atom pair and 0 for padding) with shape [ncluster, natoms, natoms].
             atom_mask: Atom mask (with 1 for real atom and 0 for padding) with shape [ncluster, natoms].
 
-        Returns:
-            x: Atomic representation with shape [ncluster, natoms, atomic_dim].
-            pair: Pair representation with shape [ncluster, natoms, natoms, pair_dim].
+        Returns
+        -------
+        x: Atomic representation with shape [ncluster, natoms, atomic_dim].
+        pair: Pair representation with shape [ncluster, natoms, natoms, pair_dim].
 
         """
         # [ncluster, natoms, 1]
@@ -1638,6 +1892,6 @@ class Evoformer3bEncoder(nn.Module):
                 attn_mask=attn_mask,
                 pair_mask=pair_mask,
                 op_mask=op_mask,
-                op_norm=op_norm
+                op_norm=op_norm,
             )
         return x, pair

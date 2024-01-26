@@ -1,22 +1,36 @@
-from copy import deepcopy
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import json
 import unittest
-from pathlib import Path
+from copy import (
+    deepcopy,
+)
+from pathlib import (
+    Path,
+)
 
 import numpy as np
-from deepmd_pt.entrypoints.main import get_trainer
-from deepmd_pt.infer.deep_eval import DeepPot
+
+from deepmd_pt.entrypoints.main import (
+    get_trainer,
+)
+from deepmd_pt.infer.deep_eval import (
+    DeepPot,
+)
 
 
 class TestDeepPot(unittest.TestCase):
     def setUp(self):
         input_json = str(Path(__file__).parent / "water/se_atten.json")
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["training"]["numb_steps"] = 1
         self.config["training"]["save_freq"] = 1
-        self.config["training"]["training_data"]["systems"] = [str(Path(__file__).parent / "water/data/single")]
-        self.config["training"]["validation_data"]["systems"] = [str(Path(__file__).parent / "water/data/single")]
+        self.config["training"]["training_data"]["systems"] = [
+            str(Path(__file__).parent / "water/data/single")
+        ]
+        self.config["training"]["validation_data"]["systems"] = [
+            str(Path(__file__).parent / "water/data/single")
+        ]
         self.input_json = "test_dp_test.json"
         with open(self.input_json, "w") as fp:
             json.dump(self.config, fp, indent=4)
@@ -30,14 +44,38 @@ class TestDeepPot(unittest.TestCase):
 
     def test_dp_test(self):
         dp = DeepPot(str(self.model))
-        cell = np.array([
-            5.122106549439247480e+00,4.016537340154059388e-01,6.951654033828678081e-01,
-            4.016537340154059388e-01,6.112136112297989143e+00,8.178091365465004481e-01,
-            6.951654033828678081e-01,8.178091365465004481e-01,6.159552512682983760e+00,
-        ]).reshape(1, 3, 3)
-        coord = np.array([
-            2.978060152121375648e+00,3.588469695887098077e+00,2.792459820604495491e+00,3.895592322591093115e+00,2.712091020667753760e+00,1.366836847133650501e+00,9.955616170888935690e-01,4.121324820711413039e+00,1.817239061889086571e+00,3.553661462345699906e+00,5.313046969500791583e+00,6.635182659098815883e+00,6.088601018589653080e+00,6.575011420004332585e+00,6.825240650611076099e+00
-        ]).reshape(1, -1, 3)
+        cell = np.array(
+            [
+                5.122106549439247480e00,
+                4.016537340154059388e-01,
+                6.951654033828678081e-01,
+                4.016537340154059388e-01,
+                6.112136112297989143e00,
+                8.178091365465004481e-01,
+                6.951654033828678081e-01,
+                8.178091365465004481e-01,
+                6.159552512682983760e00,
+            ]
+        ).reshape(1, 3, 3)
+        coord = np.array(
+            [
+                2.978060152121375648e00,
+                3.588469695887098077e00,
+                2.792459820604495491e00,
+                3.895592322591093115e00,
+                2.712091020667753760e00,
+                1.366836847133650501e00,
+                9.955616170888935690e-01,
+                4.121324820711413039e00,
+                1.817239061889086571e00,
+                3.553661462345699906e00,
+                5.313046969500791583e00,
+                6.635182659098815883e00,
+                6.088601018589653080e00,
+                6.575011420004332585e00,
+                6.825240650611076099e00,
+            ]
+        ).reshape(1, -1, 3)
         atype = np.array([0, 0, 0, 1, 1]).reshape(1, -1)
 
         e, f, v, ae, av = dp.eval(coord, cell, atype, atomic=True)

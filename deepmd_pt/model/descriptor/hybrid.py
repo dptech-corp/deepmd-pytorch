@@ -1,44 +1,49 @@
-import numpy as np
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from typing import (
+    List,
+    Optional,
+)
+
 import torch
 
-from deepmd_pt.utils import env
-from deepmd_pt.model.descriptor import prod_env_mat_se_a, DescriptorBlock, compute_std
-from deepmd_pt.model.network import Identity, Linear
-from typing import Optional, List
-
-try:
-    from typing import Final
-except:
-    from torch.jit import Final
+from deepmd_pt.model.descriptor import (
+    DescriptorBlock,
+)
+from deepmd_pt.model.network.network import (
+    Identity,
+    Linear,
+)
 
 
 @DescriptorBlock.register("hybrid")
 class DescrptBlockHybrid(DescriptorBlock):
-
-    def __init__(self,
-                 list,
-                 ntypes: int,
-                 tebd_dim: int = 8,
-                 tebd_input_mode: str = 'concat',
-                 hybrid_mode: str = "concat",
-                 **kwargs):
+    def __init__(
+        self,
+        list,
+        ntypes: int,
+        tebd_dim: int = 8,
+        tebd_input_mode: str = "concat",
+        hybrid_mode: str = "concat",
+        **kwargs,
+    ):
         """Construct a hybrid descriptor.
 
         Args:
         - descriptor_list: list of descriptors.
         - descriptor_param: descriptor configs.
         """
-        super(DescrptBlockHybrid, self).__init__()
-        supported_descrpt = ['se_atten', 'se_uni']
+        super().__init__()
+        supported_descrpt = ["se_atten", "se_uni"]
         descriptor_list = []
         for descriptor_param_item in list:
-            descriptor_type_tmp = descriptor_param_item['type']
-            assert descriptor_type_tmp in supported_descrpt, \
-                f'Only descriptors in {supported_descrpt} are supported for `hybrid` descriptor!'
-            descriptor_param_item['ntypes'] = ntypes
+            descriptor_type_tmp = descriptor_param_item["type"]
+            assert (
+                descriptor_type_tmp in supported_descrpt
+            ), f"Only descriptors in {supported_descrpt} are supported for `hybrid` descriptor!"
+            descriptor_param_item["ntypes"] = ntypes
             if descriptor_type_tmp == "se_atten":
-              descriptor_param_item['tebd_dim'] = tebd_dim
-              descriptor_param_item['tebd_input_mode'] = tebd_input_mode
+                descriptor_param_item["tebd_dim"] = tebd_dim
+                descriptor_param_item["tebd_input_mode"] = tebd_input_mode
             descriptor_list.append(DescriptorBlock(**descriptor_param_item))
         self.descriptor_list = torch.nn.ModuleList(descriptor_list)
         self.descriptor_param = list
@@ -46,7 +51,9 @@ class DescrptBlockHybrid(DescriptorBlock):
         self.sec = [descrpt.sec for descrpt in self.descriptor_list]
         self.sel = [descrpt.sel for descrpt in self.descriptor_list]
         self.split_sel = [sum(ii) for ii in self.sel]
-        self.local_cluster_list = [descrpt.local_cluster for descrpt in self.descriptor_list]
+        self.local_cluster_list = [
+            descrpt.local_cluster for descrpt in self.descriptor_list
+        ]
         self.local_cluster = True in self.local_cluster_list
         self.hybrid_mode = hybrid_mode
         self.tebd_dim = tebd_dim
@@ -57,53 +64,45 @@ class DescrptBlockHybrid(DescriptorBlock):
                 if descriptor_list[ii].dim_out == descriptor_list[ii + 1].dim_in:
                     sequential_transform.append(Identity())
                 else:
-                    sequential_transform.append(Linear(descriptor_list[ii].dim_out, descriptor_list[ii + 1].dim_in,
-                                                       bias=False, init="glorot"))
+                    sequential_transform.append(
+                        Linear(
+                            descriptor_list[ii].dim_out,
+                            descriptor_list[ii + 1].dim_in,
+                            bias=False,
+                            init="glorot",
+                        )
+                    )
             sequential_transform.append(Identity())
         self.sequential_transform = torch.nn.ModuleList(sequential_transform)
         self.ntypes = ntypes
 
-    def get_rcut(self)->float:
-      """
-      Returns the cut-off radius
-      """
-      return self.rcut
+    def get_rcut(self) -> float:
+        """Returns the cut-off radius."""
+        return self.rcut
 
-    def get_nsel(self)->int:
-      """
-      Returns the number of selected atoms in the cut-off radius
-      """
-      return [sum(ii) for ii in self.get_sel()]
+    def get_nsel(self) -> int:
+        """Returns the number of selected atoms in the cut-off radius."""
+        return [sum(ii) for ii in self.get_sel()]
 
-    def get_sel(self)->List[int]:
-      """
-      Returns the number of selected atoms for each type.
-      """
-      return self.sel
+    def get_sel(self) -> List[int]:
+        """Returns the number of selected atoms for each type."""
+        return self.sel
 
-    def get_ntype(self)->int:
-      """
-      Returns the number of element types
-      """
-      return self.ntypes
+    def get_ntype(self) -> int:
+        """Returns the number of element types."""
+        return self.ntypes
 
-    def get_dim_out(self)->int:
-      """
-      Returns the output dimension
-      """
-      return self.dim_out
+    def get_dim_out(self) -> int:
+        """Returns the output dimension."""
+        return self.dim_out
 
-    def get_dim_in(self)->int:
-      """
-      Returns the input dimension
-      """
-      return self.dim_in
+    def get_dim_in(self) -> int:
+        """Returns the input dimension."""
+        return self.dim_in
 
     @property
     def dim_out(self):
-        """
-        Returns the output dimension of this descriptor
-        """
+        """Returns the output dimension of this descriptor."""
         if self.hybrid_mode == "concat":
             return sum([descrpt.dim_out for descrpt in self.descriptor_list])
         elif self.hybrid_mode == "sequential":
@@ -113,16 +112,12 @@ class DescrptBlockHybrid(DescriptorBlock):
 
     @property
     def dim_emb_list(self) -> List[int]:
-        """
-        Returns the output dimension list of embeddings
-        """
+        """Returns the output dimension list of embeddings."""
         return [descrpt.dim_emb for descrpt in self.descriptor_list]
 
     @property
     def dim_emb(self):
-        """
-        Returns the output dimension of embedding
-        """
+        """Returns the output dimension of embedding."""
         if self.hybrid_mode == "concat":
             return sum(self.dim_emb_list)
         elif self.hybrid_mode == "sequential":
@@ -131,23 +126,37 @@ class DescrptBlockHybrid(DescriptorBlock):
             raise RuntimeError
 
     def share_params(self, base_class, shared_level, resume=False):
-        assert self.__class__ == base_class.__class__, "Only descriptors of the same type can share params!"
+        assert (
+            self.__class__ == base_class.__class__
+        ), "Only descriptors of the same type can share params!"
         if shared_level == 0:
             for ii, des in enumerate(self.descriptor_list):
-                self.descriptor_list[ii].share_params(base_class.descriptor_list[ii], shared_level, resume=resume)
+                self.descriptor_list[ii].share_params(
+                    base_class.descriptor_list[ii], shared_level, resume=resume
+                )
             if self.hybrid_mode == "sequential":
                 self.sequential_transform = base_class.sequential_transform
         else:
             raise NotImplementedError
 
     def compute_input_stats(self, merged):
-        """Update mean and stddev for descriptor elements.
-        """
+        """Update mean and stddev for descriptor elements."""
         sumr, suma, sumn, sumr2, suma2 = [], [], [], [], []
         for ii, descrpt in enumerate(self.descriptor_list):
-            merged_tmp = [{key: item[key] if not isinstance(item[key], list) else item[key][ii] for key in item} for
-                          item in merged]
-            sumr_tmp, suma_tmp, sumn_tmp, sumr2_tmp, suma2_tmp = descrpt.compute_input_stats(merged_tmp)
+            merged_tmp = [
+                {
+                    key: item[key] if not isinstance(item[key], list) else item[key][ii]
+                    for key in item
+                }
+                for item in merged
+            ]
+            (
+                sumr_tmp,
+                suma_tmp,
+                sumn_tmp,
+                sumr2_tmp,
+                suma2_tmp,
+            ) = descrpt.compute_input_stats(merged_tmp)
             sumr.append(sumr_tmp)
             suma.append(suma_tmp)
             sumn.append(sumn_tmp)
@@ -177,27 +186,27 @@ class DescrptBlockHybrid(DescriptorBlock):
         - atype_tebd: Tell simulation box with shape [nframes, 9].
         - nlist_tebd: Tell simulation box with shape [nframes, 9].
 
-        Returns:
+        Returns
+        -------
         - result: descriptor with shape [nframes, nloc, self.filter_neuron[-1] * self.axis_neuron].
         - ret: environment matrix with shape [nframes, nloc, self.neei, out_size]
         """
         nlist_list = list(torch.split(nlist, self.split_sel, -1))
         nframes, nloc, nnei = nlist.shape
         concat_rot_mat = True
-        if self.hybrid_mode == 'concat':
+        if self.hybrid_mode == "concat":
             out_descriptor = []
             # out_env_mat = []
             out_rot_mat_list = []
             # out_diff = []
             for ii, descrpt in enumerate(self.descriptor_list):
-                descriptor, env_mat, diff, rot_mat, sw = \
-                  descrpt(
-                    nlist_list[ii], 
+                descriptor, env_mat, diff, rot_mat, sw = descrpt(
+                    nlist_list[ii],
                     extended_coord,
                     extended_atype,
                     extended_atype_embd,
                     mapping,
-                  )
+                )
                 if descriptor.shape[0] == nframes * nloc:
                     # [nframes * nloc, 1 + nnei, emb_dim]
                     descriptor = descriptor[:, 0, :].reshape(nframes, nloc, -1)
@@ -213,28 +222,33 @@ class DescrptBlockHybrid(DescriptorBlock):
             else:
                 out_rot_mat = None
             return out_descriptor, None, None, out_rot_mat, sw
-        elif self.hybrid_mode == 'sequential':
+        elif self.hybrid_mode == "sequential":
             assert extended_atype_embd is not None
             assert mapping is not None
             nframes, nloc, nnei = nlist.shape
             nall = extended_coord.view(nframes, -1).shape[1] // 3
             seq_input_ext = extended_atype_embd
-            seq_input = seq_input_ext[:, :nloc, :] if len(self.descriptor_list) == 0 else None
+            seq_input = (
+                seq_input_ext[:, :nloc, :] if len(self.descriptor_list) == 0 else None
+            )
             env_mat, diff, rot_mat, sw = None, None, None, None
             env_mat_list, diff_list = [], []
-            for ii, (descrpt, seq_transform) in enumerate(zip(self.descriptor_list, self.sequential_transform)):
-                seq_output, env_mat, diff, rot_mat, sw = \
-                  descrpt(
-                    nlist_list[ii], 
+            for ii, (descrpt, seq_transform) in enumerate(
+                zip(self.descriptor_list, self.sequential_transform)
+            ):
+                seq_output, env_mat, diff, rot_mat, sw = descrpt(
+                    nlist_list[ii],
                     extended_coord,
                     extended_atype,
                     seq_input_ext,
                     mapping,
-                  )
+                )
                 seq_input = seq_transform(seq_output)
-                mapping_ext = mapping.view(nframes, nall)\
-                                     .unsqueeze(-1)\
-                                     .expand(-1, -1, seq_input.shape[-1])
+                mapping_ext = (
+                    mapping.view(nframes, nall)
+                    .unsqueeze(-1)
+                    .expand(-1, -1, seq_input.shape[-1])
+                )
                 seq_input_ext = torch.gather(seq_input, 1, mapping_ext)
                 env_mat_list.append(env_mat)
                 diff_list.append(diff)

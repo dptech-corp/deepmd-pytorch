@@ -1,7 +1,9 @@
-import logging
-import numpy as np
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import torch
-from deepmd_pt.utils.preprocess import compute_smooth_weight
+
+from deepmd_pt.utils.preprocess import (
+    compute_smooth_weight,
+)
 
 
 def _make_env_mat_se_a(nlist, coord, rcut: float, ruct_smth: float):
@@ -19,15 +21,15 @@ def _make_env_mat_se_a(nlist, coord, rcut: float, ruct_smth: float):
     # for index 0 nloc atom
     length = length + ~mask.unsqueeze(-1)
     t0 = 1 / length
-    t1 = diff / length ** 2
+    t1 = diff / length**2
     weight = compute_smooth_weight(length, ruct_smth, rcut)
     env_mat_se_a = torch.cat([t0, t1], dim=-1) * weight * mask.unsqueeze(-1)
     return env_mat_se_a, diff * mask.unsqueeze(-1), weight
 
 
 def prod_env_mat_se_a(
-        extended_coord, nlist, atype,
-        mean, stddev, rcut: float, rcut_smth: float):
+    extended_coord, nlist, atype, mean, stddev, rcut: float, rcut_smth: float
+):
     """Generate smooth environment matrix from atom coordinates and other context.
 
     Args:
@@ -41,11 +43,14 @@ def prod_env_mat_se_a(
     - rcut: Cut-off radius.
     - rcut_smth: Smooth hyper-parameter for pair force & energy.
 
-    Returns:
+    Returns
+    -------
     - env_mat_se_a: Shape is [nframes, natoms[1]*nnei*4].
     """
     nframes = extended_coord.shape[0]  # 样本数量
-    _env_mat_se_a, diff, switch = _make_env_mat_se_a(nlist, extended_coord, rcut, rcut_smth)  # shape [n_atom, dim, 4]
+    _env_mat_se_a, diff, switch = _make_env_mat_se_a(
+        nlist, extended_coord, rcut, rcut_smth
+    )  # shape [n_atom, dim, 4]
     t_avg = mean[atype]  # [n_atom, dim, 4]
     t_std = stddev[atype]  # [n_atom, dim, 4]
     env_mat_se_a = (_env_mat_se_a - t_avg) / t_std

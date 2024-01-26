@@ -1,7 +1,11 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import logging
-import torch
-from torch.optim.optimizer import Optimizer
 import math
+
+import torch
+from torch.optim.optimizer import (
+    Optimizer,
+)
 
 
 class LKFOptimizer(Optimizer):
@@ -12,14 +16,12 @@ class LKFOptimizer(Optimizer):
         kalman_nue=0.9987,
         block_size=5120,
     ):
-
-        defaults = dict(
-            lr=0.1,
-            kalman_nue=kalman_nue,
-            block_size=block_size,
-        )
-
-        super(LKFOptimizer, self).__init__(params, defaults)
+        defaults = {
+            "lr": 0.1,
+            "kalman_nue": kalman_nue,
+            "block_size": block_size,
+        }
+        super().__init__(params, defaults)
 
         self._params = self.param_groups[0]["params"]
 
@@ -36,7 +38,6 @@ class LKFOptimizer(Optimizer):
         self.__init_P()
 
     def __init_P(self):
-
         param_nums = []
         param_sum = 0
         block_size = self.__get_blocksize()
@@ -81,7 +82,7 @@ class LKFOptimizer(Optimizer):
                             )
                         )
                         params_packed_index.append(param_num - block_size * i)
-            else: 
+            else:
                 P.append(torch.eye(param_num, dtype=data_type, device=device))
                 params_packed_index.append(param_num)
 
@@ -169,7 +170,6 @@ class LKFOptimizer(Optimizer):
         self.grad_prefactor = grad_prefactor
 
     def step(self, error):
-
         params_packed_index = self._state.get("params_packed_index")
 
         weights = []

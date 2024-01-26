@@ -1,11 +1,15 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import logging
-from collections import defaultdict
 
 import numpy as np
 import torch
-from deepmd_pt.utils import env
-from deepmd_pt.utils.dataloader import BufferedIterator
-from tqdm import trange
+from tqdm import (
+    trange,
+)
+
+from deepmd_pt.utils import (
+    env,
+)
 
 
 def make_stat_input(datasets, dataloaders, nbatches):
@@ -15,7 +19,8 @@ def make_stat_input(datasets, dataloaders, nbatches):
     - dataset: A list of dataset to analyze.
     - nbatches: Batch count for collecting stats.
 
-    Returns:
+    Returns
+    -------
     - a list of dicts, each of which contains data from a system
     """
     lst = []
@@ -94,7 +99,8 @@ def compute_output_stats(energy, natoms, rcond=None):
     - energy: Batched energy with shape [nframes, 1].
     - natoms: Batched atom statisics with shape [self.ntypes+2].
 
-    Returns:
+    Returns
+    -------
     - energy_coef: Average enery per atom for each element.
     """
     for i in range(len(energy)):

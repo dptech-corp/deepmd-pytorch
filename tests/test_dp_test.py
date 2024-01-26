@@ -1,22 +1,32 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import json
 import os
 import shutil
 import unittest
-from copy import deepcopy
+from copy import (
+    deepcopy,
+)
 
 import numpy as np
-from deepmd_pt.entrypoints.main import get_trainer
-from deepmd_pt.infer import inference
+
+from deepmd_pt.entrypoints.main import (
+    get_trainer,
+)
+from deepmd_pt.infer import (
+    inference,
+)
 
 
 class TestDPTest(unittest.TestCase):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["training"]["numb_steps"] = 1
         self.config["training"]["save_freq"] = 1
-        self.config["training"]["validation_data"]["systems"] = ["tests/water/data/single"]
+        self.config["training"]["validation_data"]["systems"] = [
+            "tests/water/data/single"
+        ]
         self.input_json = "test_dp_test.json"
         with open(self.input_json, "w") as fp:
             json.dump(self.config, fp, indent=4)
@@ -25,7 +35,7 @@ class TestDPTest(unittest.TestCase):
         trainer = get_trainer(deepcopy(self.config))
         trainer.run()
 
-        input_dict, label_dict,_ = trainer.get_data(is_train=False)
+        input_dict, label_dict, _ = trainer.get_data(is_train=False)
         _, _, more_loss = trainer.wrapper(**input_dict, label=label_dict, cur_lr=1.0)
 
         tester = inference.Tester("model.pt", input_script=self.input_json)
@@ -37,7 +47,9 @@ class TestDPTest(unittest.TestCase):
         for k, v in res.items():
             if k == "rmse" or "mae" in k or k not in more_loss:
                 continue
-            np.testing.assert_allclose(v, more_loss[k].cpu().detach().numpy(), rtol=1e-04, atol=1e-07)
+            np.testing.assert_allclose(
+                v, more_loss[k].cpu().detach().numpy(), rtol=1e-04, atol=1e-07
+            )
 
     def tearDown(self):
         for f in os.listdir("."):
@@ -50,5 +62,5 @@ class TestDPTest(unittest.TestCase):
         os.remove(self.input_json)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

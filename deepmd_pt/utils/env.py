@@ -1,5 +1,7 @@
-import numpy as np
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import os
+
+import numpy as np
 import torch
 
 PRECISION = os.environ.get("PRECISION", "float64")
@@ -7,25 +9,25 @@ GLOBAL_NP_FLOAT_PRECISION = getattr(np, PRECISION)
 GLOBAL_PT_FLOAT_PRECISION = getattr(torch, PRECISION)
 GLOBAL_ENER_FLOAT_PRECISION = getattr(np, PRECISION)
 DISABLE_TQDM = os.environ.get("DISABLE_TQDM", False)
-SAMPLER_RECORD = os.environ.get("SAMPLER_RECORD",False)
-NUM_WORKERS = int(os.environ.get("NUM_WORKERS",8))
+SAMPLER_RECORD = os.environ.get("SAMPLER_RECORD", False)
+NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 8))
 # Make sure DDP uses correct device if applicable
 LOCAL_RANK = os.environ.get("LOCAL_RANK")
 LOCAL_RANK = int(0 if LOCAL_RANK is None else LOCAL_RANK)
 
 if os.environ.get("DEVICE") == "cpu" or torch.cuda.is_available() is False:
-    DEVICE = torch.device('cpu')
+    DEVICE = torch.device("cpu")
 else:
-    DEVICE=torch.device(f"cuda:{LOCAL_RANK}")
+    DEVICE = torch.device(f"cuda:{LOCAL_RANK}")
 
 if os.environ.get("PREPROCESS_DEVICE") == "gpu":
-    PREPROCESS_DEVICE = torch.device(f'cuda:{LOCAL_RANK}')
+    PREPROCESS_DEVICE = torch.device(f"cuda:{LOCAL_RANK}")
 else:
-    PREPROCESS_DEVICE = torch.device('cpu')
+    PREPROCESS_DEVICE = torch.device("cpu")
 
 JIT = False
-CACHE_PER_SYS = 5 # keep at most so many sets per sys in memory
-TEST_CONFIG = 'tests/water/se_e2_a.json'
+CACHE_PER_SYS = 5  # keep at most so many sets per sys in memory
+TEST_CONFIG = "tests/water/se_e2_a.json"
 ENERGY_BIAS_TRAINABLE = True
 
 PRECISION_DICT = {
@@ -37,4 +39,3 @@ PRECISION_DICT = {
     "double": torch.float64,
 }
 DEFAULT_PRECISION = "float64"
-  

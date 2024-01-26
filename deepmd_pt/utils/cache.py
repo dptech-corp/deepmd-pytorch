@@ -1,7 +1,6 @@
-import functools
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import copy as copy_lib
-import time
-import queue
+import functools
 
 
 def lru_cache(maxsize=16, typed=False, copy=False, deepcopy=False):

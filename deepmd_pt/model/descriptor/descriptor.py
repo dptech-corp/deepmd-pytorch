@@ -1,21 +1,28 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from abc import (
+    ABC,
+    abstractmethod,
+)
+from typing import (
+    Callable,
+    List,
+    Optional,
+)
+
 import numpy as np
 import torch
-from abc import ABC, abstractmethod
-from typing import Callable, Optional, List
 
-from deepmd_pt.utils import env
-from deepmd_pt.utils.plugin import Plugin, PluginVariant
-from deepmd_pt.model.network import TypeEmbedNet
-
-try:
-    from typing import Final
-except:
-    from torch.jit import Final
+from deepmd_pt.model.network.network import (
+    TypeEmbedNet,
+)
+from deepmd_pt.utils.plugin import (
+    Plugin,
+)
 
 
 class Descriptor(torch.nn.Module, ABC):
     """The descriptor.
-    Given the atomic coordinates, atomic types and neighbor list, 
+    Given the atomic coordinates, atomic types and neighbor list,
     calculate the descriptor.
     """
 
@@ -23,62 +30,38 @@ class Descriptor(torch.nn.Module, ABC):
     local_cluster = False
 
     @abstractmethod
-    def get_rcut(self)->float:
-        """
-        Returns the cut-off radius
-        """
+    def get_rcut(self) -> float:
+        """Returns the cut-off radius."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_nsel(self)->int:
-        """
-        Returns the number of selected atoms in the cut-off radius
-        """
+    def get_nsel(self) -> int:
+        """Returns the number of selected atoms in the cut-off radius."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_sel(self)->List[int]:
-        """
-        Returns the number of selected atoms for each type.
-        """
+    def get_sel(self) -> List[int]:
+        """Returns the number of selected atoms for each type."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_ntype(self)->int:
-        """
-        Returns the number of element types
-        """
+    def get_ntype(self) -> int:
+        """Returns the number of element types."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_dim_out(self)->int:
-        """
-        Returns the output dimension
-        """
+    def get_dim_out(self) -> int:
+        """Returns the output dimension."""
         raise NotImplementedError
 
     @abstractmethod
     def compute_input_stats(self, merged):
-        """Update mean and stddev for descriptor elements.
-        """
+        """Update mean and stddev for descriptor elements."""
         raise NotImplementedError
 
     @abstractmethod
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
-        """Initialize the model bias by the statistics
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def compute_input_stats(self, merged):
-        """Update mean and stddev for descriptor elements.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
-        """Initialize the model bias by the statistics
-        """
+        """Initialize the model bias by the statistics."""
         raise NotImplementedError
 
     @abstractmethod
@@ -89,8 +72,7 @@ class Descriptor(torch.nn.Module, ABC):
         nlist,
         mapping: Optional[torch.Tensor] = None,
     ):
-        """Calculate descriptor.
-        """
+        """Calculate descriptor."""
         raise NotImplementedError
 
     @staticmethod
@@ -140,7 +122,7 @@ class Descriptor(torch.nn.Module, ABC):
 
 class DescriptorBlock(torch.nn.Module, ABC):
     """The building block of descriptor.
-    Given the input descriptor, provide with the atomic coordinates, 
+    Given the input descriptor, provide with the atomic coordinates,
     atomic types and neighbor list, calculate the new descriptor.
     """
 
@@ -182,69 +164,74 @@ class DescriptorBlock(torch.nn.Module, ABC):
         return super().__new__(cls)
 
     @abstractmethod
-    def get_rcut(self)->float:
-        """
-        Returns the cut-off radius
-        """
+    def get_rcut(self) -> float:
+        """Returns the cut-off radius."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_nsel(self)->int:
-        """
-        Returns the number of selected atoms in the cut-off radius
-        """
+    def get_nsel(self) -> int:
+        """Returns the number of selected atoms in the cut-off radius."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_sel(self)->List[int]:
-        """
-        Returns the number of selected atoms for each type
-        """
+    def get_sel(self) -> List[int]:
+        """Returns the number of selected atoms for each type."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_ntype(self)->int:
-        """
-        Returns the number of element types
-        """
+    def get_ntype(self) -> int:
+        """Returns the number of element types."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_dim_out(self)->int:
-        """
-        Returns the output dimension
-        """
+    def get_dim_out(self) -> int:
+        """Returns the output dimension."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_dim_in(self)->int:
-        """
-        Returns the output dimension
-        """
+    def get_dim_in(self) -> int:
+        """Returns the output dimension."""
         raise NotImplementedError
 
     @abstractmethod
     def compute_input_stats(self, merged):
-        """Update mean and stddev for DescriptorBlock elements.
-        """
+        """Update mean and stddev for DescriptorBlock elements."""
         raise NotImplementedError
 
     @abstractmethod
     def init_desc_stat(self, sumr, suma, sumn, sumr2, suma2):
-        """Initialize the model bias by the statistics
-        """
+        """Initialize the model bias by the statistics."""
         raise NotImplementedError
 
     def share_params(self, base_class, shared_level, resume=False):
-        assert self.__class__ == base_class.__class__, "Only descriptors of the same type can share params!"
+        assert (
+            self.__class__ == base_class.__class__
+        ), "Only descriptors of the same type can share params!"
         if shared_level == 0:
             # link buffers
-            if hasattr(self, 'mean') and not resume:
+            if hasattr(self, "mean") and not resume:
                 # in case of change params during resume
-                sumr_base, suma_base, sumn_base, sumr2_base, suma2_base = \
-                    base_class.sumr, base_class.suma, base_class.sumn, base_class.sumr2, base_class.suma2
-                sumr, suma, sumn, sumr2, suma2 = self.sumr, self.suma, self.sumn, self.sumr2, self.suma2
-                base_class.init_desc_stat(sumr_base + sumr, suma_base + suma, sumn_base + sumn, sumr2_base + sumr2, suma2_base + suma2)
+                sumr_base, suma_base, sumn_base, sumr2_base, suma2_base = (
+                    base_class.sumr,
+                    base_class.suma,
+                    base_class.sumn,
+                    base_class.sumr2,
+                    base_class.suma2,
+                )
+                sumr, suma, sumn, sumr2, suma2 = (
+                    self.sumr,
+                    self.suma,
+                    self.sumn,
+                    self.sumr2,
+                    self.suma2,
+                )
+                base_class.init_desc_stat(
+                    sumr_base + sumr,
+                    suma_base + suma,
+                    sumn_base + sumn,
+                    sumr2_base + sumr2,
+                    suma2_base + suma2,
+                )
                 self.mean = base_class.mean
                 self.stddev = base_class.stddev
             # self.load_state_dict(base_class.state_dict()) # this does not work, because it only inits the model
@@ -263,8 +250,7 @@ class DescriptorBlock(torch.nn.Module, ABC):
         extended_atype_embd: Optional[torch.Tensor] = None,
         mapping: Optional[torch.Tensor] = None,
     ):
-        """Calculate DescriptorBlock.
-        """
+        """Calculate DescriptorBlock."""
         raise NotImplementedError
 
 
@@ -281,7 +267,6 @@ def compute_std(sumv2, sumv, sumn, rcut_r):
 def make_default_type_embedding(
     ntypes,
 ):
-  aux = {}
-  aux['tebd_dim'] = 8
-  return TypeEmbedNet(ntypes, aux['tebd_dim']), aux
-
+    aux = {}
+    aux["tebd_dim"] = 8
+    return TypeEmbedNet(ntypes, aux["tebd_dim"]), aux

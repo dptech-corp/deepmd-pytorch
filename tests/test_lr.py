@@ -1,17 +1,21 @@
-import numpy as np
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import unittest
 
+import numpy as np
 import tensorflow.compat.v1 as tf
 
 tf.disable_eager_execution()
 
-from deepmd.utils import learning_rate
+from deepmd.tf.utils import (
+    learning_rate,
+)
 
-from deepmd_pt.utils.learning_rate import LearningRateExp
+from deepmd_pt.utils.learning_rate import (
+    LearningRateExp,
+)
 
 
 class TestLearningRate(unittest.TestCase):
-
     def setUp(self):
         self.start_lr = 0.001
         self.stop_lr = 3.51e-8
@@ -26,19 +30,30 @@ class TestLearningRate(unittest.TestCase):
                 self.judge_it()
 
     def judge_it(self):
-        base_lr = learning_rate.LearningRateExp(self.start_lr, self.stop_lr, self.decay_step)
+        base_lr = learning_rate.LearningRateExp(
+            self.start_lr, self.stop_lr, self.decay_step
+        )
         g = tf.Graph()
         with g.as_default():
             global_step = tf.placeholder(shape=[], dtype=tf.int32)
             t_lr = base_lr.build(global_step, self.stop_step)
 
-        my_lr = LearningRateExp(self.start_lr, self.stop_lr, self.decay_step, self.stop_step)
+        my_lr = LearningRateExp(
+            self.start_lr, self.stop_lr, self.decay_step, self.stop_step
+        )
         with tf.Session(graph=g) as sess:
-            base_vals = [sess.run(t_lr, feed_dict={global_step: step_id}) for step_id in range(self.stop_step) if
-                         step_id % self.decay_step != 0]
-        my_vals = [my_lr.value(step_id) for step_id in range(self.stop_step) if step_id % self.decay_step != 0]
+            base_vals = [
+                sess.run(t_lr, feed_dict={global_step: step_id})
+                for step_id in range(self.stop_step)
+                if step_id % self.decay_step != 0
+            ]
+        my_vals = [
+            my_lr.value(step_id)
+            for step_id in range(self.stop_step)
+            if step_id % self.decay_step != 0
+        ]
         self.assertTrue(np.allclose(base_vals, my_vals))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

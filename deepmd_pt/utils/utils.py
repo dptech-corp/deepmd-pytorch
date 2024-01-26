@@ -1,11 +1,15 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from typing import (
+    Callable,
+    Optional,
+)
+
 import torch
 import torch.nn.functional as F
-from typing import List, Callable, Any, Dict, Optional
 
 
 def get_activation_fn(activation: str) -> Callable:
-    """ Returns the activation function corresponding to `activation` """
-
+    """Returns the activation function corresponding to `activation`."""
     if activation.lower() == "relu":
         return F.relu
     elif activation.lower() == "gelu":
@@ -21,10 +25,10 @@ def get_activation_fn(activation: str) -> Callable:
 class ActivationFn(torch.nn.Module):
     def __init__(self, activation: Optional[str]):
         super().__init__()
-        self.activation : str = activation if activation is not None else "linear"
+        self.activation: str = activation if activation is not None else "linear"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """ Returns the tensor after applying activation function corresponding to `activation` """
+        """Returns the tensor after applying activation function corresponding to `activation`."""
         # See jit supported types: https://pytorch.org/docs/stable/jit_language_reference.html#supported-type
 
         if self.activation.lower() == "relu":

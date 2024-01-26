@@ -1,19 +1,26 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import json
 import os
 import shutil
 import unittest
-from copy import deepcopy
-from pathlib import Path
+from copy import (
+    deepcopy,
+)
+
 import torch
 
-import numpy as np
-from deepmd_pt.entrypoints.main import get_trainer
-from deepmd_pt.infer import inference
+from deepmd_pt.entrypoints.main import (
+    get_trainer,
+)
+from deepmd_pt.infer import (
+    inference,
+)
+
 from .test_permutation import (
-  model_se_e2_a,
-  model_dpa1,
-  model_dpa2,
-  model_hybrid,
+    model_dpa1,
+    model_dpa2,
+    model_hybrid,
+    model_se_e2_a,
 )
 
 
@@ -21,8 +28,8 @@ class TestJIT:
     def test_jit(self):
         trainer = get_trainer(deepcopy(self.config))
         trainer.run()
-        model = torch.jit.script(inference.Tester('./model.pt', numb_test=1).model)
-        torch.jit.save(model, './frozen_model.pth', {})
+        model = torch.jit.script(inference.Tester("./model.pt", numb_test=1).model)
+        torch.jit.save(model, "./frozen_model.pth", {})
 
     def tearDown(self):
         for f in os.listdir("."):
@@ -37,12 +44,12 @@ class TestJIT:
 class TestEnergyModelSeA(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_se_e2_a)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
-    
+
     def tearDown(self):
         TestJIT.tearDown(self)
 
@@ -50,7 +57,7 @@ class TestEnergyModelSeA(unittest.TestCase, TestJIT):
 class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_dpa1)
         self.config["training"]["numb_steps"] = 10
@@ -63,12 +70,18 @@ class TestEnergyModelDPA1(unittest.TestCase, TestJIT):
 class TestEnergyModelDPA2(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
-        self.config["model"] = deepcopy(model_dpa2)        
-        self.config["model"]["descriptor"]["rcut"] = self.config["model"]["descriptor"]["repinit_rcut"]
-        self.config["model"]["descriptor"]["rcut_smth"] = self.config["model"]["descriptor"]["repinit_rcut_smth"]
-        self.config["model"]["descriptor"]["sel"] = self.config["model"]["descriptor"]["repinit_nsel"]
+        self.config["model"] = deepcopy(model_dpa2)
+        self.config["model"]["descriptor"]["rcut"] = self.config["model"]["descriptor"][
+            "repinit_rcut"
+        ]
+        self.config["model"]["descriptor"]["rcut_smth"] = self.config["model"][
+            "descriptor"
+        ]["repinit_rcut_smth"]
+        self.config["model"]["descriptor"]["sel"] = self.config["model"]["descriptor"][
+            "repinit_nsel"
+        ]
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
@@ -77,17 +90,18 @@ class TestEnergyModelDPA2(unittest.TestCase, TestJIT):
 class TestEnergyModelHybrid(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_hybrid)
         self.config["training"]["numb_steps"] = 10
         self.config["training"]["save_freq"] = 10
 
+
 @unittest.skip("hybrid not supported at the moment")
 class TestEnergyModelHybrid2(unittest.TestCase, TestJIT):
     def setUp(self):
         input_json = "tests/water/se_atten.json"
-        with open(input_json, "r") as f:
+        with open(input_json) as f:
             self.config = json.load(f)
         self.config["model"] = deepcopy(model_hybrid)
         self.config["model"]["descriptor"]["hybrid_mode"] = "sequential"
@@ -95,5 +109,5 @@ class TestEnergyModelHybrid2(unittest.TestCase, TestJIT):
         self.config["training"]["save_freq"] = 10
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
