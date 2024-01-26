@@ -52,7 +52,7 @@ class TestPairTab(unittest.TestCase):
         expected_result = torch.tensor([[2.4000, 2.7085],
                                         [2.4000, 0.8000]])
         
-        np.testing.assert_allclose(result,expected_result)
+        torch.testing.assert_allclose(result,expected_result)
 
     def test_with_mask(self):
 
