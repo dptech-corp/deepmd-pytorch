@@ -142,7 +142,7 @@ self.dataloaders: List[DataLoader] = []
 for system in systems:
     dl = create_dataloader(system)
     self.dataloaders.append(dl)
-    for _ in range(len(dl)): # len(dl) == how many mini-batches in this system
+    for _ in range(len(dl)):  # len(dl) == how many mini-batches in this system
         index.append(len(self.dataloaders) - 1)
 ```
 

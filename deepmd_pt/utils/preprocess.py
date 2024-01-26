@@ -1,12 +1,17 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import logging
-import numpy as np
+from typing import (
+    Union,
+)
+
 import torch
-from deepmd_pt.utils import env
-from typing import Union
+
+from deepmd_pt.utils import (
+    env,
+)
 
 
-class Region3D(object):
-
+class Region3D:
     def __init__(self, boxt):
         """Construct a simulation box."""
         boxt = boxt.reshape([3, 3])
@@ -56,7 +61,6 @@ def compute_serial_cid(cell_offset, ncell):
     - cell_offset: shape is [3]
     - ncell: shape is [3]
     """
-
     cell_offset[:, 0] *= ncell[1] * ncell[2]
     cell_offset[:, 1] *= ncell[2]
     return cell_offset.sum(-1)
@@ -65,8 +69,12 @@ def compute_serial_cid(cell_offset, ncell):
 def compute_pbc_shift(cell_offset, ncell):
     """Tell shift count to move the atom into region."""
     shift = torch.zeros_like(cell_offset)
-    shift = shift + (cell_offset < 0) * -(torch.div(cell_offset, ncell, rounding_mode='floor'))
-    shift = shift + (cell_offset >= ncell) * -(torch.div((cell_offset - ncell), ncell, rounding_mode='floor') + 1)
+    shift = shift + (cell_offset < 0) * -(
+        torch.div(cell_offset, ncell, rounding_mode="floor")
+    )
+    shift = shift + (cell_offset >= ncell) * -(
+        torch.div((cell_offset - ncell), ncell, rounding_mode="floor") + 1
+    )
     assert torch.all(cell_offset + shift * ncell >= 0)
     assert torch.all(cell_offset + shift * ncell < ncell)
     return shift
@@ -81,7 +89,7 @@ def build_inside_clist(coord, region: Region3D, ncell):
     """
     loc_ncell = int(torch.prod(ncell))  # 模拟区域内的 Cell 数量
     nloc = coord.numel() // 3  # 原子数量
-    inter_cell_size = 1. / ncell
+    inter_cell_size = 1.0 / ncell
 
     inter_cood = region.phys2inter(coord.view(-1, 3))
     cell_offset = torch.floor(inter_cood / inter_cell_size).to(torch.long)
@@ -91,14 +99,14 @@ def build_inside_clist(coord, region: Region3D, ncell):
     delta = cell_offset - ncell
     a2c = compute_serial_cid(cell_offset, ncell)  # cell id of atoms
     arange = torch.arange(0, loc_ncell, 1, device=env.PREPROCESS_DEVICE)
-    cellid = (a2c == arange.unsqueeze(-1))  # one hot cellid
+    cellid = a2c == arange.unsqueeze(-1)  # one hot cellid
     c2a = cellid.nonzero()
     lst = []
     cnt = 0
     bincount = torch.bincount(a2c, minlength=loc_ncell)
     for i in range(loc_ncell):
         n = bincount[i]
-        lst.append(c2a[cnt: cnt + n, 1])
+        lst.append(c2a[cnt : cnt + n, 1])
         cnt += n
     return a2c, lst
 
@@ -116,16 +124,24 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     ncell = torch.floor(to_face / rcut).to(torch.long)
     ncell[ncell == 0] = 1  # 模拟区域内的 Cell 数量
     cell_size = to_face / ncell
-    ngcell = torch.floor(rcut / cell_size).to(torch.long) + 1  # 模拟区域外的 Cell 数量，存储的是 Ghost 原子
+    ngcell = (
+        torch.floor(rcut / cell_size).to(torch.long) + 1
+    )  # 模拟区域外的 Cell 数量, 存储的是 Ghost 原子
 
     # 借助 Cell 列表添加边界外的 Ghost 原子
     a2c, c2a = build_inside_clist(coord, region, ncell)
     xi = torch.arange(-ngcell[0], ncell[0] + ngcell[0], 1, device=env.PREPROCESS_DEVICE)
     yi = torch.arange(-ngcell[1], ncell[1] + ngcell[1], 1, device=env.PREPROCESS_DEVICE)
     zi = torch.arange(-ngcell[2], ncell[2] + ngcell[2], 1, device=env.PREPROCESS_DEVICE)
-    xyz = xi.view(-1, 1, 1, 1) * torch.tensor([1, 0, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
-    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor([0, 1, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE)
-    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor([0, 0, 1], dtype=torch.long, device=env.PREPROCESS_DEVICE)
+    xyz = xi.view(-1, 1, 1, 1) * torch.tensor(
+        [1, 0, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE
+    )
+    xyz = xyz + yi.view(1, -1, 1, 1) * torch.tensor(
+        [0, 1, 0], dtype=torch.long, device=env.PREPROCESS_DEVICE
+    )
+    xyz = xyz + zi.view(1, 1, -1, 1) * torch.tensor(
+        [0, 0, 1], dtype=torch.long, device=env.PREPROCESS_DEVICE
+    )
     xyz = xyz.view(-1, 3)
     mask_a = (xyz >= 0).all(dim=-1)
     mask_b = (xyz < ncell).all(dim=-1)
@@ -139,7 +155,7 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     n_atoms = coord.shape[0]
     aid = [c2a[ci] + i * n_atoms for i, ci in enumerate(cid)]
     aid = torch.cat(aid)
-    tmp = torch.div(aid, n_atoms, rounding_mode='trunc')
+    tmp = torch.div(aid, n_atoms, rounding_mode="trunc")
     aid = aid % n_atoms
     tmp_coord = coord[aid] - coord_shift[tmp]
     tmp_atype = atype[aid]
@@ -148,11 +164,15 @@ def append_neighbors(coord, region: Region3D, atype, rcut: float):
     merged_coord = torch.cat([coord, tmp_coord])
     merged_coord_shift = torch.cat([torch.zeros_like(coord), coord_shift[tmp]])
     merged_atype = torch.cat([atype, tmp_atype])
-    merged_mapping = torch.cat([torch.arange(atype.numel(), device=env.PREPROCESS_DEVICE), aid])
+    merged_mapping = torch.cat(
+        [torch.arange(atype.numel(), device=env.PREPROCESS_DEVICE), aid]
+    )
     return merged_coord_shift, merged_atype, merged_mapping
 
 
-def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type_split=True, min_check=False):
+def build_neighbor_list(
+    nloc: int, coord, atype, rcut: float, sec, mapping, type_split=True, min_check=False
+):
     """For each atom inside region, build its neighbor list.
 
     Args:
@@ -167,7 +187,9 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
     distance = coord_l - coord_r
     distance = torch.linalg.norm(distance, dim=-1)
     DISTANCE_INF = distance.max().detach() + rcut
-    distance[:nloc, :nloc] += torch.eye(nloc, dtype=torch.bool, device=env.PREPROCESS_DEVICE) * DISTANCE_INF
+    distance[:nloc, :nloc] += (
+        torch.eye(nloc, dtype=torch.bool, device=env.PREPROCESS_DEVICE) * DISTANCE_INF
+    )
     if min_check:
         if distance.min().abs() < 1e-6:
             RuntimeError("Atom dist too close!")
@@ -175,8 +197,12 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
         sec = sec[-1:]
     lst = []
     nlist = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
-    nlist_loc = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
-    nlist_type = torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    nlist_loc = (
+        torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    )
+    nlist_type = (
+        torch.zeros((nloc, sec[-1].item()), device=env.PREPROCESS_DEVICE).long() - 1
+    )
     for i, nnei in enumerate(sec):
         if i > 0:
             nnei = nnei - sec[i - 1]
@@ -190,10 +216,15 @@ def build_neighbor_list(nloc: int, coord, atype, rcut: float, sec, mapping, type
         else:
             # when nnei > nall
             indices = torch.zeros((nloc, nnei), device=env.PREPROCESS_DEVICE).long() - 1
-            _sorted = torch.ones((nloc, nnei), device=env.PREPROCESS_DEVICE).long() * DISTANCE_INF
-            _sorted_nnei, indices_nnei = torch.topk(tmp, tmp.shape[1], dim=1, largest=False)
-            _sorted[:, :tmp.shape[1]] = _sorted_nnei
-            indices[:, :tmp.shape[1]] = indices_nnei
+            _sorted = (
+                torch.ones((nloc, nnei), device=env.PREPROCESS_DEVICE).long()
+                * DISTANCE_INF
+            )
+            _sorted_nnei, indices_nnei = torch.topk(
+                tmp, tmp.shape[1], dim=1, largest=False
+            )
+            _sorted[:, : tmp.shape[1]] = _sorted_nnei
+            indices[:, : tmp.shape[1]] = indices_nnei
         mask = (_sorted < rcut).to(torch.long)
         indices_loc = mapping[indices]
         indices = indices * mask + -1 * (1 - mask)  # -1 for padding
@@ -219,50 +250,67 @@ def compute_smooth_weight(distance, rmin: float, rmax: float):
     return vv * mid_mask + min_mask
 
 
-def make_env_mat(coord,
-                 atype,
-                 region,
-                 rcut: Union[float, list],
-                 sec,
-                 pbc=True,
-                 type_split=True,
-                 min_check=False):
+def make_env_mat(
+    coord,
+    atype,
+    region,
+    rcut: Union[float, list],
+    sec,
+    pbc=True,
+    type_split=True,
+    min_check=False,
+):
     """Based on atom coordinates, return environment matrix.
 
     Returns
-        nlist: nlist, [nloc, nnei]
-        merged_coord_shift: shift on nall atoms, [nall, 3]
-        merged_mapping: mapping from nall index to nloc index, [nall]
+    -------
+    nlist: nlist, [nloc, nnei]
+    merged_coord_shift: shift on nall atoms, [nall, 3]
+    merged_mapping: mapping from nall index to nloc index, [nall]
     """
-    # 将盒子外的原子，通过镜像挪入盒子内
+    # 将盒子外的原子, 通过镜像挪入盒子内
     hybrid = isinstance(rcut, list)
     _rcut = rcut
     if hybrid:
         _rcut = max(rcut)
     if pbc:
-        merged_coord_shift, merged_atype, merged_mapping = append_neighbors(coord, region, atype, _rcut)
+        merged_coord_shift, merged_atype, merged_mapping = append_neighbors(
+            coord, region, atype, _rcut
+        )
         merged_coord = coord[merged_mapping] - merged_coord_shift
         if merged_coord.shape[0] <= coord.shape[0]:
-            logging.warning('No ghost atom is added for system ')
+            logging.warning("No ghost atom is added for system ")
     else:
         merged_coord_shift = torch.zeros_like(coord)
         merged_atype = atype.clone()
         merged_mapping = torch.arange(atype.numel(), device=env.PREPROCESS_DEVICE)
         merged_coord = coord.clone()
 
-    # 构建邻居列表，并按 sel_a 筛选
+    # 构建邻居列表, 并按 sel_a 筛选
     if not hybrid:
-        nlist, nlist_loc, nlist_type = build_neighbor_list(coord.shape[0], merged_coord, merged_atype, rcut, sec,
-                                                           merged_mapping, type_split=type_split, min_check=min_check)
+        nlist, nlist_loc, nlist_type = build_neighbor_list(
+            coord.shape[0],
+            merged_coord,
+            merged_atype,
+            rcut,
+            sec,
+            merged_mapping,
+            type_split=type_split,
+            min_check=min_check,
+        )
     else:
         nlist, nlist_loc, nlist_type = [], [], []
         for ii, single_rcut in enumerate(rcut):
-            nlist_tmp, nlist_loc_tmp, nlist_type_tmp = build_neighbor_list(coord.shape[0], merged_coord,
-                                                                           merged_atype,
-                                                                           single_rcut, sec[ii],
-                                                                           merged_mapping,
-                                                                           type_split=type_split,
-                                                                           min_check=min_check)
+            nlist_tmp, nlist_loc_tmp, nlist_type_tmp = build_neighbor_list(
+                coord.shape[0],
+                merged_coord,
+                merged_atype,
+                single_rcut,
+                sec[ii],
+                merged_mapping,
+                type_split=type_split,
+                min_check=min_check,
+            )
             nlist.append(nlist_tmp)
             nlist_loc.append(nlist_loc_tmp)
             nlist_type.append(nlist_type_tmp)

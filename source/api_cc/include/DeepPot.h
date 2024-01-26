@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 #include "common.h"
 
 namespace deepmd {
@@ -5,7 +6,7 @@ namespace deepmd {
  * @brief Deep Potential.
  **/
 class DeepPot {
- public:
+public:
   // cublasHandle_t handle;
   /**
    * @brief DP constructor without initialization.
@@ -16,8 +17,7 @@ class DeepPot {
    * @brief Initialize the DP.
    * @param[in] model The name of the frozen model file.
    **/
-  template <typename VALUETYPE>
-  void init(const std::string& model);
+  template <typename VALUETYPE> void init(const std::string &model);
 
   /**
    * @brief Evaluate the energy, force and virial by using this DP.
@@ -31,32 +31,27 @@ class DeepPot {
    *x 9.
    **/
   template <typename VALUETYPE, typename ENERGYVTYPE>
-  void compute(ENERGYVTYPE& ener,
-               std::vector<VALUETYPE>& force,
-               std::vector<VALUETYPE>& virial,
-               const std::vector<VALUETYPE>& coord,
-               const std::vector<int>& atype,
-               const std::vector<VALUETYPE>& box);
- private:
+  void
+  compute(ENERGYVTYPE &ener, std::vector<VALUETYPE> &force,
+          std::vector<VALUETYPE> &virial, const std::vector<VALUETYPE> &coord,
+          const std::vector<int> &atype, const std::vector<VALUETYPE> &box);
+
+private:
   torch::jit::script::Module module;
 };
 
-template <typename VALUETYPE>
-void DeepPot::init(const std::string& model) {
-    // cublasCreate(&handle);
+template <typename VALUETYPE> void DeepPot::init(const std::string &model) {
+  // cublasCreate(&handle);
 
-    try {
-        module = torch::jit::load(model);
-    }
-    catch (const c10::Error& e) {
-        std::cerr << "Error loading the model\n";
-    }
-
-
+  try {
+    module = torch::jit::load(model);
+  } catch (const c10::Error &e) {
+    std::cerr << "Error loading the model\n";
+  }
 }
 
 class DeepPotModelDevi {
- public:
+public:
   /**
    * @brief DP model deviation constructor without initialization.
    **/
@@ -67,7 +62,7 @@ class DeepPotModelDevi {
    * @param[in] models The name of the frozen model files.
    **/
   template <typename VALUETYPE>
-  void init(const std::vector<std::string>& models);
+  void init(const std::vector<std::string> &models);
 
   /**
    * @brief Evaluate the energy, force and virial by using this DP.
@@ -81,28 +76,28 @@ class DeepPotModelDevi {
    *x 9.
    **/
   template <typename VALUETYPE, typename ENERGYVTYPE>
-  void compute(std::vector<ENERGYVTYPE>& all_ener,
-               std::vector<std::vector<VALUETYPE>>& all_force,
-               std::vector<std::vector<VALUETYPE>>& all_virial,
-               const std::vector<VALUETYPE>& coord,
-               const std::vector<int>& atype,
-               const std::vector<VALUETYPE>& box);
+  void compute(std::vector<ENERGYVTYPE> &all_ener,
+               std::vector<std::vector<VALUETYPE>> &all_force,
+               std::vector<std::vector<VALUETYPE>> &all_virial,
+               const std::vector<VALUETYPE> &coord,
+               const std::vector<int> &atype,
+               const std::vector<VALUETYPE> &box);
   /**
    * @brief Compute the average energy.
    * @param[out] dener The average energy.
    * @param[in] all_energy The energies of all models.
    **/
   template <typename VALUETYPE>
-  void compute_avg(VALUETYPE& dener, const std::vector<VALUETYPE>& all_energy);
+  void compute_avg(VALUETYPE &dener, const std::vector<VALUETYPE> &all_energy);
   /**
    * @brief Compute the average of vectors.
    * @param[out] avg The average of vectors.
    * @param[in] xx The vectors of all models.
    **/
   template <typename VALUETYPE>
-  void compute_avg(std::vector<VALUETYPE>& avg,
-                   const std::vector<std::vector<VALUETYPE> >& xx);
- /**
+  void compute_avg(std::vector<VALUETYPE> &avg,
+                   const std::vector<std::vector<VALUETYPE>> &xx);
+  /**
    * @brief Compute the standard deviation of vectors.
    * @param[out] std The standard deviation of vectors.
    * @param[in] avg The average of vectors.
@@ -110,10 +105,9 @@ class DeepPotModelDevi {
    * @param[in] stride The stride to compute the deviation.
    **/
   template <typename VALUETYPE>
-  void compute_std(std::vector<VALUETYPE>& std,
-                   const std::vector<VALUETYPE>& avg,
-                   const std::vector<std::vector<VALUETYPE> >& xx,
-                   const int& stride);
+  void
+  compute_std(std::vector<VALUETYPE> &std, const std::vector<VALUETYPE> &avg,
+              const std::vector<std::vector<VALUETYPE>> &xx, const int &stride);
   /**
    * @brief Compute the relative standard deviation of vectors.
    * @param[out] std The standard deviation of vectors.
@@ -122,10 +116,9 @@ class DeepPotModelDevi {
    * @param[in] stride The stride to compute the deviation.
    **/
   template <typename VALUETYPE>
-  void compute_relative_std(std::vector<VALUETYPE>& std,
-                            const std::vector<VALUETYPE>& avg,
-                            const VALUETYPE eps,
-                            const int& stride);
+  void compute_relative_std(std::vector<VALUETYPE> &std,
+                            const std::vector<VALUETYPE> &avg,
+                            const VALUETYPE eps, const int &stride);
   /**
    * @brief Compute the standard deviation of forces.
    * @param[out] std The standard deviation of forces.
@@ -133,9 +126,9 @@ class DeepPotModelDevi {
    * @param[in] xx The vectors of all forces.
    **/
   template <typename VALUETYPE>
-  void compute_std_f(std::vector<VALUETYPE>& std,
-                     const std::vector<VALUETYPE>& avg,
-                     const std::vector<std::vector<VALUETYPE> >& xx);
+  void compute_std_f(std::vector<VALUETYPE> &std,
+                     const std::vector<VALUETYPE> &avg,
+                     const std::vector<std::vector<VALUETYPE>> &xx);
   /**
    * @brief Compute the relative standard deviation of forces.
    * @param[out] std The relative standard deviation of forces.
@@ -143,29 +136,28 @@ class DeepPotModelDevi {
    * @param[in] eps The level parameter for computing the deviation.
    **/
   template <typename VALUETYPE>
-  void compute_relative_std_f(std::vector<VALUETYPE>& std,
-                              const std::vector<VALUETYPE>& avg,
+  void compute_relative_std_f(std::vector<VALUETYPE> &std,
+                              const std::vector<VALUETYPE> &avg,
                               const VALUETYPE eps);
 
- private:
+private:
   unsigned numb_models;
   std::vector<torch::jit::script::Module> modules;
 };
 
 template <typename VALUETYPE>
-void DeepPotModelDevi::init(const std::vector<std::string>& models) {
-    numb_models = models.size();
-    modules.resize(numb_models);
-    // cublasCreate(&handle);
+void DeepPotModelDevi::init(const std::vector<std::string> &models) {
+  numb_models = models.size();
+  modules.resize(numb_models);
+  // cublasCreate(&handle);
 
-    try {
-        for (int ii=0; ii<numb_models; ii++) {
-            modules[ii] = torch::jit::load(models[ii]);
-        }
-        
+  try {
+    for (int ii = 0; ii < numb_models; ii++) {
+      modules[ii] = torch::jit::load(models[ii]);
     }
-    catch (const c10::Error& e) {
-        std::cerr << "Error loading the model\n";
-    }
+
+  } catch (const c10::Error &e) {
+    std::cerr << "Error loading the model\n";
+  }
 }
-}  // namespace deepmd
+} // namespace deepmd

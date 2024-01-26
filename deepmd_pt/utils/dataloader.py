@@ -1,27 +1,45 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import logging
 import os
 import queue
 import time
-import numpy as np
-from threading import Thread
-from typing import Callable, Dict, List, Tuple, Type, Union
-from multiprocessing.dummy import Pool
+from multiprocessing.dummy import (
+    Pool,
+)
+from threading import (
+    Thread,
+)
+from typing import (
+    List,
+)
 
 import h5py
 import torch
 import torch.distributed as dist
-from deepmd_pt.utils import env
-from deepmd_pt.utils.dataset import DeepmdDataSetForLoader
-from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
-from torch.utils.data.distributed import DistributedSampler
-from deepmd_pt.model.descriptor import Descriptor
-from tqdm import tqdm
 import torch.multiprocessing
-
-from deepmd_utils.utils.data_system import (
+from deepmd.utils.data_system import (
     prob_sys_size_ext,
-    process_sys_probs
+    process_sys_probs,
 )
+from torch.utils.data import (
+    DataLoader,
+    Dataset,
+    WeightedRandomSampler,
+)
+from torch.utils.data.distributed import (
+    DistributedSampler,
+)
+
+from deepmd_pt.model.descriptor import (
+    Descriptor,
+)
+from deepmd_pt.utils import (
+    env,
+)
+from deepmd_pt.utils.dataset import (
+    DeepmdDataSetForLoader,
+)
+
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
@@ -94,15 +112,15 @@ class DpLoaderSet(Dataset):
                 self.sampler_list.append(system_sampler)
             else:
                 system_sampler = None
-            if isinstance(batch_size,str):
+            if isinstance(batch_size, str):
                 if batch_size == "auto":
                     rule = 32
                 elif batch_size.startswith("auto:"):
                     rule = int(batch_size.split(":")[1])
                 else:
                     rule = None
-                    logging.error(f"Unsupported batch size type")
-                self.batch_size = rule // system._natoms 
+                    logging.error("Unsupported batch size type")
+                self.batch_size = rule // system._natoms
                 if self.batch_size * system._natoms < rule:
                     self.batch_size += 1
             else:
@@ -122,7 +140,7 @@ class DpLoaderSet(Dataset):
         self.iters = []
         for item in self.dataloaders:
             self.iters.append(iter(item))
-        
+
     def set_noise(self, noise_settings):
         # noise_settings['noise_type'] # "trunc_normal", "normal", "uniform"
         # noise_settings['noise'] # float, default 1.0
@@ -137,15 +155,14 @@ class DpLoaderSet(Dataset):
         return len(self.dataloaders)
 
     def __getitem__(self, idx):
-        #logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
+        # logging.warning(str(torch.distributed.get_rank())+" idx: "+str(idx)+" index: "+str(self.index[idx]))
         try:
             batch = next(self.iters[idx])
         except StopIteration:
             self.iters[idx] = iter(self.dataloaders[idx])
             batch = next(self.iters[idx])
-        batch['sid'] = idx
+        batch["sid"] = idx
         return batch
-
 
 
 _sentinel = object()
@@ -167,7 +184,7 @@ class BackgroundConsumer(Thread):
         self._queue.put(_sentinel)
 
 
-class BufferedIterator(object):
+class BufferedIterator:
     def __init__(self, iterable):
         self._queue = queue.Queue(QUEUESIZE)
         self._iterable = iterable
@@ -235,8 +252,12 @@ def collate_tensor_fn(batch):
                 # If we're in a background process, concatenate directly into a
                 # shared memory tensor to avoid an extra copy
                 numel = sum(x.numel() for x in tmp_batch)
-                storage = hybrid_item._typed_storage()._new_shared(numel, device=hybrid_item.device)
-                out = hybrid_item.new(storage).resize_(len(tmp_batch), *list(hybrid_item.size()))
+                storage = hybrid_item._typed_storage()._new_shared(
+                    numel, device=hybrid_item.device
+                )
+                out = hybrid_item.new(storage).resize_(
+                    len(tmp_batch), *list(hybrid_item.size())
+                )
             out_hybrid.append(torch.stack(tmp_batch, 0, out=out))
         return out_hybrid
 
@@ -277,21 +298,22 @@ def collate_batch(batch):
                 result[key] = collate_tensor_fn([d[key] for d in batch])
     return result
 
-def get_weighted_sampler(training_data,prob_style,sys_prob=False):
-    if sys_prob == False:
+
+def get_weighted_sampler(training_data, prob_style, sys_prob=False):
+    if sys_prob is False:
         if prob_style == "prob_uniform":
             prob_v = 1.0 / float(training_data.__len__())
             probs = [prob_v for ii in range(training_data.__len__())]
-        else:#prob_sys_size;A:B:p1;C:D:p2 or prob_sys_size = prob_sys_size;0:nsys:1.0
+        else:  # prob_sys_size;A:B:p1;C:D:p2 or prob_sys_size = prob_sys_size;0:nsys:1.0
             if prob_style == "prob_sys_size":
-                style = "prob_sys_size;0:{}:1.0".format(len(training_data))
+                style = f"prob_sys_size;0:{len(training_data)}:1.0"
             else:
                 style = prob_style
-            probs = prob_sys_size_ext(style,len(training_data),training_data.index)
+            probs = prob_sys_size_ext(style, len(training_data), training_data.index)
     else:
-        probs = process_sys_probs(prob_style,training_data.index)
-    logging.info("Generated weighted sampler with prob array: "+str(probs))
-    #training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iteraters
+        probs = process_sys_probs(prob_style, training_data.index)
+    logging.info("Generated weighted sampler with prob array: " + str(probs))
+    # training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iteraters
     len_sampler = training_data.total_batch * env.NUM_WORKERS
-    sampler = WeightedRandomSampler(probs,len_sampler, replacement = True)
+    sampler = WeightedRandomSampler(probs, len_sampler, replacement=True)
     return sampler

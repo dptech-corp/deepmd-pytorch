@@ -1,4 +1,5 @@
-from deepmd_utils.utils.random import (
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from deepmd.utils.random import (
     choice,
     random,
     seed,

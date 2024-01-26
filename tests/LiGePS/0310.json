@@ -1,119 +1,124 @@
 {
- "model": {
-  "descriptor": {
-   "type": "se_e2_a",
-   "sel": [30, 30, 30, 30],
-   "rcut_smth": 2.0,
-   "rcut": 9.0,
-   "neuron": [
-    36,
-    72,
-    144
-   ],
-   "resnet_dt": false,
-   "axis_neuron": 12,
-   "attn": 128,
-   "attn_layer": 2,
-   "attn_dotr": true,
-   "attn_mask": false,
-   "seed": 10,
-   "_activation_function": "tanh"
+  "model": {
+    "descriptor": {
+      "type": "se_e2_a",
+      "sel": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "rcut_smth": 2.0,
+      "rcut": 9.0,
+      "neuron": [
+        36,
+        72,
+        144
+      ],
+      "resnet_dt": false,
+      "axis_neuron": 12,
+      "attn": 128,
+      "attn_layer": 2,
+      "attn_dotr": true,
+      "attn_mask": false,
+      "seed": 10,
+      "_activation_function": "tanh"
+    },
+    "fitting_net": {
+      "neuron": [
+        240,
+        240,
+        240
+      ],
+      "resnet_dt": true,
+      "_coord_norm": true,
+      "_type_fitting_net": false,
+      "seed": 10,
+      "_activation_function": "tanh"
+    },
+    "type_map": [
+      "Li",
+      "Ge",
+      "P",
+      "S"
+    ]
   },
-  "fitting_net": {
-   "neuron": [
-    240,
-    240,
-    240
-   ],
-   "resnet_dt": true,
-   "_coord_norm": true,
-   "_type_fitting_net": false,
-   "seed": 10,
-   "_activation_function": "tanh"
+  "learning_rate": {
+    "type": "exp",
+    "start_lr": 0.001,
+    "decay_steps": 80000,
+    "stop_lr": 5e-08,
+    "_decay_rate": 0.95
   },
-  "type_map": [
-   "Li",
-   "Ge",
-   "P",
-   "S"
-  ]
- },
- "learning_rate": {
-  "type": "exp",
-  "start_lr": 0.001,
-  "decay_steps": 80000,
-  "stop_lr": 5e-08,
-  "_decay_rate": 0.95
- },
- "loss": {
-  "start_pref_e": 0.02,
-  "limit_pref_e": 2,
-  "start_pref_f": 1000,
-  "limit_pref_f": 1,
-  "start_pref_v": 0.01,
-  "limit_pref_v": 1
- },
- "training": {
-  "training_data": {
-   "systems": [
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-init.system",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000000-data.000",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000001-data.001",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000002-data.002",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000003-data.003",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000007-data.007",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000008-data.008",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000008-data.016",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000009-data.009",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000010-data.010",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000010-data.018",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000011-data.011",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000011-data.019",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000012-data.012",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000012-data.020",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000013-data.013",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000013-data.021",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000014-data.014",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000014-data.022",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000015-data.015",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000015-data.023",
-    "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.000",
-    "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.001",
-    "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.002",
-    "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.003",
-    "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.000",
-    "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.001",
-    "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.002",
-    "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.003",
-    "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.000",
-    "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.001",
-    "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.002",
-    "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.003"
-   ],
-   "batch_size": "auto"
+  "loss": {
+    "start_pref_e": 0.02,
+    "limit_pref_e": 2,
+    "start_pref_f": 1000,
+    "limit_pref_f": 1,
+    "start_pref_v": 0.01,
+    "limit_pref_v": 1
   },
-  "validation_data": {
-   "systems": [
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000004-data.004",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000005-data.005",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000006-data.006",
-    "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000009-data.017"
-   ],
-   "batch_size": 1,
-   "numb_btch": 4,
-   "_comment": "that's all"
-  },
-  "numb_steps": 2000000,
-  "seed": 10,
-  "_comment": "that's all",
-  "disp_file": "lcurve.out",
-  "disp_freq": 2000,
-  "numb_test": 1,
-  "save_freq": 2000,
-  "save_ckpt": "model.ckpt",
-  "disp_training": true,
-  "time_training": true,
-  "profiling": false,
-  "profiling_file": "timeline.json"
- }
+  "training": {
+    "training_data": {
+      "systems": [
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-init.system",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000000-data.000",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000001-data.001",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000002-data.002",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000003-data.003",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000007-data.007",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000008-data.008",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000008-data.016",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000009-data.009",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000010-data.010",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000010-data.018",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000011-data.011",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000011-data.019",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000012-data.012",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000012-data.020",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000013-data.013",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000013-data.021",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000014-data.014",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000014-data.022",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000015-data.015",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000015-data.023",
+        "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.000",
+        "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.001",
+        "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.002",
+        "data/LiGePS-SSE-PBE/data/iter.000000/02.fp/data.003",
+        "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.000",
+        "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.001",
+        "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.002",
+        "data/LiGePS-SSE-PBE/data/iter.000001/02.fp/data.003",
+        "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.000",
+        "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.001",
+        "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.002",
+        "data/LiGePS-SSE-PBE/data/iter.000002/02.fp/data.003"
+      ],
+      "batch_size": "auto"
+    },
+    "validation_data": {
+      "systems": [
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000004-data.004",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000005-data.005",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000006-data.006",
+        "data/LiGePS-SSE-PBE/data/home/chenglab/hjx/proj-sse-new/dpgen-LiGePS/data.init/LiGePS-iter.000009-data.017"
+      ],
+      "batch_size": 1,
+      "numb_btch": 4,
+      "_comment": "that's all"
+    },
+    "numb_steps": 2000000,
+    "seed": 10,
+    "_comment": "that's all",
+    "disp_file": "lcurve.out",
+    "disp_freq": 2000,
+    "numb_test": 1,
+    "save_freq": 2000,
+    "save_ckpt": "model.ckpt",
+    "disp_training": true,
+    "time_training": true,
+    "profiling": false,
+    "profiling_file": "timeline.json"
+  }
 }

@@ -1,9 +1,13 @@
-import torch
-import torch.nn as nn
-from torch.optim.optimizer import Optimizer
-import numpy as np
-import torch.distributed as dist
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import math
+
+import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+from torch.optim.optimizer import (
+    Optimizer,
+)
 
 
 class KFOptimizerWrapper:
@@ -25,7 +29,7 @@ class KFOptimizerWrapper:
         self, inputs: dict, Etot_label: torch.Tensor, update_prefactor: float = 1
     ) -> None:
         model_pred, _, _ = self.model(**inputs, inference_only=True)
-        Etot_predict = model_pred['energy']
+        Etot_predict = model_pred["energy"]
         natoms_sum = int(inputs["atype"].shape[-1])
         self.optimizer.set_grad_prefactor(natoms_sum)
 
@@ -63,9 +67,9 @@ class KFOptimizerWrapper:
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
             model_pred, _, _ = self.model(**inputs, inference_only=True)
-            Etot_predict = model_pred['energy']
+            Etot_predict = model_pred["energy"]
             natoms_sum = int(inputs["atype"].shape[-1])
-            force_predict = model_pred['force']
+            force_predict = model_pred["force"]
             error_tmp = Force_label[:, index[i]] - force_predict[:, index[i]]
             error_tmp = update_prefactor * error_tmp
             mask = error_tmp < 0
@@ -86,7 +90,12 @@ class KFOptimizerWrapper:
         return Etot_predict, force_predict
 
     def update_denoise_coord(
-        self, inputs: dict, clean_coord: torch.Tensor, update_prefactor: float = 1, mask_loss_coord: bool = True, coord_mask: torch.Tensor = None
+        self,
+        inputs: dict,
+        clean_coord: torch.Tensor,
+        update_prefactor: float = 1,
+        mask_loss_coord: bool = True,
+        coord_mask: torch.Tensor = None,
     ) -> None:
         natoms_sum = int(inputs["atype"].shape[-1])
         bs = clean_coord.shape[0]
@@ -97,7 +106,7 @@ class KFOptimizerWrapper:
         for i in range(index.shape[0]):
             self.optimizer.zero_grad()
             model_pred, _, _ = self.model(**inputs, inference_only=True)
-            updated_coord = model_pred['updated_coord']
+            updated_coord = model_pred["updated_coord"]
             natoms_sum = int(inputs["atype"].shape[-1])
             error_tmp = clean_coord[:, index[i]] - updated_coord[:, index[i]]
             error_tmp = update_prefactor * error_tmp
@@ -126,7 +135,8 @@ class KFOptimizerWrapper:
         if atoms_selected % atoms_per_group:
             raise Exception("divider")
         index = range(natoms)
-        res = np.random.choice(index, atoms_selected).reshape(-1, atoms_per_group)
+        rng = np.random.default_rng()
+        res = rng.choice(index, atoms_selected).reshape(-1, atoms_per_group)
         return res
 
 

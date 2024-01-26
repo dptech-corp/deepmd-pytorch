@@ -1,27 +1,23 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+from typing import (
+    Dict,
+    List,
+    Optional,
+)
+
 import torch
-from typing import Optional, List, Union, Dict
-from deepmd_pt.model.model import BaseModel
-from deepmd_pt.utils.nlist import extend_coord_with_ghosts, build_neighbor_list
-from deepmd_pt.utils.region import normalize_coord
-from deepmd_pt.model.descriptor import make_default_type_embedding
 
-from deepmd_pt.model.model.transform_output import (
-  fit_output_to_model_output,
-  communicate_extended_output,
+from .dp_atomic_model import (
+    DPAtomicModel,
 )
-from deepmd_utils.model_format import (
-  model_check_output,
-  ModelOutputDef,
+from .make_model import (
+    make_model,
 )
-from .dp_atomic_model import DPAtomicModel
-from .make_model import make_model
-
 
 DPModel = make_model(DPAtomicModel)
 
 
 class EnergyModel(DPModel):
-
     model_type = "ener"
 
     def __init__(
@@ -35,10 +31,12 @@ class EnergyModel(DPModel):
         self,
         coord,
         atype,
-        box: Optional[torch.Tensor] = None, 
+        box: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ) -> Dict[str, torch.Tensor]:
-        model_ret = self.forward_common(coord, atype, box, do_atomic_virial=do_atomic_virial)
+        model_ret = self.forward_common(
+            coord, atype, box, do_atomic_virial=do_atomic_virial
+        )
         if self.fitting_net is not None:
             model_predict = {}
             model_predict["atom_energy"] = model_ret["energy"]
@@ -46,48 +44,54 @@ class EnergyModel(DPModel):
             if self.do_grad("energy"):
                 model_predict["force"] = model_ret["energy_derv_r"].squeeze(-2)
                 if do_atomic_virial:
-                  model_predict["atomic_virial"] = model_ret["energy_derv_c"].squeeze(-3)
+                    model_predict["atomic_virial"] = model_ret["energy_derv_c"].squeeze(
+                        -3
+                    )
                 model_predict["virial"] = model_ret["energy_derv_c_redu"].squeeze(-3)
             else:
-                model_predict['force'] = model_ret['dforce']
+                model_predict["force"] = model_ret["dforce"]
         else:
             model_predict = model_ret
-            model_predict['updated_coord'] += coord
+            model_predict["updated_coord"] += coord
         return model_predict
 
-
     def forward_lower(
-        self, 
-        extended_coord, 
-        extended_atype, 
+        self,
+        extended_coord,
+        extended_atype,
         nlist,
         mapping: Optional[torch.Tensor] = None,
         do_atomic_virial: bool = False,
     ):
         model_ret = self.common_forward_lower(
-          extended_coord, extended_atype, nlist, mapping,
-          do_atomic_virial=do_atomic_virial)
+            extended_coord,
+            extended_atype,
+            nlist,
+            mapping,
+            do_atomic_virial=do_atomic_virial,
+        )
         if self.fitting_net is not None:
             model_predict = {}
             model_predict["atom_energy"] = model_ret["energy"]
             model_predict["energy"] = model_ret["energy_redu"]
             if self.do_grad("energy"):
-                model_predict['extended_force'] = model_ret['energy_derv_r'].squeeze(-2)
+                model_predict["extended_force"] = model_ret["energy_derv_r"].squeeze(-2)
                 if do_atomic_virial:
-                  model_predict['extended_virial'] = model_ret['energy_derv_c'].squeeze(-3)
+                    model_predict["extended_virial"] = model_ret[
+                        "energy_derv_c"
+                    ].squeeze(-3)
             else:
                 assert model_ret["dforce"] is not None
-                model_predict["dforce"] = model_ret["dforce"]            
+                model_predict["dforce"] = model_ret["dforce"]
         else:
             model_predict = model_ret
         return model_predict
 
 
-
 # should be a stand-alone function!!!!
 def process_nlist(
-    nlist, 
-    extended_atype, 
+    nlist,
+    extended_atype,
     mapping: Optional[torch.Tensor] = None,
 ):
     # process the nlist_type and nlist_loc
@@ -96,25 +100,26 @@ def process_nlist(
     nlist[nmask] = 0
     if mapping is not None:
         nlist_loc = torch.gather(
-          mapping, 
-          dim=1, 
-          index=nlist.reshape(nframes, -1),
+            mapping,
+            dim=1,
+            index=nlist.reshape(nframes, -1),
         ).reshape(nframes, nloc, -1)
         nlist_loc[nmask] = -1
     else:
         nlist_loc = None
     nlist_type = torch.gather(
-      extended_atype, 
-      dim=1, 
-      index=nlist.reshape(nframes, -1),
-    ).reshape(nframes, nloc,-1)
+        extended_atype,
+        dim=1,
+        index=nlist.reshape(nframes, -1),
+    ).reshape(nframes, nloc, -1)
     nlist_type[nmask] = -1
     nlist[nmask] = -1
     return nlist_loc, nlist_type, nframes, nloc
 
+
 def process_nlist_gathered(
-    nlist, 
-    extended_atype, 
+    nlist,
+    extended_atype,
     split_sel: List[int],
     mapping: Optional[torch.Tensor] = None,
 ):
@@ -126,15 +131,14 @@ def process_nlist_gathered(
         nmask = nlist_item == -1
         nlist_item[nmask] = 0
         if mapping is not None:
-            nlist_loc_item = torch.gather(mapping, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
-                nframes, nloc,
-                -1)
+            nlist_loc_item = torch.gather(
+                mapping, dim=1, index=nlist_item.reshape(nframes, -1)
+            ).reshape(nframes, nloc, -1)
             nlist_loc_item[nmask] = -1
             nlist_loc_list.append(nlist_loc_item)
-        nlist_type_item = torch.gather(extended_atype, dim=1, index=nlist_item.reshape(nframes, -1)).reshape(
-            nframes,
-            nloc,
-            -1)
+        nlist_type_item = torch.gather(
+            extended_atype, dim=1, index=nlist_item.reshape(nframes, -1)
+        ).reshape(nframes, nloc, -1)
         nlist_type_item[nmask] = -1
         nlist_type_list.append(nlist_type_item)
         nlist_item[nmask] = -1
