@@ -140,7 +140,7 @@ class PairTabModel(nn.Module, AtomicModel):
                     [0.015 0.    1.    1.5  ]
                     [0.02  0.    0.5   0.75 ]
                     [0.025 0.    0.    0.   ]]
-                    
+
         ----------------------------------------------
 
         table = [[0.005 1.    2.    3.   ]
@@ -178,7 +178,7 @@ class PairTabModel(nn.Module, AtomicModel):
                 )
             # if table values decay to `0` at rcut, do nothing
             
-            # if table values do not decay to `0` before rcut, pad table with `0`s.
+            # if table values decay to `0` before rcut, pad table with `0`s.
             elif self.rcut > upper:
                 pad_zero = np.zeros((rcut_idx - upper_idx,4))
                 pad_zero[:,0] = np.linspace(upper + increment, increment*(rcut_idx+1), rcut_idx-upper_idx)
