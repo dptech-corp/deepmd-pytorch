@@ -1,4 +1,4 @@
-from atomic_model import AtomicModel
+from .atomic_model import AtomicModel
 from deepmd_utils.pair_tab import (
     PairTab,
 )
