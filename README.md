@@ -1,3 +1,7 @@
+> [!CAUTION]
+> **This repository has been deprecated.**
+> The whole repository has been migrated to [DeePMD-kit](https://github.com/deepmodeling/deepmd-kit) and released in [DeePMD-kit v3.0.0a0](https://github.com/deepmodeling/deepmd-kit/releases/tag/v3.0.0a0).
+
 This repository is written by Hang'rui Bi based on Shaochen Shi's implementation of DeePMD-kit using PyTorch.
 It is supposed to offer comparable accuracy and performance to the TF implementation.
 
